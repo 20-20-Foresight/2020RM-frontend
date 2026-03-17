@@ -1,12 +1,27 @@
-import { Heading, Text, VStack, Box } from "@chakra-ui/react";
+import { json } from "@remix-run/node";
+import { useLoaderData } from "@remix-run/react";
+import { SearchDirectoryPage } from "../components/SearchDirectoryPage";
 
-export default function OrganizationsPage() {
-  return (
-    <VStack align="start" spacing={3}>
-      <Heading size="md">Organizations</Heading>
-      <Text color="gray.600">List and manage organizations. (Prototype placeholder)</Text>
-      <Box w="full" h="200px" bg="white" borderRadius="lg" shadow="sm" p={4} />
-    </VStack>
+const { loadRestSearchPage } = require("../models/rest-search.server");
+
+export async function loader({ request }) {
+  return json(
+    await loadRestSearchPage({
+      request,
+      entityType: "organization"
+    })
   );
 }
 
+export default function OrganizationsPage() {
+  const data = useLoaderData();
+
+  return (
+    <SearchDirectoryPage
+      title="Organizations"
+      searchPlaceholder="Search organizations by name"
+      emptyLabel="Unnamed organization"
+      data={data}
+    />
+  );
+}

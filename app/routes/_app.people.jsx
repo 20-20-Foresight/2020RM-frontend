@@ -1,12 +1,27 @@
-import { Heading, Text, VStack, Box } from "@chakra-ui/react";
+import { json } from "@remix-run/node";
+import { useLoaderData } from "@remix-run/react";
+import { SearchDirectoryPage } from "../components/SearchDirectoryPage";
 
-export default function PeoplePage() {
-  return (
-    <VStack align="start" spacing={3}>
-      <Heading size="md">People</Heading>
-      <Text color="gray.600">List and manage people. (Prototype placeholder)</Text>
-      <Box w="full" h="200px" bg="white" borderRadius="lg" shadow="sm" p={4} />
-    </VStack>
+const { loadRestSearchPage } = require("../models/rest-search.server");
+
+export async function loader({ request }) {
+  return json(
+    await loadRestSearchPage({
+      request,
+      entityType: "person"
+    })
   );
 }
 
+export default function PeoplePage() {
+  const data = useLoaderData();
+
+  return (
+    <SearchDirectoryPage
+      title="People"
+      searchPlaceholder="Search people by name"
+      emptyLabel="Unnamed person"
+      data={data}
+    />
+  );
+}

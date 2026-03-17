@@ -6,6 +6,7 @@ Remix + Chakra UI frontend with Express BFF for Microsoft OIDC and `/api/*` prox
 - Remix app (UI): `app/`
 - Server: `src/server.js`
 - Design: `../2020-Design/phase1/auth-replan.md`
+- Search UI: `/organizations` and `/people` proxy to backend REST search endpoints
 
 ## Run (dev)
 
