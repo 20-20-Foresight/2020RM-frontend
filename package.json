@@ -1,0 +1,39 @@
+{
+  "name": "2020rm-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "remix dev -c \"node src/server.js\"",
+    "dev:server": "NODE_ENV=development node src/server.js",
+    "build": "remix build",
+    "start": "NODE_ENV=production node src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@20-20-Foresight/base": "^0.1.10",
+    "@20-20-Foresight/utils": "^0.1.17",
+    "@chakra-ui/icons": "^2.1.1",
+    "@chakra-ui/react": "^2.8.2",
+    "@emotion/react": "^11.11.4",
+    "@emotion/server": "^11.11.0",
+    "@emotion/styled": "^11.11.5",
+    "@remix-run/express": "^2.7.2",
+    "@remix-run/node": "^2.7.2",
+    "@remix-run/react": "^2.7.2",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-session": "^1.17.3",
+    "framer-motion": "^11.0.8",
+    "openid-client": "^5.7.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-icons": "^5.2.1"
+  },
+  "devDependencies": {
+    "@remix-run/dev": "^2.7.2"
+  }
+}
