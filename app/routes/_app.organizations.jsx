@@ -21,6 +21,11 @@ export default function OrganizationsPage() {
       title="Organizations"
       searchPlaceholder="Search organizations by name"
       emptyLabel="Unnamed organization"
+      secondaryFieldLabel="Website"
+      secondaryFieldPaths={[
+        "metadata.website",
+        "metadata.domain"
+      ]}
       data={data}
     />
   );

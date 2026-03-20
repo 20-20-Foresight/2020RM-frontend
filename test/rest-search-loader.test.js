@@ -22,6 +22,7 @@ test("rest search loader returns idle state when name is missing", async () => {
     meta: {
       count: 0
     },
+    schema: null,
     error: null
   });
 });
@@ -59,6 +60,16 @@ test("rest search loader calls the organization REST endpoint and returns normal
             meta: {
               count: 1,
               limit: 25
+            },
+            schema: {
+              namespace: "crm.schema",
+              key: "organization",
+              version: 1,
+              document: {
+                fieldPaths: [
+                  { path: "metadata.website" }
+                ]
+              }
             }
           };
         }
@@ -84,6 +95,16 @@ test("rest search loader calls the organization REST endpoint and returns normal
     meta: {
       count: 1,
       limit: 25
+    },
+    schema: {
+      namespace: "crm.schema",
+      key: "organization",
+      version: 1,
+      document: {
+        fieldPaths: [
+          { path: "metadata.website" }
+        ]
+      }
     },
     error: null
   });
@@ -113,6 +134,7 @@ test("rest search loader returns an error state when the backend request fails",
     meta: {
       count: 0
     },
+    schema: null,
     error: "Upstream RPC request failed."
   });
 });

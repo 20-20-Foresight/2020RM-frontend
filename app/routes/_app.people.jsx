@@ -21,6 +21,14 @@ export default function PeoplePage() {
       title="People"
       searchPlaceholder="Search people by name"
       emptyLabel="Unnamed person"
+      secondaryFieldLabel="Email"
+      secondaryFieldPaths={[
+        "metadata.primaryemail",
+        "metadata.workemail",
+        "metadata.email.work",
+        "metadata.email.personal",
+        "metadata.email"
+      ]}
       data={data}
     />
   );

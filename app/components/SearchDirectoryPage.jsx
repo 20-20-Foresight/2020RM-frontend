@@ -16,9 +16,22 @@ import {
 } from "@chakra-ui/react";
 import { Form, useNavigation } from "@remix-run/react";
 
-export function SearchDirectoryPage({ title, emptyLabel, searchPlaceholder, data }) {
+const {
+  getSearchResultFieldValue,
+  resolveSchemaFieldPath
+} = require("../models/search-result");
+
+export function SearchDirectoryPage({
+  title,
+  emptyLabel,
+  searchPlaceholder,
+  secondaryFieldLabel,
+  secondaryFieldPaths,
+  data
+}) {
   const navigation = useNavigation();
   const isSearching = navigation.state === "loading";
+  const secondaryFieldPath = resolveSchemaFieldPath(data.schema, secondaryFieldPaths);
 
   return (
     <VStack align="stretch" spacing={6}>
@@ -65,7 +78,12 @@ export function SearchDirectoryPage({ title, emptyLabel, searchPlaceholder, data
 
         {data.results.length ? (
           <List spacing={3}>
-            {data.results.map((result) => (
+            {data.results.map((result) => {
+              const secondaryValue = secondaryFieldPath
+                ? getSearchResultFieldValue(result, secondaryFieldPath)
+                : null;
+
+              return (
               <ListItem
                 key={result.uuid || result.name}
                 borderWidth="1px"
@@ -75,8 +93,14 @@ export function SearchDirectoryPage({ title, emptyLabel, searchPlaceholder, data
                 py={3}
               >
                 <Text fontWeight="semibold">{result.name || emptyLabel}</Text>
+                {secondaryFieldLabel && secondaryValue ? (
+                  <Text color="gray.600" fontSize="sm" mt={1}>
+                    {secondaryFieldLabel}: {secondaryValue}
+                  </Text>
+                ) : null}
               </ListItem>
-            ))}
+              );
+            })}
           </List>
         ) : (
           <Text color="gray.600">{data.query.name ? `No results for "${data.query.name}".` : "No search yet."}</Text>

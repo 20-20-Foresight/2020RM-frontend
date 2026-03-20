@@ -11,7 +11,7 @@ function readNameQuery(requestUrl) {
 /**
  * Builds the initial empty state for a search page.
  * @param {string} entityLabel
- * @returns {{query: {name: string}, status: string, statusExplained: string, results: object[], meta: {count: number}, error: string|null}}
+ * @returns {{query: {name: string}, status: string, statusExplained: string, results: object[], meta: {count: number}, schema: object|null, error: string|null}}
  */
 function buildIdleState(entityLabel) {
   return {
@@ -24,6 +24,7 @@ function buildIdleState(entityLabel) {
     meta: {
       count: 0
     },
+    schema: null,
     error: null
   };
 }
@@ -35,7 +36,7 @@ function buildIdleState(entityLabel) {
  *   entityType: "organization" | "person",
  *   fetchImpl?: typeof fetch
  * }} options
- * @returns {Promise<{query: {name: string}, status: string, statusExplained: string, results: object[], meta: {count: number} & object, error: string|null}>}
+ * @returns {Promise<{query: {name: string}, status: string, statusExplained: string, results: object[], meta: {count: number} & object, schema: object|null, error: string|null}>}
  */
 async function loadRestSearchPage(options) {
   const fetchImpl = options.fetchImpl || fetch;
@@ -68,6 +69,7 @@ async function loadRestSearchPage(options) {
         meta: {
           count: 0
         },
+        schema: null,
         error: payload && typeof payload.message === "string" ? payload.message : "Search request failed."
       };
     }
@@ -88,6 +90,10 @@ async function loadRestSearchPage(options) {
           : {
               count: 0
             },
+      schema:
+        payload && payload.schema && typeof payload.schema === "object"
+          ? payload.schema
+          : null,
       error: null
     };
   } catch (error) {
@@ -101,6 +107,7 @@ async function loadRestSearchPage(options) {
       meta: {
         count: 0
       },
+      schema: null,
       error: error instanceof Error ? error.message : "Search request failed."
     };
   }
