@@ -54,7 +54,13 @@ test("rest search loader calls the organization REST endpoint and returns normal
             results: [
               {
                 uuid: "org-1",
-                name: "Acme"
+                name: "Acme",
+                relatedLocation: {
+                  address: "Chicago, IL",
+                  city: "Chicago",
+                  regionCode: "IL",
+                  countryCode: "US"
+                }
               }
             ],
             meta: {
@@ -89,7 +95,13 @@ test("rest search loader calls the organization REST endpoint and returns normal
     results: [
       {
         uuid: "org-1",
-        name: "Acme"
+        name: "Acme",
+        relatedLocation: {
+          address: "Chicago, IL",
+          city: "Chicago",
+          regionCode: "IL",
+          countryCode: "US"
+        }
       }
     ],
     meta: {

@@ -7,7 +7,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "dev": "remix dev -c \"node src/server.js\"",
+    "dev": "remix dev --port 8002 -c \"node src/server.js\"",
     "dev:server": "NODE_ENV=development node src/server.js",
     "build": "remix build",
     "start": "NODE_ENV=production node src/server.js",

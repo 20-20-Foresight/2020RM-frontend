@@ -7,19 +7,112 @@ import {
   FormControl,
   FormHelperText,
   Heading,
+  Grid,
   HStack,
   Input,
+  Link as ChakraLink,
   List,
   ListItem,
+  Icon,
   Text,
   VStack
 } from "@chakra-ui/react";
 import { Form, useNavigation } from "@remix-run/react";
+import { FaLinkedin } from "react-icons/fa";
 
-const {
-  getSearchResultFieldValue,
-  resolveSchemaFieldPath
-} = require("../models/search-result");
+/**
+ * Read a dotted path from a result object.
+ * @param {unknown} value
+ * @param {string} path
+ * @returns {unknown}
+ */
+function readObjectPath(value, path) {
+  if (!value || typeof value !== "object" || typeof path !== "string" || !path.trim()) {
+    return null;
+  }
+
+  const resolved = path.split(".").reduce((currentValue, key) => {
+    if (!currentValue || typeof currentValue !== "object") {
+      return undefined;
+    }
+
+    return currentValue[key];
+  }, value);
+
+  if (typeof resolved === "string") {
+    const trimmed = resolved.trim();
+    return trimmed ? trimmed : null;
+  }
+
+  return resolved == null ? null : resolved;
+}
+
+/**
+ * Resolve a displayable field value from one search result.
+ * @param {unknown} result
+ * @param {string} path
+ * @returns {string|null}
+ */
+function getSearchResultFieldValue(result, path) {
+  const value = readObjectPath(result, path);
+  if (value == null) {
+    return null;
+  }
+
+  return typeof value === "string" ? value : String(value);
+}
+
+/**
+ * Pick the first preferred field path present in the active schema.
+ * @param {unknown} schema
+ * @param {string[]} preferredPaths
+ * @returns {string|null}
+ */
+function resolveSchemaFieldPath(schema, preferredPaths) {
+  const fieldPaths = Array.isArray(schema?.document?.fieldPaths)
+    ? schema.document.fieldPaths
+    : Array.isArray(schema?.fieldPaths)
+      ? schema.fieldPaths
+      : [];
+  const availablePaths = new Set(
+    fieldPaths
+      .map((field) => (typeof field?.path === "string" ? field.path.trim() : ""))
+      .filter(Boolean)
+  );
+
+  for (const path of Array.isArray(preferredPaths) ? preferredPaths : []) {
+    if (typeof path === "string" && availablePaths.has(path)) {
+      return path;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Format the attached related location for list display.
+ * @param {unknown} relatedLocation
+ * @returns {string|null}
+ */
+function formatRelatedLocation(relatedLocation) {
+  if (!relatedLocation || typeof relatedLocation !== "object") {
+    return null;
+  }
+
+  if (typeof relatedLocation.address === "string" && relatedLocation.address.trim()) {
+    return relatedLocation.address.trim();
+  }
+
+  const parts = [
+    relatedLocation.city,
+    relatedLocation.regionCode,
+    relatedLocation.countryCode
+  ]
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter(Boolean);
+
+  return parts.length ? parts.join(", ") : null;
+}
 
 export function SearchDirectoryPage({
   title,
@@ -27,11 +120,13 @@ export function SearchDirectoryPage({
   searchPlaceholder,
   secondaryFieldLabel,
   secondaryFieldPaths,
+  linkedInFieldPaths,
   data
 }) {
   const navigation = useNavigation();
   const isSearching = navigation.state === "loading";
   const secondaryFieldPath = resolveSchemaFieldPath(data.schema, secondaryFieldPaths);
+  const linkedInFieldPath = resolveSchemaFieldPath(data.schema, linkedInFieldPaths);
 
   return (
     <VStack align="stretch" spacing={6}>
@@ -77,31 +172,98 @@ export function SearchDirectoryPage({
         </Text>
 
         {data.results.length ? (
-          <List spacing={3}>
-            {data.results.map((result) => {
-              const secondaryValue = secondaryFieldPath
-                ? getSearchResultFieldValue(result, secondaryFieldPath)
-                : null;
+          <Box borderWidth="1px" borderColor="gray.200" borderRadius="md" overflow="hidden">
+            <Grid
+              display={{ base: "none", md: "grid" }}
+              templateColumns="minmax(0, 1.8fr) minmax(0, 1.1fr) 48px"
+              px={4}
+              py={2}
+              bg="gray.50"
+              borderBottomWidth="1px"
+              borderColor="gray.200"
+              align="center"
+              columnGap={4}
+            >
+              <Text fontSize="xs" fontWeight="bold" letterSpacing="wide" textTransform="uppercase" color="gray.500">
+                Name
+              </Text>
+              <Text fontSize="xs" fontWeight="bold" letterSpacing="wide" textTransform="uppercase" color="gray.500">
+                Location
+              </Text>
+              <Text fontSize="xs" fontWeight="bold" letterSpacing="wide" textTransform="uppercase" color="gray.500">
+                Links
+              </Text>
+            </Grid>
+            <List spacing={0}>
+              {data.results.map((result, index) => {
+                const secondaryValue = secondaryFieldPath
+                  ? getSearchResultFieldValue(result, secondaryFieldPath)
+                  : null;
+                const linkedInValue = linkedInFieldPath
+                  ? getSearchResultFieldValue(result, linkedInFieldPath)
+                  : null;
+                const relatedLocationValue = formatRelatedLocation(result.relatedLocation);
 
-              return (
-              <ListItem
-                key={result.uuid || result.name}
-                borderWidth="1px"
-                borderColor="gray.100"
-                borderRadius="md"
-                px={4}
-                py={3}
-              >
-                <Text fontWeight="semibold">{result.name || emptyLabel}</Text>
-                {secondaryFieldLabel && secondaryValue ? (
-                  <Text color="gray.600" fontSize="sm" mt={1}>
-                    {secondaryFieldLabel}: {secondaryValue}
-                  </Text>
-                ) : null}
-              </ListItem>
-              );
-            })}
-          </List>
+                return (
+                  <ListItem
+                    key={result.uuid || result.name}
+                    borderBottomWidth={index === data.results.length - 1 ? "0" : "1px"}
+                    borderColor="gray.100"
+                    px={4}
+                    py={3}
+                  >
+                    <Grid
+                      templateColumns={{ base: "minmax(0, 1fr) 40px", md: "minmax(0, 1.8fr) minmax(0, 1.1fr) 48px" }}
+                      templateAreas={{
+                        base: "\"name links\" \"location links\"",
+                        md: "\"name location links\""
+                      }}
+                      columnGap={4}
+                      rowGap={2}
+                      alignItems="start"
+                    >
+                      <Box minW="0" gridArea="name">
+                        <Text fontWeight="semibold">{result.name || emptyLabel}</Text>
+                        {secondaryFieldLabel && secondaryValue ? (
+                          <Text color="gray.600" fontSize="sm" mt={1}>
+                            {secondaryFieldLabel}: {secondaryValue}
+                          </Text>
+                        ) : null}
+                      </Box>
+                      <Box minW="0" gridArea="location">
+                        <Text
+                          color={relatedLocationValue ? "gray.700" : "gray.400"}
+                          fontSize="sm"
+                          textAlign={{ base: "left", md: "left" }}
+                        >
+                          {relatedLocationValue || "-"}
+                        </Text>
+                      </Box>
+                      <Box minW="32px" gridArea="links" textAlign="right">
+                        {linkedInValue ? (
+                          <ChakraLink
+                            href={linkedInValue}
+                            isExternal
+                            color="linkedin.500"
+                            display="inline-flex"
+                            alignItems="center"
+                            justifyContent="center"
+                            minW="32px"
+                            minH="32px"
+                            borderRadius="md"
+                            _hover={{ color: "linkedin.600", bg: "blue.50" }}
+                            aria-label={`Open LinkedIn for ${result.name || emptyLabel}`}
+                          >
+                            <Icon as={FaLinkedin} boxSize={5} />
+                          </ChakraLink>
+                        ) : null}
+                      </Box>
+                    </Grid>
+                  </ListItem>
+                );
+              })}
+            </List>
+          </Box>
         ) : (
           <Text color="gray.600">{data.query.name ? `No results for "${data.query.name}".` : "No search yet."}</Text>
         )}

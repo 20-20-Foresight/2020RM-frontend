@@ -40,6 +40,22 @@ test("getSearchResultFieldValue returns organization website from metadata", () 
   );
 });
 
+test("getSearchResultFieldValue returns linkedin url from socials metadata", () => {
+  assert.equal(
+    getSearchResultFieldValue(
+      {
+        metadata: {
+          socials: {
+            linkedin: "https://www.linkedin.com/company/acme"
+          }
+        }
+      },
+      "metadata.socials.linkedin"
+    ),
+    "https://www.linkedin.com/company/acme"
+  );
+});
+
 test("getSchemaFieldPaths reads field paths from schema documents", () => {
   assert.deepEqual(
     getSchemaFieldPaths({
@@ -69,5 +85,21 @@ test("resolveSchemaFieldPath returns the first configured path present in schema
       ["metadata.primaryemail", "metadata.workemail"]
     ),
     "metadata.workemail"
+  );
+});
+
+test("resolveSchemaFieldPath resolves linkedin paths from schema", () => {
+  assert.equal(
+    resolveSchemaFieldPath(
+      {
+        document: {
+          fieldPaths: [
+            { path: "metadata.socials.linkedin" }
+          ]
+        }
+      },
+      ["metadata.socials.linkedin", "linkedin"]
+    ),
+    "metadata.socials.linkedin"
   );
 });

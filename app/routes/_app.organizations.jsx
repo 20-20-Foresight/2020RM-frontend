@@ -1,8 +1,7 @@
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { SearchDirectoryPage } from "../components/SearchDirectoryPage";
-
-const { loadRestSearchPage } = require("../models/rest-search.server");
+import { loadRestSearchPage } from "../models/rest-search.server";
 
 export async function loader({ request }) {
   return json(
@@ -25,6 +24,9 @@ export default function OrganizationsPage() {
       secondaryFieldPaths={[
         "metadata.website",
         "metadata.domain"
+      ]}
+      linkedInFieldPaths={[
+        "metadata.socials.linkedin"
       ]}
       data={data}
     />

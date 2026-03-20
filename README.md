@@ -22,3 +22,5 @@ Remix + Chakra UI frontend with Express BFF for Microsoft OIDC and `/api/*` prox
 
 Notes:
 - `.env` is auto-loaded via `dotenv`.
+- `npm run dev` pins the internal Remix dev server to port `8002` so it does not collide with the backend default port `3001`.
+- The Express BFF still serves the app on `http://localhost:3000`.
