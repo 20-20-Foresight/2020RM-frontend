@@ -1,14 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const {
-  navItems,
-  isPathWithinItem,
-  isNavItemActive,
-  getExpandedNavItemKeys
-} = require("../app/models/navigation");
-
-test("navigation model defines the requested subsection labels", () => {
+test("navigation model defines the requested subsection labels", async () => {
+  const { navItems } = await import("../app/models/navigation.mjs");
   assert.deepEqual(
     navItems
       .filter((item) => Array.isArray(item.children))
@@ -37,7 +31,8 @@ test("navigation model defines the requested subsection labels", () => {
   );
 });
 
-test("isPathWithinItem matches parent routes and descendants", () => {
+test("isPathWithinItem matches parent routes and descendants", async () => {
+  const { isPathWithinItem } = await import("../app/models/navigation.mjs");
   assert.equal(
     isPathWithinItem({ to: "/people" }, "/people"),
     true
@@ -52,13 +47,15 @@ test("isPathWithinItem matches parent routes and descendants", () => {
   );
 });
 
-test("isNavItemActive treats child routes as active for the parent section", () => {
+test("isNavItemActive treats child routes as active for the parent section", async () => {
+  const { navItems, isNavItemActive } = await import("../app/models/navigation.mjs");
   const peopleItem = navItems.find((item) => item.key === "people");
   assert.equal(isNavItemActive(peopleItem, "/people/em-clients"), true);
   assert.equal(isNavItemActive(peopleItem, "/jobs"), false);
 });
 
-test("getExpandedNavItemKeys expands the matching section for subsection routes", () => {
+test("getExpandedNavItemKeys expands the matching section for subsection routes", async () => {
+  const { getExpandedNavItemKeys } = await import("../app/models/navigation.mjs");
   assert.deepEqual(getExpandedNavItemKeys("/jobs/all-em-jobs"), ["jobs"]);
   assert.deepEqual(getExpandedNavItemKeys("/admin/user-management"), ["admin"]);
 });

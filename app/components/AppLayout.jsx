@@ -26,9 +26,13 @@ import {
   MdDashboard
 } from "react-icons/md";
 import { FiLogOut } from "react-icons/fi";
-import navigationModel from "../models/navigation";
+import {
+  navItems,
+  isPathWithinItem,
+  isNavItemActive,
+  getExpandedNavItemKeys
+} from "../models/navigation.mjs";
 
-const { navItems, isPathWithinItem, isNavItemActive, getExpandedNavItemKeys } = navigationModel;
 const iconByName = {
   dashboard: MdDashboard,
   business: MdBusiness,

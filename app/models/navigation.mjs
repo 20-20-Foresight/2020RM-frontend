@@ -1,7 +1,7 @@
 /**
  * Sidebar navigation model for the application shell.
  */
-const navItems = [
+export const navItems = [
   {
     key: "dashboard",
     label: "Dashboard",
@@ -116,7 +116,7 @@ const navItems = [
  * @param {string} pathname
  * @returns {boolean}
  */
-function isPathWithinItem(item, pathname) {
+export function isPathWithinItem(item, pathname) {
   if (!item || typeof item.to !== "string" || typeof pathname !== "string") {
     return false;
   }
@@ -130,7 +130,7 @@ function isPathWithinItem(item, pathname) {
  * @param {string} pathname
  * @returns {boolean}
  */
-function isNavItemActive(item, pathname) {
+export function isNavItemActive(item, pathname) {
   if (isPathWithinItem(item, pathname)) {
     return true;
   }
@@ -145,15 +145,8 @@ function isNavItemActive(item, pathname) {
  * @param {string} pathname
  * @returns {string[]}
  */
-function getExpandedNavItemKeys(pathname) {
+export function getExpandedNavItemKeys(pathname) {
   return navItems
     .filter((item) => Array.isArray(item.children) && item.children.length && isNavItemActive(item, pathname))
     .map((item) => item.key);
 }
-
-module.exports = {
-  navItems,
-  isPathWithinItem,
-  isNavItemActive,
-  getExpandedNavItemKeys
-};
