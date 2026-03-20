@@ -99,19 +99,20 @@ function formatRelatedLocation(relatedLocation) {
     return null;
   }
 
-  if (typeof relatedLocation.address === "string" && relatedLocation.address.trim()) {
-    return relatedLocation.address.trim();
+  const city =
+    typeof relatedLocation.city === "string" && relatedLocation.city.trim()
+      ? relatedLocation.city.trim()
+      : null;
+  const regionCode =
+    typeof relatedLocation.regionCode === "string" && relatedLocation.regionCode.trim()
+      ? relatedLocation.regionCode.trim()
+      : null;
+
+  if (city && regionCode) {
+    return `${city}, ${regionCode}`;
   }
 
-  const parts = [
-    relatedLocation.city,
-    relatedLocation.regionCode,
-    relatedLocation.countryCode
-  ]
-    .map((value) => (typeof value === "string" ? value.trim() : ""))
-    .filter(Boolean);
-
-  return parts.length ? parts.join(", ") : null;
+  return city || regionCode || null;
 }
 
 export function SearchDirectoryPage({
@@ -127,6 +128,7 @@ export function SearchDirectoryPage({
   const isSearching = navigation.state === "loading";
   const secondaryFieldPath = resolveSchemaFieldPath(data.schema, secondaryFieldPaths);
   const linkedInFieldPath = resolveSchemaFieldPath(data.schema, linkedInFieldPaths);
+  const emptyLocationLabel = data.entityType === "organization" ? "?" : "-";
 
   return (
     <VStack align="stretch" spacing={6}>
@@ -236,7 +238,7 @@ export function SearchDirectoryPage({
                           fontSize="sm"
                           textAlign={{ base: "left", md: "left" }}
                         >
-                          {relatedLocationValue || "-"}
+                          {relatedLocationValue || emptyLocationLabel}
                         </Text>
                       </Box>
                       <Box minW="32px" gridArea="links" textAlign="right">
