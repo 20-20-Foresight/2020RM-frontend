@@ -56,24 +56,6 @@ async function tryReadJson(response) {
 }
 
 /**
- * Reads one action result from an RPC envelope.
- * @param {Record<string, unknown>|null} payload
- * @param {string} actionName
- * @returns {unknown}
- */
-function readActionResult(payload, actionName) {
-  if (isPlainObject(payload?.results) && actionName in payload.results) {
-    return payload.results[actionName];
-  }
-
-  if (payload && "response" in payload) {
-    return payload.response;
-  }
-
-  return null;
-}
-
-/**
  * Builds a stable frontend identifier for one admin data record.
  * @param {unknown} value
  * @returns {string|null}
@@ -333,44 +315,42 @@ function buildDocumentFromEditor(options) {
 }
 
 /**
- * Posts one RPC request through the frontend BFF.
+ * Calls one normalized admin data REST route through the frontend BFF.
  * @param {{
  *   request: Request,
- *   actionName: string,
- *   action: string,
- *   settings?: Record<string, unknown>,
+ *   pathname: string,
+ *   method?: string,
+ *   body?: Record<string, unknown>|null,
  *   fetchImpl?: typeof fetch
  * }} options
- * @returns {Promise<unknown>}
+ * @returns {Promise<Record<string, unknown>|null>}
  */
-async function postRpcAction(options) {
+async function requestAdminDataApi(options) {
   const fetchImpl = options.fetchImpl || globalThis.fetch;
   if (typeof fetchImpl !== "function") {
     throw new Error("Fetch is required to load admin data.");
   }
 
-  const target = new URL("/api/rpc", options.request.url);
+  const target = new URL(options.pathname, options.request.url);
   let response;
 
   try {
-    response = await fetchImpl(target, {
-      method: "POST",
-      headers: {
-        cookie: options.request.headers.get("cookie") || "",
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        mode: "sync-required",
-        actions: [
-          {
-            name: options.actionName,
-            action: options.action,
-            settings: isPlainObject(options.settings) ? options.settings : {},
-            respond: true
-          }
-        ]
-      })
-    });
+    const headers = {
+      cookie: options.request.headers.get("cookie") || ""
+    };
+
+    /** @type {RequestInit} */
+    const requestInit = {
+      method: options.method,
+      headers
+    };
+
+    if (options.body && isPlainObject(options.body)) {
+      headers["content-type"] = "application/json";
+      requestInit.body = JSON.stringify(options.body);
+    }
+
+    response = await fetchImpl(target, requestInit);
   } catch (error) {
     throw new AdminDataApiError("Unable to reach the admin data service.", {
       code: "admin_data_unreachable",
@@ -385,7 +365,7 @@ async function postRpcAction(options) {
     const errorMessage =
       readTrimmedString(payload?.error?.message) ||
       readTrimmedString(payload?.message) ||
-      "Admin data request failed.";
+      `Admin data request failed (HTTP ${response.status}).`;
 
     throw new AdminDataApiError(errorMessage, {
       code: errorCode,
@@ -393,7 +373,7 @@ async function postRpcAction(options) {
     });
   }
 
-  return readActionResult(payload, options.actionName);
+  return payload;
 }
 
 /**
@@ -402,18 +382,13 @@ async function postRpcAction(options) {
  * @returns {Promise<ReturnType<typeof normalizeSummary>[]>}
  */
 async function loadAdminDataList(options) {
-  const result = await postRpcAction({
+  const payload = await requestAdminDataApi({
     request: options.request,
-    actionName: "dataList",
-    action: "data/list",
-    settings: {
-      namespacePrefix: "crm.data",
-      summaryOnly: true
-    },
+    pathname: "/api/rest/admin/data",
     fetchImpl: options.fetchImpl
   });
 
-  return Array.isArray(result) ? result.map((value) => normalizeSummary(value)) : [];
+  return Array.isArray(payload?.items) ? payload.items.map((value) => normalizeSummary(value)) : [];
 }
 
 /**
@@ -422,15 +397,12 @@ async function loadAdminDataList(options) {
  * @returns {Promise<ReturnType<typeof normalizeSummary> & {document: unknown, editor: {columns: string[], rows: Record<string, string>[]}}>}
  */
 async function loadAdminDataDocument(options) {
-  const result = await postRpcAction({
+  const payload = await requestAdminDataApi({
     request: options.request,
-    actionName: "dataDocument",
-    action: "data/get",
-    settings: {
-      id: options.id
-    },
+    pathname: `/api/rest/admin/data/${encodeURIComponent(options.id)}`,
     fetchImpl: options.fetchImpl
   });
+  const result = payload?.data;
 
   return {
     ...normalizeSummary(result),
@@ -464,12 +436,11 @@ async function saveAdminDataDocument(options) {
     document: options.document
   });
 
-  const result = await postRpcAction({
+  const payload = await requestAdminDataApi({
     request: options.request,
-    actionName: "saveDataDocument",
-    action: "data/save",
-    settings: {
-      id: options.id,
+    pathname: `/api/rest/admin/data/${encodeURIComponent(options.id)}`,
+    method: "PUT",
+    body: {
       description: typeof options.description === "string" ? options.description : "",
       expectedVersion: Number.isFinite(options.expectedVersion) ? Number(options.expectedVersion) : null,
       document: nextDocument,
@@ -481,6 +452,7 @@ async function saveAdminDataDocument(options) {
     },
     fetchImpl: options.fetchImpl
   });
+  const result = payload?.data;
 
   return normalizeSummary(result);
 }

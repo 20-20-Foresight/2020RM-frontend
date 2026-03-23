@@ -8,7 +8,7 @@ const {
   buildDocumentFromEditor
 } = require("../app/models/admin-data.server");
 
-test("admin data list loader posts the summary RPC request and normalizes the returned rows", async () => {
+test("admin data list loader calls the normalized admin data REST route", async () => {
   const calls = [];
   const rows = await loadAdminDataList({
     request: new Request("http://localhost:3000/admin/data", {
@@ -26,18 +26,16 @@ test("admin data list loader posts the summary RPC request and normalizes the re
         ok: true,
         async json() {
           return {
-            results: {
-              dataList: [
-                {
-                  namespace: "crm.data",
-                  key: "nicknames",
-                  name: "Nicknames",
-                  description: "Nickname crosswalk for person matching",
-                  lastmodifieddate: "2026-03-23T12:30:00.000Z",
-                  lastmodifiedby: "admin@example.com"
-                }
-              ]
-            }
+            items: [
+              {
+                namespace: "crm.data",
+                key: "nicknames",
+                name: "Nicknames",
+                description: "Nickname crosswalk for person matching",
+                lastmodifieddate: "2026-03-23T12:30:00.000Z",
+                lastmodifiedby: "admin@example.com"
+              }
+            ]
           };
         }
       };
@@ -45,24 +43,9 @@ test("admin data list loader posts the summary RPC request and normalizes the re
   });
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, "http://localhost:3000/api/rpc");
-  assert.equal(calls[0].options.method, "POST");
+  assert.equal(calls[0].url, "http://localhost:3000/api/rest/admin/data");
+  assert.equal(calls[0].options.method, undefined);
   assert.equal(calls[0].options.headers.cookie, "sid=123");
-  assert.equal(calls[0].options.headers["content-type"], "application/json");
-  assert.deepEqual(JSON.parse(calls[0].options.body), {
-    mode: "sync-required",
-    actions: [
-      {
-        name: "dataList",
-        action: "data/list",
-        settings: {
-          namespacePrefix: "crm.data",
-          summaryOnly: true
-        },
-        respond: true
-      }
-    ]
-  });
   assert.deepEqual(rows, [
     {
       id: "crm.data:nicknames",
@@ -79,7 +62,7 @@ test("admin data list loader posts the summary RPC request and normalizes the re
   ]);
 });
 
-test("admin data detail loader posts the get RPC request and preserves the editor payload", async () => {
+test("admin data detail loader calls the normalized admin data detail route", async () => {
   const calls = [];
   const detail = await loadAdminDataDocument({
     request: new Request("http://localhost:3000/admin/data/crm.data%3Anicknames", {
@@ -98,7 +81,7 @@ test("admin data detail loader posts the get RPC request and preserves the edito
         ok: true,
         async json() {
           return {
-            response: {
+            data: {
               id: "crm.data:nicknames",
               namespace: "crm.data",
               key: "nicknames",
@@ -132,20 +115,8 @@ test("admin data detail loader posts the get RPC request and preserves the edito
   });
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, "http://localhost:3000/api/rpc");
-  assert.deepEqual(JSON.parse(calls[0].options.body), {
-    mode: "sync-required",
-    actions: [
-      {
-        name: "dataDocument",
-        action: "data/get",
-        settings: {
-          id: "crm.data:nicknames"
-        },
-        respond: true
-      }
-    ]
-  });
+  assert.equal(calls[0].url, "http://localhost:3000/api/rest/admin/data/crm.data%3Anicknames");
+  assert.equal(calls[0].options.method, undefined);
   assert.deepEqual(detail, {
     id: "crm.data:nicknames",
     namespace: "crm.data",
@@ -274,7 +245,7 @@ test("buildDocumentFromEditor preserves one-property wrappers for list and keyva
   );
 });
 
-test("admin data save posts the save RPC request with the rebuilt document and editor payload", async () => {
+test("admin data save calls the normalized admin data save route with the rebuilt document and editor payload", async () => {
   const calls = [];
   const saved = await saveAdminDataDocument({
     request: new Request("http://localhost:3000/admin/data/crm.data%3Anicknames", {
@@ -310,18 +281,16 @@ test("admin data save posts the save RPC request with the rebuilt document and e
         ok: true,
         async json() {
           return {
-            results: {
-              saveDataDocument: {
-                id: "crm.data:nicknames",
-                namespace: "crm.data",
-                key: "nicknames",
-                name: "Nicknames",
-                description: "Nickname crosswalk for person matching",
-                version: 5,
-                lastmodifieddate: "2026-03-23T12:45:00.000Z",
-                lastmodifiedby: "admin@example.com",
-                status: "active"
-              }
+            data: {
+              id: "crm.data:nicknames",
+              namespace: "crm.data",
+              key: "nicknames",
+              name: "Nicknames",
+              description: "Nickname crosswalk for person matching",
+              version: 5,
+              lastmodifieddate: "2026-03-23T12:45:00.000Z",
+              lastmodifiedby: "admin@example.com",
+              status: "active"
             }
           };
         }
@@ -330,44 +299,37 @@ test("admin data save posts the save RPC request with the rebuilt document and e
   });
 
   assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "http://localhost:3000/api/rest/admin/data/crm.data%3Anicknames");
+  assert.equal(calls[0].options.method, "PUT");
+  assert.equal(calls[0].options.headers.cookie, "sid=123");
+  assert.equal(calls[0].options.headers["content-type"], "application/json");
   assert.deepEqual(JSON.parse(calls[0].options.body), {
-    mode: "sync-required",
-    actions: [
-      {
-        name: "saveDataDocument",
-        action: "data/save",
-        settings: {
-          id: "crm.data:nicknames",
-          description: "Nickname crosswalk for person matching",
-          expectedVersion: 4,
-          document: {
-            crosswalk: {
-              bob: {
-                values: ["robert"]
-              },
-              liz: {
-                values: ["elizabeth"]
-              }
-            }
-          },
-          editor: {
-            shape: "crosswalk",
-            columns: ["source", "target"],
-            rows: [
-              {
-                source: "bob",
-                target: "robert"
-              },
-              {
-                source: "liz",
-                target: "elizabeth"
-              }
-            ]
-          }
+    description: "Nickname crosswalk for person matching",
+    expectedVersion: 4,
+    document: {
+      crosswalk: {
+        bob: {
+          values: ["robert"]
         },
-        respond: true
+        liz: {
+          values: ["elizabeth"]
+        }
       }
-    ]
+    },
+    editor: {
+      shape: "crosswalk",
+      columns: ["source", "target"],
+      rows: [
+        {
+          source: "bob",
+          target: "robert"
+        },
+        {
+          source: "liz",
+          target: "elizabeth"
+        }
+      ]
+    }
   });
   assert.deepEqual(saved, {
     id: "crm.data:nicknames",
@@ -414,6 +376,28 @@ test("admin data save surfaces handled upstream errors with status information",
       assert.equal(error.statusCode, 409);
       assert.equal(error.code, "version_conflict");
       assert.equal(error.message, "Data changed underneath you.");
+      return true;
+    }
+  );
+});
+
+test("admin data list includes the HTTP status in the error when the REST route is missing", async () => {
+  await assert.rejects(
+    () =>
+      loadAdminDataList({
+        request: new Request("http://localhost:3000/admin/data"),
+        fetchImpl: async () => ({
+          ok: false,
+          status: 404,
+          async json() {
+            throw new Error("not json");
+          }
+        })
+      }),
+    (error) => {
+      assert.equal(error.name, "AdminDataApiError");
+      assert.equal(error.statusCode, 404);
+      assert.equal(error.message, "Admin data request failed (HTTP 404).");
       return true;
     }
   );

@@ -206,6 +206,22 @@ function createApp(config, remixHandler) {
       const target = new URL(backendPath, config.backendBaseUrl);
       const backendRes = await fetch(target, buildBackendProxyRequestInit(req));
 
+      if (backendRes.status >= 500) {
+        log.error("api proxy upstream server error", {
+          method: req.method,
+          path: backendPath,
+          status: backendRes.status,
+          userEmail: req.user?.email || "unknown"
+        });
+      } else if (backendRes.status >= 400) {
+        log.warn("api proxy upstream client error", {
+          method: req.method,
+          path: backendPath,
+          status: backendRes.status,
+          userEmail: req.user?.email || "unknown"
+        });
+      }
+
       res.status(backendRes.status);
       backendRes.headers.forEach((value, key) => {
         if (["content-encoding", "transfer-encoding"].includes(key.toLowerCase())) return;
@@ -216,6 +232,12 @@ function createApp(config, remixHandler) {
       return res.send(buffer);
     } catch (err) {
       const message = err instanceof Error ? err.message : "proxy_error";
+      log.error("api proxy error", {
+        method: req.method,
+        path: req.originalUrl || "/",
+        userEmail: req.user?.email || "unknown",
+        message
+      });
       return res.status(502).json({ error: "proxy_error", message });
     }
   });
