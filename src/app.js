@@ -5,6 +5,52 @@ const { buildAuthorizationUrl, handleCallback } = require("./auth/microsoft");
 const { getSessionStore } = require("./session/store");
 
 /**
+ * Returns whether the proxied request method can include a body.
+ * @param {string|undefined} method
+ * @returns {boolean}
+ */
+function canProxyRequestBody(method) {
+  const normalizedMethod = typeof method === "string" ? method.toUpperCase() : "GET";
+  return normalizedMethod !== "GET" && normalizedMethod !== "HEAD";
+}
+
+/**
+ * Builds the fetch init for one backend proxy request.
+ * @param {{
+ *   method?: string,
+ *   headers?: Record<string, string|string[]|undefined>,
+ *   accessToken?: string|null
+ * } & NodeJS.ReadableStream} req
+ * @returns {RequestInit}
+ */
+function buildBackendProxyRequestInit(req) {
+  const headers = new Headers();
+  for (const [key, value] of Object.entries(req.headers || {})) {
+    if (value == null) continue;
+    const lower = key.toLowerCase();
+    if (["host", "connection", "content-length", "accept-encoding", "cookie"].includes(lower)) continue;
+    headers.set(key, Array.isArray(value) ? value.join(", ") : String(value));
+  }
+  if (req.accessToken) {
+    headers.set("authorization", `Bearer ${req.accessToken}`);
+  }
+
+  /** @type {RequestInit} */
+  const init = {
+    method: req.method,
+    headers,
+    redirect: "manual"
+  };
+
+  if (canProxyRequestBody(req.method)) {
+    init.body = req;
+    init.duplex = "half";
+  }
+
+  return init;
+}
+
+/**
  * @typedef {import("./config").AppConfig} AppConfig
  */
 
@@ -158,23 +204,7 @@ function createApp(config, remixHandler) {
       // Preserve the full API path when proxying to backend.
       const backendPath = req.originalUrl || "/";
       const target = new URL(backendPath, config.backendBaseUrl);
-
-      const headers = new Headers();
-      for (const [key, value] of Object.entries(req.headers)) {
-        if (value == null) continue;
-        const lower = key.toLowerCase();
-        if (["host", "connection", "content-length", "accept-encoding", "cookie"].includes(lower)) continue;
-        headers.set(key, Array.isArray(value) ? value.join(", ") : String(value));
-      }
-      if (req.accessToken) {
-        headers.set("authorization", `Bearer ${req.accessToken}`);
-      }
-
-      const backendRes = await fetch(target, {
-        method: req.method,
-        headers,
-        redirect: "manual"
-      });
+      const backendRes = await fetch(target, buildBackendProxyRequestInit(req));
 
       res.status(backendRes.status);
       backendRes.headers.forEach((value, key) => {
@@ -237,5 +267,6 @@ function createApp(config, remixHandler) {
 }
 
 module.exports = {
+  buildBackendProxyRequestInit,
   createApp
 };
