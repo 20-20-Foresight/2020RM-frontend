@@ -1,5 +1,7 @@
 import {
   Box,
+  Center,
+  Spinner,
   Flex,
   IconButton,
   Drawer,
@@ -13,7 +15,7 @@ import {
   Divider,
   Collapse
 } from "@chakra-ui/react";
-import { Link, NavLink, useLocation } from "@remix-run/react";
+import { Link, NavLink, useFetchers, useLocation, useNavigation } from "@remix-run/react";
 import { ChevronDownIcon, ChevronRightIcon, HamburgerIcon } from "@chakra-ui/icons";
 import { useEffect, useState } from "react";
 import {
@@ -240,11 +242,38 @@ function SidebarContent({ user, onNavigate }) {
   );
 }
 
+/**
+ * Renders a blocking loading state across the app.
+ * @param {{label: string}} props
+ * @returns {JSX.Element}
+ */
+function AppLoadingOverlay({ label }) {
+  return (
+    <Center position="fixed" inset={0} zIndex={1400} bg="rgba(247, 250, 252, 0.88)">
+      <VStack spacing={3} bg="white" borderRadius="lg" shadow="xl" px={6} py={5}>
+        <Spinner color="blue.500" thickness="3px" size="lg" />
+        <Text fontWeight="semibold" color="gray.700">
+          {label}
+        </Text>
+      </VStack>
+    </Center>
+  );
+}
+
 export function AppLayout({ user, children }) {
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const location = useLocation();
+  const navigation = useNavigation();
+  const fetchers = useFetchers();
+  const isAdminDataRoute = location.pathname.startsWith("/admin/data");
+  const hasActiveFetchers = fetchers.some((fetcher) => fetcher.state !== "idle");
+  const isLoading = navigation.state !== "idle" || hasActiveFetchers;
+  const isSubmitting = navigation.state === "submitting" || fetchers.some((fetcher) => fetcher.state === "submitting");
+  const loadingLabel = isSubmitting ? "Saving changes..." : "Loading...";
+  const headerTitle = isAdminDataRoute ? "Data" : "Dashboard";
 
   return (
-    <Flex minH="100vh" bg="gray.50" color="gray.900">
+    <Flex minH="100vh" bg="gray.50" color="gray.900" position="relative">
       <Box display={{ base: "none", md: "block" }} w="250px" bg="white" borderRightWidth="1px">
         <SidebarContent user={user} />
       </Box>
@@ -255,7 +284,7 @@ export function AppLayout({ user, children }) {
         </DrawerContent>
       </Drawer>
 
-      <Flex direction="column" flex="1">
+      <Flex direction="column" flex="1" minW="0">
         <Flex
           as="header"
           align="center"
@@ -273,13 +302,15 @@ export function AppLayout({ user, children }) {
             onClick={onOpen}
             variant="ghost"
           />
-          <Text fontWeight="semibold">Dashboard</Text>
+          <Text fontWeight="semibold">{headerTitle}</Text>
           <Spacer />
         </Flex>
-        <Box as="main" flex="1" p={{ base: 4, md: 6 }}>
+        <Box as="main" flex="1" minH="0" p={isAdminDataRoute ? 0 : { base: 4, md: 6 }}>
           {children}
         </Box>
       </Flex>
+
+      {isLoading ? <AppLoadingOverlay label={loadingLabel} /> : null}
     </Flex>
   );
 }

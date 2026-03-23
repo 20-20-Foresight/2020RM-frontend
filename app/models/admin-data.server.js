@@ -14,6 +14,8 @@ class AdminDataApiError extends Error {
   }
 }
 
+const KNOWN_EDITOR_SHAPES = new Set(["crosswalk", "list", "keyvalue", "object"]);
+
 /**
  * Returns whether a value is a plain object.
  * @param {unknown} value
@@ -107,6 +109,275 @@ function normalizeSummary(value) {
 }
 
 /**
+ * Reads one supported editor shape.
+ * @param {unknown} value
+ * @returns {"crosswalk"|"list"|"keyvalue"|"object"|null}
+ */
+function normalizeShape(value) {
+  const shape = readTrimmedString(value);
+  return shape && KNOWN_EDITOR_SHAPES.has(shape) ? shape : null;
+}
+
+/**
+ * Returns whether one value can be represented as a simple string cell.
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isScalarValue(value) {
+  return value == null || (typeof value !== "object" && typeof value !== "function");
+}
+
+/**
+ * Unwraps the most likely editable value from one document wrapper.
+ * @param {unknown} document
+ * @returns {{wrapperKey: string|null, value: unknown}}
+ */
+function unwrapDocumentValue(document) {
+  if (Array.isArray(document) || !isPlainObject(document)) {
+    return {
+      wrapperKey: null,
+      value: document
+    };
+  }
+
+  if (isPlainObject(document.crosswalk)) {
+    return {
+      wrapperKey: "crosswalk",
+      value: document.crosswalk
+    };
+  }
+
+  const keys = Object.keys(document);
+  if (keys.length === 1) {
+    return {
+      wrapperKey: keys[0],
+      value: document[keys[0]]
+    };
+  }
+
+  return {
+    wrapperKey: null,
+    value: document
+  };
+}
+
+/**
+ * Returns whether one value matches the crosswalk document pattern.
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isCrosswalkValue(value) {
+  if (!isPlainObject(value)) {
+    return false;
+  }
+
+  const entries = Object.values(value);
+  if (!entries.length) {
+    return false;
+  }
+
+  return entries.every((entry) => Array.isArray(entry) || (isPlainObject(entry) && Array.isArray(entry.values)));
+}
+
+/**
+ * Infers the editable shape from one returned document.
+ * @param {unknown} document
+ * @param {unknown} explicitShape
+ * @returns {"crosswalk"|"list"|"keyvalue"|"object"|null}
+ */
+function inferShape(document, explicitShape) {
+  const normalizedExplicitShape = normalizeShape(explicitShape);
+  if (normalizedExplicitShape) {
+    return normalizedExplicitShape;
+  }
+
+  const { wrapperKey, value } = unwrapDocumentValue(document);
+  if (wrapperKey === "crosswalk" || isCrosswalkValue(value)) {
+    return "crosswalk";
+  }
+
+  if (Array.isArray(value)) {
+    return "list";
+  }
+
+  if (!isPlainObject(value)) {
+    return null;
+  }
+
+  const entries = Object.values(value).filter((entry) => entry != null);
+  if (!entries.length) {
+    return wrapperKey === "entries" ? "keyvalue" : null;
+  }
+
+  if (entries.every((entry) => isScalarValue(entry))) {
+    return "keyvalue";
+  }
+
+  if (entries.every((entry) => isPlainObject(entry))) {
+    return "object";
+  }
+
+  return null;
+}
+
+/**
+ * Collects a stable column list from object-like rows.
+ * @param {unknown[]} values
+ * @returns {string[]}
+ */
+function collectColumns(values) {
+  /** @type {Set<string>} */
+  const seen = new Set();
+  /** @type {string[]} */
+  const columns = [];
+
+  for (const value of values) {
+    if (!isPlainObject(value)) {
+      continue;
+    }
+
+    for (const key of Object.keys(value)) {
+      const column = key.trim();
+      if (column && !seen.has(column)) {
+        seen.add(column);
+        columns.push(column);
+      }
+    }
+  }
+
+  return columns;
+}
+
+/**
+ * Builds editor rows from a wrapped document when no explicit editor metadata exists.
+ * @param {unknown} document
+ * @param {"crosswalk"|"list"|"keyvalue"|"object"|null} shape
+ * @returns {{columns: string[], rows: Record<string, string>[]}}
+ */
+function inferEditorFromDocument(document, shape) {
+  const { value } = unwrapDocumentValue(document);
+
+  if (shape === "crosswalk") {
+    if (!isPlainObject(value)) {
+      return {
+        columns: ["source", "target"],
+        rows: []
+      };
+    }
+
+    /** @type {Record<string, string>[]} */
+    const rows = [];
+
+    for (const [source, targetValue] of Object.entries(value)) {
+      const targets = Array.isArray(targetValue)
+        ? targetValue
+        : Array.isArray(targetValue?.values)
+          ? targetValue.values
+          : [];
+
+      if (!targets.length) {
+        rows.push({
+          source,
+          target: ""
+        });
+        continue;
+      }
+
+      for (const target of targets) {
+        rows.push({
+          source,
+          target: target == null ? "" : String(target)
+        });
+      }
+    }
+
+    return {
+      columns: ["source", "target"],
+      rows
+    };
+  }
+
+  if (shape === "list") {
+    if (!Array.isArray(value)) {
+      return {
+        columns: ["value"],
+        rows: []
+      };
+    }
+
+    const objectColumns = value.some((entry) => isPlainObject(entry)) ? collectColumns(value) : [];
+    if (objectColumns.length) {
+      return {
+        columns: objectColumns,
+        rows: value
+          .filter((entry) => isPlainObject(entry))
+          .map((entry) =>
+            Object.fromEntries(
+              objectColumns.map((column) => [column, entry[column] == null ? "" : String(entry[column])])
+            )
+          )
+      };
+    }
+
+    return {
+      columns: ["value"],
+      rows: value.map((entry) => ({
+        value: entry == null ? "" : String(entry)
+      }))
+    };
+  }
+
+  if (shape === "keyvalue") {
+    if (!isPlainObject(value)) {
+      return {
+        columns: ["key", "value"],
+        rows: []
+      };
+    }
+
+    return {
+      columns: ["key", "value"],
+      rows: Object.entries(value).map(([key, entryValue]) => ({
+        key,
+        value: entryValue == null ? "" : String(entryValue)
+      }))
+    };
+  }
+
+  if (shape === "object") {
+    if (!isPlainObject(value)) {
+      return {
+        columns: ["key", "value"],
+        rows: []
+      };
+    }
+
+    const nestedColumns = collectColumns(Object.values(value));
+    const columns = nestedColumns.length ? ["key", ...nestedColumns] : ["key", "value"];
+
+    return {
+      columns,
+      rows: Object.entries(value).map(([key, entryValue]) =>
+        Object.fromEntries(
+          columns.map((column, columnIndex) => {
+            if (columnIndex === 0) {
+              return [column, key];
+            }
+
+            return [column, entryValue?.[column] == null ? "" : String(entryValue[column])];
+          })
+        )
+      )
+    };
+  }
+
+  return {
+    columns: [],
+    rows: []
+  };
+}
+
+/**
  * Returns column names for an editor payload.
  * @param {unknown} editor
  * @returns {string[]}
@@ -132,9 +403,10 @@ function normalizeColumns(editor) {
 /**
  * Normalizes editor rows so each declared column is present.
  * @param {unknown} editor
+ * @param {{shape?: unknown, document?: unknown}} [options]
  * @returns {{columns: string[], rows: Record<string, string>[]}}
  */
-function normalizeEditor(editor) {
+function normalizeEditor(editor, options = {}) {
   const columns = normalizeColumns(editor);
   const rows = Array.isArray(editor?.rows)
     ? editor.rows
@@ -149,9 +421,17 @@ function normalizeEditor(editor) {
         )
     : [];
 
+  if (columns.length) {
+    return {
+      columns,
+      rows
+    };
+  }
+
+  const inferredShape = inferShape(options.document, options.shape);
+
   return {
-    columns,
-    rows
+    ...inferEditorFromDocument(options.document, inferredShape)
   };
 }
 
@@ -403,11 +683,16 @@ async function loadAdminDataDocument(options) {
     fetchImpl: options.fetchImpl
   });
   const result = payload?.data;
+  const shape = inferShape(result?.document, result?.shape ?? result?.editor?.shape);
 
   return {
     ...normalizeSummary(result),
+    shape,
     document: result?.document ?? null,
-    editor: normalizeEditor(result?.editor)
+    editor: normalizeEditor(result?.editor, {
+      shape,
+      document: result?.document
+    })
   };
 }
 

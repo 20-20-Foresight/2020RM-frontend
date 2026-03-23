@@ -147,6 +147,184 @@ test("admin data detail loader calls the normalized admin data detail route", as
   });
 });
 
+test("admin data detail infers a keyvalue editor from the document when editor metadata is omitted", async () => {
+  const detail = await loadAdminDataDocument({
+    request: new Request("http://localhost:3000/admin/data/crm.data%3Acountries", {
+      headers: {
+        cookie: "sid=123"
+      }
+    }),
+    id: "crm.data:countries",
+    fetchImpl: async () => ({
+      ok: true,
+      async json() {
+        return {
+          data: {
+            id: "crm.data:countries",
+            namespace: "crm.data",
+            key: "countries",
+            name: "Countries",
+            document: {
+              entries: {
+                us: "United States",
+                ca: "Canada"
+              }
+            }
+          }
+        };
+      }
+    })
+  });
+
+  assert.equal(detail.shape, "keyvalue");
+  assert.deepEqual(detail.editor, {
+    columns: ["key", "value"],
+    rows: [
+      {
+        key: "us",
+        value: "United States"
+      },
+      {
+        key: "ca",
+        value: "Canada"
+      }
+    ]
+  });
+});
+
+test("admin data detail infers a list editor from wrapped scalar arrays when editor metadata is omitted", async () => {
+  const detail = await loadAdminDataDocument({
+    request: new Request("http://localhost:3000/admin/data/crm.data%3Acountries", {
+      headers: {
+        cookie: "sid=123"
+      }
+    }),
+    id: "crm.data:countries",
+    fetchImpl: async () => ({
+      ok: true,
+      async json() {
+        return {
+          data: {
+            id: "crm.data:countries",
+            namespace: "crm.data",
+            key: "countries",
+            name: "Countries",
+            document: {
+              values: ["United States", "Canada"]
+            }
+          }
+        };
+      }
+    })
+  });
+
+  assert.equal(detail.shape, "list");
+  assert.deepEqual(detail.editor, {
+    columns: ["value"],
+    rows: [
+      {
+        value: "United States"
+      },
+      {
+        value: "Canada"
+      }
+    ]
+  });
+});
+
+test("admin data detail infers table columns from wrapped object-list documents when editor metadata is omitted", async () => {
+  const detail = await loadAdminDataDocument({
+    request: new Request("http://localhost:3000/admin/data/crm.data%3Acommon%20locations", {
+      headers: {
+        cookie: "sid=123"
+      }
+    }),
+    id: "crm.data:common locations",
+    fetchImpl: async () => ({
+      ok: true,
+      async json() {
+        return {
+          data: {
+            id: "crm.data:common locations",
+            namespace: "crm.data",
+            key: "common locations",
+            name: "Common Locations",
+            document: {
+              values: [
+                {
+                  city: "Chicago",
+                  state: "IL"
+                },
+                {
+                  city: "New York",
+                  state: "NY"
+                }
+              ]
+            }
+          }
+        };
+      }
+    })
+  });
+
+  assert.equal(detail.shape, "list");
+  assert.deepEqual(detail.editor, {
+    columns: ["city", "state"],
+    rows: [
+      {
+        city: "Chicago",
+        state: "IL"
+      },
+      {
+        city: "New York",
+        state: "NY"
+      }
+    ]
+  });
+});
+
+test("admin data detail infers a crosswalk editor from wrapped crosswalk documents when editor metadata is omitted", async () => {
+  const detail = await loadAdminDataDocument({
+    request: new Request("http://localhost:3000/admin/data/crm.data%3Acompany%20abbreviations", {
+      headers: {
+        cookie: "sid=123"
+      }
+    }),
+    id: "crm.data:company abbreviations",
+    fetchImpl: async () => ({
+      ok: true,
+      async json() {
+        return {
+          data: {
+            id: "crm.data:company abbreviations",
+            namespace: "crm.data",
+            key: "company abbreviations",
+            name: "Company Abbreviations",
+            document: {
+              crosswalk: {
+                ibm: {
+                  values: ["International Business Machines"]
+                }
+              }
+            }
+          }
+        };
+      }
+    })
+  });
+
+  assert.equal(detail.shape, "crosswalk");
+  assert.deepEqual(detail.editor, {
+    columns: ["source", "target"],
+    rows: [
+      {
+        source: "ibm",
+        target: "International Business Machines"
+      }
+    ]
+  });
+});
+
 test("buildDocumentFromEditor rewrites crosswalk rows into the canonical document shape", () => {
   assert.deepEqual(
     buildDocumentFromEditor({

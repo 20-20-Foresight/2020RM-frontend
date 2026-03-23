@@ -7,7 +7,7 @@ Remix + Chakra UI frontend with Express BFF for Microsoft OIDC and `/api/*` prox
 - Server: `src/server.js`
 - Design: `../2020-Design/phase1/auth-replan.md`
 - Search UI: `/organizations` and `/people` proxy to backend REST search endpoints
-- Admin data UI: `/admin/data` lists backend-normalized admin data sets and `/admin/data/:id` edits one data table through `/api/rest/admin/data`
+- Admin data UI: `/admin/data` is a full-page list and `/admin/data/:id` is a dedicated full-page editor backed by `/api/rest/admin/data`, with a global loading overlay for route changes and saves
 
 ## Run (dev)
 
