@@ -5,12 +5,14 @@ import {
   Badge,
   Box,
   Button,
+  Center,
   FormControl,
   FormLabel,
   Grid,
   Heading,
   HStack,
   Input,
+  Spinner,
   Table,
   Tbody,
   Td,
@@ -21,7 +23,7 @@ import {
   Tr,
   VStack
 } from "@chakra-ui/react";
-import { Form, useLocation, useNavigate } from "@remix-run/react";
+import { Form, Link, useLocation, useNavigation } from "@remix-run/react";
 import { useEffect, useState } from "react";
 
 /**
@@ -95,10 +97,16 @@ function cloneRows(rows) {
  */
 export function AdminDataShell({ items, error, children }) {
   const location = useLocation();
-  const navigate = useNavigate();
+  const navigation = useNavigation();
+  const isAdminDataNavigation =
+    navigation.state !== "idle" &&
+    ((typeof navigation.location?.pathname === "string" &&
+      navigation.location.pathname.startsWith("/admin/data")) ||
+      (typeof navigation.formAction === "string" && navigation.formAction.startsWith("/admin/data")));
+  const loadingLabel = navigation.state === "submitting" ? "Saving admin data..." : "Loading admin data...";
 
   return (
-    <VStack align="stretch" spacing={6}>
+    <VStack align="stretch" spacing={6} minH="100%">
       <Box>
         <Heading size="md">Data</Heading>
         <Text color="gray.600" mt={2}>
@@ -106,8 +114,33 @@ export function AdminDataShell({ items, error, children }) {
         </Text>
       </Box>
 
-      <Grid templateColumns={{ base: "1fr", xl: "minmax(340px, 420px) minmax(0, 1fr)" }} gap={6} alignItems="start">
-        <Box bg="white" borderRadius="lg" shadow="sm" p={5}>
+      <Box position="relative" flex="1" minH={{ base: "auto", xl: "calc(100vh - 170px)" }}>
+        {isAdminDataNavigation ? (
+          <Center
+            position="absolute"
+            inset={0}
+            zIndex={10}
+            bg="rgba(247, 250, 252, 0.76)"
+            backdropFilter="blur(2px)"
+            pointerEvents="none"
+          >
+            <VStack spacing={3} bg="white" borderRadius="lg" shadow="md" px={6} py={5}>
+              <Spinner color="blue.500" thickness="3px" size="lg" />
+              <Text fontWeight="medium" color="gray.700">
+                {loadingLabel}
+              </Text>
+            </VStack>
+          </Center>
+        ) : null}
+
+        <Grid
+          templateColumns={{ base: "1fr", xl: "minmax(360px, 420px) minmax(0, 1fr)" }}
+          gap={6}
+          alignItems="stretch"
+          h="100%"
+          minH="inherit"
+        >
+        <Box bg="white" borderRadius="lg" shadow="sm" p={5} display="flex" flexDirection="column" minH="0">
           <Heading size="sm" mb={4}>
             Data Sets
           </Heading>
@@ -120,8 +153,8 @@ export function AdminDataShell({ items, error, children }) {
           ) : null}
 
           {items.length ? (
-            <Box borderWidth="1px" borderColor="gray.200" borderRadius="md" overflow="hidden">
-              <Box maxH={{ base: "none", xl: "72vh" }} overflow="auto">
+            <Box borderWidth="1px" borderColor="gray.200" borderRadius="md" overflow="hidden" flex="1" minH="0">
+              <Box h="100%" overflow="auto">
                 <Table size="sm" variant="simple">
                   <Thead bg="gray.50">
                     <Tr>
@@ -140,42 +173,37 @@ export function AdminDataShell({ items, error, children }) {
                     {items.map((item) => {
                       const itemPath = buildAdminDataPath(item.id);
                       const isActive = location.pathname === itemPath;
-                      const isClickable = Boolean(item.id);
 
                       return (
                         <Tr
                           key={item.id || item.name}
                           bg={isActive ? "blue.50" : "transparent"}
-                          cursor={isClickable ? "pointer" : "default"}
                           _hover={
-                            isClickable
+                            item.id
                               ? {
                                   bg: isActive ? "blue.100" : "gray.50"
                                 }
                               : undefined
                           }
-                          onClick={() => {
-                            if (isClickable) {
-                              navigate(itemPath);
-                            }
-                          }}
-                          onKeyDown={(event) => {
-                            if (!isClickable) {
-                              return;
-                            }
-
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault();
-                              navigate(itemPath);
-                            }
-                          }}
-                          role={isClickable ? "link" : undefined}
-                          tabIndex={isClickable ? 0 : undefined}
                         >
                           <Td verticalAlign="top">
-                            <Text color={isActive ? "blue.900" : "gray.800"} fontWeight="semibold">
-                              {item.name}
-                            </Text>
+                            {item.id ? (
+                              <Link
+                                to={itemPath}
+                                style={{
+                                  display: "block",
+                                  color: isActive ? "#1A365D" : "#1A202C",
+                                  fontWeight: 600,
+                                  textDecoration: "none"
+                                }}
+                              >
+                                {item.name}
+                              </Link>
+                            ) : (
+                              <Text color="gray.800" fontWeight="semibold">
+                                {item.name}
+                              </Text>
+                            )}
                           </Td>
                           <Td verticalAlign="top">
                             <Text color={item.description ? "gray.700" : "gray.400"} noOfLines={3}>
@@ -200,10 +228,13 @@ export function AdminDataShell({ items, error, children }) {
           )}
         </Box>
 
-        <Box bg="white" borderRadius="lg" shadow="sm" p={5}>
-          {children}
+        <Box bg="white" borderRadius="lg" shadow="sm" p={5} display="flex" flexDirection="column" minH="0">
+          <Box flex="1" minH="0">
+            {children}
+          </Box>
         </Box>
-      </Grid>
+        </Grid>
+      </Box>
     </VStack>
   );
 }
@@ -214,7 +245,7 @@ export function AdminDataShell({ items, error, children }) {
  */
 export function AdminDataIndexPanel() {
   return (
-    <VStack align="stretch" spacing={4} minH="320px" justify="center">
+    <VStack align="stretch" spacing={4} minH="100%" justify="center">
       <Heading size="sm">Select A Data Set</Heading>
       <Text color="gray.600">
         Choose one item from the list to review its metadata, edit the table rows, and save a new version.
@@ -286,7 +317,7 @@ export function AdminDataDetailEditor({ data, actionData, isSaving = false }) {
   }
 
   return (
-    <VStack align="stretch" spacing={6}>
+    <VStack align="stretch" spacing={6} h="100%" minH="100%">
       <Box>
         <HStack justify="space-between" align="start" gap={4} flexWrap="wrap">
           <Box>
@@ -322,14 +353,22 @@ export function AdminDataDetailEditor({ data, actionData, isSaving = false }) {
       ) : null}
 
       {data.editor.columns.length ? (
-        <Form method="post">
+        <Form
+          method="post"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            minHeight: 0
+          }}
+        >
           <input type="hidden" name="shape" value={data.shape || ""} />
           <input type="hidden" name="expectedVersion" value={data.version == null ? "" : String(data.version)} />
           <input type="hidden" name="columns" value={JSON.stringify(data.editor.columns)} />
           <input type="hidden" name="rows" value={JSON.stringify(rows)} />
           <input type="hidden" name="document" value={JSON.stringify(data.document ?? null)} />
 
-          <VStack align="stretch" spacing={5}>
+          <VStack align="stretch" spacing={5} h="100%" minH="0">
             <FormControl>
               <FormLabel>Description</FormLabel>
               <Textarea
@@ -341,8 +380,8 @@ export function AdminDataDetailEditor({ data, actionData, isSaving = false }) {
               />
             </FormControl>
 
-            <Box borderWidth="1px" borderColor="gray.200" borderRadius="md" overflow="hidden">
-              <Box maxH="60vh" overflow="auto">
+            <Box borderWidth="1px" borderColor="gray.200" borderRadius="md" overflow="hidden" flex="1" minH="0">
+              <Box h="100%" overflow="auto">
                 <Table size="sm" variant="simple">
                   <Thead bg="gray.50">
                     <Tr>
