@@ -21,7 +21,7 @@ import {
   Tr,
   VStack
 } from "@chakra-ui/react";
-import { Form, Link, useLocation } from "@remix-run/react";
+import { Form, useLocation, useNavigate } from "@remix-run/react";
 import { useEffect, useState } from "react";
 
 /**
@@ -95,13 +95,14 @@ function cloneRows(rows) {
  */
 export function AdminDataShell({ items, error, children }) {
   const location = useLocation();
+  const navigate = useNavigate();
 
   return (
     <VStack align="stretch" spacing={6}>
       <Box>
         <Heading size="md">Data</Heading>
         <Text color="gray.600" mt={2}>
-          Edit shared admin data sets through the backend RPC interface.
+          Edit shared admin data sets through the backend admin data API.
         </Text>
       </Box>
 
@@ -139,25 +140,42 @@ export function AdminDataShell({ items, error, children }) {
                     {items.map((item) => {
                       const itemPath = buildAdminDataPath(item.id);
                       const isActive = location.pathname === itemPath;
+                      const isClickable = Boolean(item.id);
 
                       return (
-                        <Tr key={item.id || item.name} bg={isActive ? "blue.50" : "transparent"}>
+                        <Tr
+                          key={item.id || item.name}
+                          bg={isActive ? "blue.50" : "transparent"}
+                          cursor={isClickable ? "pointer" : "default"}
+                          _hover={
+                            isClickable
+                              ? {
+                                  bg: isActive ? "blue.100" : "gray.50"
+                                }
+                              : undefined
+                          }
+                          onClick={() => {
+                            if (isClickable) {
+                              navigate(itemPath);
+                            }
+                          }}
+                          onKeyDown={(event) => {
+                            if (!isClickable) {
+                              return;
+                            }
+
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              navigate(itemPath);
+                            }
+                          }}
+                          role={isClickable ? "link" : undefined}
+                          tabIndex={isClickable ? 0 : undefined}
+                        >
                           <Td verticalAlign="top">
-                            {item.id ? (
-                              <Link
-                                to={itemPath}
-                                prefetch="intent"
-                                style={{
-                                  color: isActive ? "#1A365D" : "#1A202C",
-                                  fontWeight: 600,
-                                  textDecoration: "none"
-                                }}
-                              >
-                                {item.name}
-                              </Link>
-                            ) : (
-                              <Text fontWeight="semibold">{item.name}</Text>
-                            )}
+                            <Text color={isActive ? "blue.900" : "gray.800"} fontWeight="semibold">
+                              {item.name}
+                            </Text>
                           </Td>
                           <Td verticalAlign="top">
                             <Text color={item.description ? "gray.700" : "gray.400"} noOfLines={3}>
