@@ -34,3 +34,9 @@ Current sidebar content:
 
 - Remix loaders call the frontend BFF at `/api/rest/organization/:uuid` and `/api/rest/person/:uuid`
 - The backend detail REST endpoints load one exported entity, schema metadata, and related locations from the RPC service
+
+## Loading States
+
+- Entity searches now show route-aware loading copy in the shared app overlay
+- Organization detail navigations show `Loading organization...`
+- Person detail navigations show `Loading person...`

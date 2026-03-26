@@ -34,6 +34,10 @@ import {
   isNavItemActive,
   getExpandedNavItemKeys
 } from "../models/navigation.mjs";
+import {
+  getAppLoadingOverlayState,
+  isAdminDataPath
+} from "../models/app-loading-state";
 
 const iconByName = {
   dashboard: MdDashboard,
@@ -265,11 +269,13 @@ export function AppLayout({ user, children }) {
   const location = useLocation();
   const navigation = useNavigation();
   const fetchers = useFetchers();
-  const isAdminDataRoute = location.pathname.startsWith("/admin/data");
-  const hasActiveFetchers = fetchers.some((fetcher) => fetcher.state !== "idle");
-  const isLoading = navigation.state !== "idle" || hasActiveFetchers;
-  const isSubmitting = navigation.state === "submitting" || fetchers.some((fetcher) => fetcher.state === "submitting");
-  const loadingLabel = isSubmitting ? "Saving changes..." : "Loading...";
+  const isAdminDataRoute = isAdminDataPath(location.pathname);
+  const loadingState = getAppLoadingOverlayState({
+    currentPathname: location.pathname,
+    navigationState: navigation.state,
+    navigationPathname: navigation.location?.pathname || null,
+    fetcherStates: fetchers.map((fetcher) => fetcher.state)
+  });
   const headerTitle = isAdminDataRoute ? "Data" : "Dashboard";
 
   return (
@@ -310,7 +316,9 @@ export function AppLayout({ user, children }) {
         </Box>
       </Flex>
 
-      {isLoading ? <AppLoadingOverlay label={loadingLabel} /> : null}
+      {loadingState.isLoading && loadingState.label ? (
+        <AppLoadingOverlay label={loadingState.label} />
+      ) : null}
     </Flex>
   );
 }
