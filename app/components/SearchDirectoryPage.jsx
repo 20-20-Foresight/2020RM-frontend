@@ -17,77 +17,13 @@ import {
   Text,
   VStack
 } from "@chakra-ui/react";
-import { Form, useNavigation } from "@remix-run/react";
+import { Form, Link as RemixLink, useNavigation } from "@remix-run/react";
 import { FaLinkedin } from "react-icons/fa";
-
-/**
- * Read a dotted path from a result object.
- * @param {unknown} value
- * @param {string} path
- * @returns {unknown}
- */
-function readObjectPath(value, path) {
-  if (!value || typeof value !== "object" || typeof path !== "string" || !path.trim()) {
-    return null;
-  }
-
-  const resolved = path.split(".").reduce((currentValue, key) => {
-    if (!currentValue || typeof currentValue !== "object") {
-      return undefined;
-    }
-
-    return currentValue[key];
-  }, value);
-
-  if (typeof resolved === "string") {
-    const trimmed = resolved.trim();
-    return trimmed ? trimmed : null;
-  }
-
-  return resolved == null ? null : resolved;
-}
-
-/**
- * Resolve a displayable field value from one search result.
- * @param {unknown} result
- * @param {string} path
- * @returns {string|null}
- */
-function getSearchResultFieldValue(result, path) {
-  const value = readObjectPath(result, path);
-  if (value == null) {
-    return null;
-  }
-
-  return typeof value === "string" ? value : String(value);
-}
-
-/**
- * Pick the first preferred field path present in the active schema.
- * @param {unknown} schema
- * @param {string[]} preferredPaths
- * @returns {string|null}
- */
-function resolveSchemaFieldPath(schema, preferredPaths) {
-  const fieldPaths = Array.isArray(schema?.document?.fieldPaths)
-    ? schema.document.fieldPaths
-    : Array.isArray(schema?.fieldPaths)
-      ? schema.fieldPaths
-      : [];
-  const availablePaths = new Set(
-    fieldPaths
-      .map((field) => (typeof field?.path === "string" ? field.path.trim() : ""))
-      .filter(Boolean)
-  );
-
-  for (const path of Array.isArray(preferredPaths) ? preferredPaths : []) {
-    if (typeof path === "string" && availablePaths.has(path)) {
-      return path;
-    }
-  }
-
-  return null;
-}
+import { buildEntityDetailPath } from "../models/entity-route";
+import {
+  getSearchResultFieldValue,
+  resolveSchemaFieldPath
+} from "../models/search-result";
 
 /**
  * Format the attached related location for list display.
@@ -205,6 +141,7 @@ export function SearchDirectoryPage({
                   ? getSearchResultFieldValue(result, linkedInFieldPath)
                   : null;
                 const relatedLocationValue = formatRelatedLocation(result.relatedLocation);
+                const detailPath = buildEntityDetailPath(data.entityType, result.uuid);
 
                 return (
                   <ListItem
@@ -225,7 +162,13 @@ export function SearchDirectoryPage({
                       alignItems="start"
                     >
                       <Box minW="0" gridArea="name">
-                        <Text fontWeight="semibold">{result.name || emptyLabel}</Text>
+                        {detailPath ? (
+                          <ChakraLink as={RemixLink} to={detailPath} color="gray.800" fontWeight="semibold">
+                            {result.name || emptyLabel}
+                          </ChakraLink>
+                        ) : (
+                          <Text fontWeight="semibold">{result.name || emptyLabel}</Text>
+                        )}
                         {secondaryFieldLabel && secondaryValue ? (
                           <Text color="gray.600" fontSize="sm" mt={1}>
                             {secondaryFieldLabel}: {secondaryValue}
