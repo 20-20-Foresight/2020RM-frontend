@@ -34,9 +34,11 @@ import {
 } from "../models/navigation.mjs";
 import {
   getAppLoadingOverlayState,
-  isAdminDataPath
+  isAdminDataPath,
+  isSegmentationPath
 } from "../models/app-loading-state";
 import { BlockingLoadingOverlay } from "./BlockingLoadingOverlay";
+import { syncSifTaxonomyToCache } from "../models/sif-taxonomy-cache";
 
 const iconByName = {
   dashboard: MdDashboard,
@@ -251,13 +253,43 @@ export function AppLayout({ user, children }) {
   const navigation = useNavigation();
   const fetchers = useFetchers();
   const isAdminDataRoute = isAdminDataPath(location.pathname);
+  const isSegmentationRoute = isSegmentationPath(location.pathname);
   const loadingState = getAppLoadingOverlayState({
     currentPathname: location.pathname,
     navigationState: navigation.state,
     navigationPathname: navigation.location?.pathname || null,
     fetcherStates: fetchers.map((fetcher) => fetcher.state)
   });
-  const headerTitle = isAdminDataRoute ? "Data" : "Dashboard";
+  const headerTitle = isSegmentationRoute ? "Segmentation" : isAdminDataRoute ? "Data" : "Dashboard";
+
+  useEffect(() => {
+    /**
+     * Keep the SIF taxonomy cached in IndexedDB for reuse across the app.
+     * Failures stay silent because the live routes still load through the BFF.
+     */
+    async function syncNow() {
+      try {
+        await syncSifTaxonomyToCache();
+      } catch (_error) {}
+    }
+
+    void syncNow();
+
+    const intervalId = window.setInterval(() => {
+      void syncNow();
+    }, 15 * 60 * 1000);
+
+    const handleWindowFocus = () => {
+      void syncNow();
+    };
+
+    window.addEventListener("focus", handleWindowFocus);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleWindowFocus);
+    };
+  }, []);
 
   return (
     <Flex minH="100vh" bg="gray.50" color="gray.900" position="relative">

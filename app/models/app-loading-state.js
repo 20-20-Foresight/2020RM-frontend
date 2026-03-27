@@ -8,6 +8,15 @@ function isAdminDataPath(pathname) {
 }
 
 /**
+ * Returns whether one pathname belongs to the segmentation area.
+ * @param {string|null|undefined} pathname
+ * @returns {boolean}
+ */
+function isSegmentationPath(pathname) {
+  return typeof pathname === "string" && pathname.startsWith("/admin/segmentation");
+}
+
+/**
  * Returns whether one pathname is an entity search list route.
  * @param {string|null|undefined} pathname
  * @returns {boolean}
@@ -84,6 +93,14 @@ function getAppLoadingOverlayState(options) {
     };
   }
 
+  if (isSubmitting && isSegmentationPath(pendingPathname)) {
+    return {
+      isLoading: true,
+      isSubmitting: true,
+      label: "Saving changes..."
+    };
+  }
+
   const detailEntityType = getEntityDetailTypeFromPath(pendingPathname);
   if (detailEntityType === "organization") {
     return {
@@ -109,6 +126,14 @@ function getAppLoadingOverlayState(options) {
     };
   }
 
+  if (isSegmentationPath(pendingPathname)) {
+    return {
+      isLoading: true,
+      isSubmitting,
+      label: "Loading segmentation..."
+    };
+  }
+
   return {
     isLoading: true,
     isSubmitting,
@@ -120,5 +145,6 @@ module.exports = {
   getAppLoadingOverlayState,
   getEntityDetailTypeFromPath,
   isAdminDataPath,
+  isSegmentationPath,
   isEntitySearchPath
 };

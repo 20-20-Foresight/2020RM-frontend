@@ -99,6 +99,11 @@ export const navItems = [
         key: "admin-data",
         label: "Data",
         to: "/admin/data"
+      },
+      {
+        key: "admin-segmentation",
+        label: "Segmentation",
+        to: "/admin/segmentation"
       }
     ]
   },

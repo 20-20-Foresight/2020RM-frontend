@@ -697,6 +697,26 @@ async function loadAdminDataDocument(options) {
 }
 
 /**
+ * Loads the raw admin data document for custom editors that own the document shape.
+ * @param {{request: Request, id: string, fetchImpl?: typeof fetch}} options
+ * @returns {Promise<ReturnType<typeof normalizeSummary> & {document: unknown, editor: unknown}>}
+ */
+async function loadRawAdminDataDocument(options) {
+  const payload = await requestAdminDataApi({
+    request: options.request,
+    pathname: `/api/rest/admin/data/${encodeURIComponent(options.id)}`,
+    fetchImpl: options.fetchImpl
+  });
+  const result = payload?.data;
+
+  return {
+    ...normalizeSummary(result),
+    document: result?.document ?? null,
+    editor: result?.editor ?? null
+  };
+}
+
+/**
  * Saves one admin data document through the RPC endpoint.
  * @param {{
  *   request: Request,
@@ -742,10 +762,41 @@ async function saveAdminDataDocument(options) {
   return normalizeSummary(result);
 }
 
+/**
+ * Saves one raw admin data document without rebuilding it through the table editor adapter.
+ * @param {{
+ *   request: Request,
+ *   id: string,
+ *   description?: string,
+ *   expectedVersion?: number|null,
+ *   document?: unknown,
+ *   fetchImpl?: typeof fetch
+ * }} options
+ * @returns {Promise<ReturnType<typeof normalizeSummary>>}
+ */
+async function saveRawAdminDataDocument(options) {
+  const payload = await requestAdminDataApi({
+    request: options.request,
+    pathname: `/api/rest/admin/data/${encodeURIComponent(options.id)}`,
+    method: "PUT",
+    body: {
+      description: typeof options.description === "string" ? options.description : "",
+      expectedVersion: Number.isFinite(options.expectedVersion) ? Number(options.expectedVersion) : null,
+      document: options.document ?? null
+    },
+    fetchImpl: options.fetchImpl
+  });
+  const result = payload?.data;
+
+  return normalizeSummary(result);
+}
+
 module.exports = {
   AdminDataApiError,
   buildDocumentFromEditor,
   loadAdminDataDocument,
+  loadRawAdminDataDocument,
   loadAdminDataList,
-  saveAdminDataDocument
+  saveAdminDataDocument,
+  saveRawAdminDataDocument
 };

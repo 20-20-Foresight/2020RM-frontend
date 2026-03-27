@@ -5,6 +5,7 @@ const {
   getAppLoadingOverlayState,
   getEntityDetailTypeFromPath,
   isAdminDataPath,
+  isSegmentationPath,
   isEntitySearchPath
 } = require("../app/models/app-loading-state");
 
@@ -12,6 +13,13 @@ test("isAdminDataPath matches the admin data route tree", () => {
   assert.equal(isAdminDataPath("/admin/data"), true);
   assert.equal(isAdminDataPath("/admin/data/crm.data%3Aexample"), true);
   assert.equal(isAdminDataPath("/organizations"), false);
+});
+
+test("isSegmentationPath matches the segmentation route tree", () => {
+  assert.equal(isSegmentationPath("/admin/segmentation"), true);
+  assert.equal(isSegmentationPath("/admin/segmentation/sectors"), true);
+  assert.equal(isSegmentationPath("/admin/segmentation/real-estate/industries"), true);
+  assert.equal(isSegmentationPath("/admin/data"), false);
 });
 
 test("isEntitySearchPath matches the list routes", () => {
@@ -111,6 +119,36 @@ test("loading overlay preserves saving copy for admin data submissions", () => {
       currentPathname: "/admin/data/crm.data%3Acompany%20abbreviations",
       navigationState: "submitting",
       navigationPathname: "/admin/data/crm.data%3Acompany%20abbreviations",
+      fetcherStates: []
+    }),
+    {
+      isLoading: true,
+      isSubmitting: true,
+      label: "Saving changes..."
+    }
+  );
+});
+
+test("loading overlay uses segmentation-specific copy for segmentation navigations and saves", () => {
+  assert.deepEqual(
+    getAppLoadingOverlayState({
+      currentPathname: "/admin/segmentation/sectors",
+      navigationState: "loading",
+      navigationPathname: "/admin/segmentation/real-estate/industries",
+      fetcherStates: []
+    }),
+    {
+      isLoading: true,
+      isSubmitting: false,
+      label: "Loading segmentation..."
+    }
+  );
+
+  assert.deepEqual(
+    getAppLoadingOverlayState({
+      currentPathname: "/admin/segmentation/sectors",
+      navigationState: "submitting",
+      navigationPathname: "/admin/segmentation/sectors",
       fetcherStates: []
     }),
     {
