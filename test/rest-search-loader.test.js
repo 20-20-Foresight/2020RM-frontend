@@ -13,6 +13,7 @@ test("rest search loader returns idle state when name is missing", async () => {
   });
 
   assert.deepEqual(result, {
+    entityType: "organization",
     query: {
       name: ""
     },
@@ -87,6 +88,7 @@ test("rest search loader calls the organization REST endpoint and returns normal
   assert.equal(calls[0].url, "http://localhost:3000/api/rest/organization?name=Acme");
   assert.equal(calls[0].options.headers.cookie, "sid=123");
   assert.deepEqual(result, {
+    entityType: "organization",
     query: {
       name: "Acme"
     },
@@ -137,6 +139,7 @@ test("rest search loader returns an error state when the backend request fails",
   });
 
   assert.deepEqual(result, {
+    entityType: "person",
     query: {
       name: "Ada"
     },

@@ -1,7 +1,5 @@
 import {
   Box,
-  Center,
-  Spinner,
   Flex,
   IconButton,
   Drawer,
@@ -34,6 +32,11 @@ import {
   isNavItemActive,
   getExpandedNavItemKeys
 } from "../models/navigation.mjs";
+import {
+  getAppLoadingOverlayState,
+  isAdminDataPath
+} from "../models/app-loading-state";
+import { BlockingLoadingOverlay } from "./BlockingLoadingOverlay";
 
 const iconByName = {
   dashboard: MdDashboard,
@@ -242,34 +245,18 @@ function SidebarContent({ user, onNavigate }) {
   );
 }
 
-/**
- * Renders a blocking loading state across the app.
- * @param {{label: string}} props
- * @returns {JSX.Element}
- */
-function AppLoadingOverlay({ label }) {
-  return (
-    <Center position="fixed" inset={0} zIndex={1400} bg="rgba(247, 250, 252, 0.88)">
-      <VStack spacing={3} bg="white" borderRadius="lg" shadow="xl" px={6} py={5}>
-        <Spinner color="blue.500" thickness="3px" size="lg" />
-        <Text fontWeight="semibold" color="gray.700">
-          {label}
-        </Text>
-      </VStack>
-    </Center>
-  );
-}
-
 export function AppLayout({ user, children }) {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const location = useLocation();
   const navigation = useNavigation();
   const fetchers = useFetchers();
-  const isAdminDataRoute = location.pathname.startsWith("/admin/data");
-  const hasActiveFetchers = fetchers.some((fetcher) => fetcher.state !== "idle");
-  const isLoading = navigation.state !== "idle" || hasActiveFetchers;
-  const isSubmitting = navigation.state === "submitting" || fetchers.some((fetcher) => fetcher.state === "submitting");
-  const loadingLabel = isSubmitting ? "Saving changes..." : "Loading...";
+  const isAdminDataRoute = isAdminDataPath(location.pathname);
+  const loadingState = getAppLoadingOverlayState({
+    currentPathname: location.pathname,
+    navigationState: navigation.state,
+    navigationPathname: navigation.location?.pathname || null,
+    fetcherStates: fetchers.map((fetcher) => fetcher.state)
+  });
   const headerTitle = isAdminDataRoute ? "Data" : "Dashboard";
 
   return (
@@ -310,7 +297,9 @@ export function AppLayout({ user, children }) {
         </Box>
       </Flex>
 
-      {isLoading ? <AppLoadingOverlay label={loadingLabel} /> : null}
+      {loadingState.isLoading && loadingState.label ? (
+        <BlockingLoadingOverlay label={loadingState.label} />
+      ) : null}
     </Flex>
   );
 }

@@ -11,10 +11,12 @@ function readNameQuery(requestUrl) {
 /**
  * Builds the initial empty state for a search page.
  * @param {string} entityLabel
- * @returns {{query: {name: string}, status: string, statusExplained: string, results: object[], meta: {count: number}, schema: object|null, error: string|null}}
+ * @param {"organization"|"person"} entityType
+ * @returns {{entityType: "organization"|"person", query: {name: string}, status: string, statusExplained: string, results: object[], meta: {count: number}, schema: object|null, error: string|null}}
  */
-function buildIdleState(entityLabel) {
+function buildIdleState(entityLabel, entityType) {
   return {
+    entityType,
     query: {
       name: ""
     },
@@ -36,7 +38,7 @@ function buildIdleState(entityLabel) {
  *   entityType: "organization" | "person",
  *   fetchImpl?: typeof fetch
  * }} options
- * @returns {Promise<{query: {name: string}, status: string, statusExplained: string, results: object[], meta: {count: number} & object, schema: object|null, error: string|null}>}
+ * @returns {Promise<{entityType: "organization"|"person", query: {name: string}, status: string, statusExplained: string, results: object[], meta: {count: number} & object, schema: object|null, error: string|null}>}
  */
 async function loadRestSearchPage(options) {
   const fetchImpl = options.fetchImpl || fetch;
@@ -44,7 +46,7 @@ async function loadRestSearchPage(options) {
   const entityLabel = options.entityType === "person" ? "people" : "organizations";
 
   if (!name) {
-    return buildIdleState(entityLabel);
+    return buildIdleState(entityLabel, options.entityType);
   }
 
   const target = new URL(`/api/rest/${options.entityType}`, options.request.url);
@@ -60,6 +62,7 @@ async function loadRestSearchPage(options) {
 
     if (!response.ok) {
       return {
+        entityType: options.entityType,
         query: {
           name
         },
@@ -75,6 +78,7 @@ async function loadRestSearchPage(options) {
     }
 
     return {
+      entityType: options.entityType,
       query: {
         name
       },
@@ -98,6 +102,7 @@ async function loadRestSearchPage(options) {
     };
   } catch (error) {
     return {
+      entityType: options.entityType,
       query: {
         name
       },
