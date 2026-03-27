@@ -28,6 +28,18 @@ test("directory search loading detects in-flight people searches", () => {
   );
 });
 
+test("directory search loading stays active for a pending local search submit", () => {
+  assert.equal(
+    isDirectorySearchLoading({
+      currentPathname: "/people",
+      navigationState: "idle",
+      navigationPathname: null,
+      hasPendingSearchSubmit: true
+    }),
+    true
+  );
+});
+
 test("directory search loading ignores navigation away from the list page", () => {
   assert.equal(
     isDirectorySearchLoading({

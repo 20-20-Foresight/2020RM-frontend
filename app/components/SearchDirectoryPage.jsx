@@ -18,6 +18,7 @@ import {
   VStack
 } from "@chakra-ui/react";
 import { Form, Link as RemixLink, useLocation, useNavigation } from "@remix-run/react";
+import { useEffect, useState } from "react";
 import { FaLinkedin } from "react-icons/fa";
 import { BlockingLoadingOverlay } from "./BlockingLoadingOverlay";
 import { buildEntityDetailPath } from "../models/entity-route";
@@ -67,15 +68,38 @@ export function SearchDirectoryPage({
 }) {
   const location = useLocation();
   const navigation = useNavigation();
+  const [pendingSearchName, setPendingSearchName] = useState(null);
   const isSearching = isDirectorySearchLoading({
     currentPathname: location.pathname,
     navigationState: navigation.state,
-    navigationPathname: navigation.location?.pathname || null
+    navigationPathname: navigation.location?.pathname || null,
+    hasPendingSearchSubmit: Boolean(pendingSearchName)
   });
   const searchLoadingLabel = getDirectorySearchLoadingLabel(data.entityType);
   const secondaryFieldPath = resolveSchemaFieldPath(data.schema, secondaryFieldPaths);
   const linkedInFieldPath = resolveSchemaFieldPath(data.schema, linkedInFieldPaths);
   const emptyLocationLabel = data.entityType === "organization" ? "?" : "-";
+
+  useEffect(() => {
+    if (!pendingSearchName) {
+      return;
+    }
+
+    if (navigation.state === "idle" && data.query?.name === pendingSearchName) {
+      setPendingSearchName(null);
+    }
+  }, [data.query?.name, navigation.state, pendingSearchName]);
+
+  /**
+   * Tracks one local search submit so the blocking modal appears immediately.
+   * @param {import("react").FormEvent<HTMLFormElement>} event
+   */
+  function handleSubmit(event) {
+    const formData = new FormData(event.currentTarget);
+    const name = formData.get("name");
+    const trimmedName = typeof name === "string" ? name.trim() : "";
+    setPendingSearchName(trimmedName || null);
+  }
 
   return (
     <VStack align="stretch" spacing={6}>
@@ -88,7 +112,7 @@ export function SearchDirectoryPage({
       </Box>
 
       <Box bg="white" borderRadius="lg" shadow="sm" p={5}>
-        <Form method="get">
+        <Form method="get" onSubmit={handleSubmit}>
           <HStack align="end" spacing={3}>
             <FormControl>
               <Input

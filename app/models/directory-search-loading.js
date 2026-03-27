@@ -3,16 +3,25 @@
  * @param {{
  *   currentPathname: string,
  *   navigationState: string,
- *   navigationPathname?: string|null
+ *   navigationPathname?: string|null,
+ *   hasPendingSearchSubmit?: boolean
  * }} options
  * @returns {boolean}
  */
 function isDirectorySearchLoading(options) {
+  const isSearchRoute = options.currentPathname === "/organizations" || options.currentPathname === "/people";
+  if (!isSearchRoute) {
+    return false;
+  }
+
+  if (options.hasPendingSearchSubmit) {
+    return true;
+  }
+
   return (
     options.navigationState !== "idle" &&
     typeof options.navigationPathname === "string" &&
-    options.navigationPathname === options.currentPathname &&
-    (options.currentPathname === "/organizations" || options.currentPathname === "/people")
+    options.navigationPathname === options.currentPathname
   );
 }
 
