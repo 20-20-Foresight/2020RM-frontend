@@ -19,7 +19,12 @@ import {
 } from "@chakra-ui/react";
 import { Form, Link as RemixLink, useLocation, useNavigation } from "@remix-run/react";
 import { FaLinkedin } from "react-icons/fa";
+import { BlockingLoadingOverlay } from "./BlockingLoadingOverlay";
 import { buildEntityDetailPath } from "../models/entity-route";
+import {
+  getDirectorySearchLoadingLabel,
+  isDirectorySearchLoading
+} from "../models/directory-search-loading";
 import {
   getSearchResultFieldValue,
   resolveSchemaFieldPath
@@ -62,14 +67,19 @@ export function SearchDirectoryPage({
 }) {
   const location = useLocation();
   const navigation = useNavigation();
-  const isSearching =
-    navigation.state !== "idle" && navigation.location?.pathname === location.pathname;
+  const isSearching = isDirectorySearchLoading({
+    currentPathname: location.pathname,
+    navigationState: navigation.state,
+    navigationPathname: navigation.location?.pathname || null
+  });
+  const searchLoadingLabel = getDirectorySearchLoadingLabel(data.entityType);
   const secondaryFieldPath = resolveSchemaFieldPath(data.schema, secondaryFieldPaths);
   const linkedInFieldPath = resolveSchemaFieldPath(data.schema, linkedInFieldPaths);
   const emptyLocationLabel = data.entityType === "organization" ? "?" : "-";
 
   return (
     <VStack align="stretch" spacing={6}>
+      {isSearching ? <BlockingLoadingOverlay label={searchLoadingLabel} zIndex={1500} /> : null}
       <Box>
         <Heading size="md">{title}</Heading>
         <Text color="gray.600" mt={2}>

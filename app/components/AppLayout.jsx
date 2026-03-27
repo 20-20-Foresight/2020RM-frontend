@@ -1,7 +1,5 @@
 import {
   Box,
-  Center,
-  Spinner,
   Flex,
   IconButton,
   Drawer,
@@ -38,6 +36,7 @@ import {
   getAppLoadingOverlayState,
   isAdminDataPath
 } from "../models/app-loading-state";
+import { BlockingLoadingOverlay } from "./BlockingLoadingOverlay";
 
 const iconByName = {
   dashboard: MdDashboard,
@@ -246,24 +245,6 @@ function SidebarContent({ user, onNavigate }) {
   );
 }
 
-/**
- * Renders a blocking loading state across the app.
- * @param {{label: string}} props
- * @returns {JSX.Element}
- */
-function AppLoadingOverlay({ label }) {
-  return (
-    <Center position="fixed" inset={0} zIndex={1400} bg="rgba(247, 250, 252, 0.88)">
-      <VStack spacing={3} bg="white" borderRadius="lg" shadow="xl" px={6} py={5}>
-        <Spinner color="blue.500" thickness="3px" size="lg" />
-        <Text fontWeight="semibold" color="gray.700">
-          {label}
-        </Text>
-      </VStack>
-    </Center>
-  );
-}
-
 export function AppLayout({ user, children }) {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const location = useLocation();
@@ -317,7 +298,7 @@ export function AppLayout({ user, children }) {
       </Flex>
 
       {loadingState.isLoading && loadingState.label ? (
-        <AppLoadingOverlay label={loadingState.label} />
+        <BlockingLoadingOverlay label={loadingState.label} />
       ) : null}
     </Flex>
   );
