@@ -40,14 +40,18 @@ function readFormString(formData, name) {
 }
 
 /**
- * Reads one checkbox-style form value.
+ * Reads one optional checkbox-style form value.
  * @param {FormData} formData
  * @param {string} name
- * @returns {boolean}
+ * @returns {boolean|undefined}
  */
-function readFormBoolean(formData, name) {
-  const value = formData.get(name);
-  return value === "on" || value === "true" || value === "1";
+function readOptionalFormBoolean(formData, name) {
+  const values = formData.getAll(name);
+  if (!values.length) {
+    return undefined;
+  }
+
+  return values.some((value) => value === "on" || value === "true" || value === "1");
 }
 
 /**
@@ -104,8 +108,8 @@ async function handleSifTaxonomyAction(options) {
         examples: splitFormList(readFormString(formData, "examples")),
         whyHere: readFormString(formData, "whyHere") || null,
         aliases: splitFormList(readFormString(formData, "aliases")),
-        active: readFormBoolean(formData, "active"),
-        crosswalkOnly: readFormBoolean(formData, "crosswalkOnly"),
+        active: readOptionalFormBoolean(formData, "active"),
+        crosswalkOnly: readOptionalFormBoolean(formData, "crosswalkOnly"),
         seenInCrosswalks: splitFormList(readFormString(formData, "seenInCrosswalks"))
       });
     } else if (intent === "add-node") {
@@ -161,6 +165,6 @@ async function handleSifTaxonomyAction(options) {
 
 module.exports = {
   buildRouteError,
-  handleSifTaxonomyAction
+  handleSifTaxonomyAction,
+  readOptionalFormBoolean
 };
-

@@ -239,15 +239,22 @@ function TaxonomyNodeCard({ node, kind, childLinkLabel = null, childLinkPath = n
 
             <HStack spacing={8} wrap="wrap">
               <FormControl display="flex" alignItems="center" w="auto">
-                <Switch name="active" defaultChecked={node.active !== false} mr={3} />
-                <FormLabel mb={0}>Active</FormLabel>
+                <input type="hidden" name="active" value="false" />
+                <Switch name="active" value="true" defaultChecked={node.active !== false} mr={3} />
+                <FormLabel mb={0}>Active (Reserved)</FormLabel>
               </FormControl>
 
               <FormControl display="flex" alignItems="center" w="auto">
-                <Switch name="crosswalkOnly" defaultChecked={node.crosswalkOnly === true} mr={3} />
+                <input type="hidden" name="crosswalkOnly" value="false" />
+                <Switch name="crosswalkOnly" value="true" defaultChecked={node.crosswalkOnly === true} mr={3} />
                 <FormLabel mb={0}>Crosswalk Only</FormLabel>
               </FormControl>
             </HStack>
+
+            <Text fontSize="sm" color="gray.500">
+              `Active` is a reserved lifecycle flag. Leave it on unless you intentionally want to disable the taxonomy
+              node.
+            </Text>
 
             <HStack spacing={3}>
               <Button type="submit" colorScheme="blue" isLoading={isSaving} loadingText="Saving">
