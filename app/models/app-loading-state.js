@@ -67,27 +67,20 @@ function getAppLoadingOverlayState(options) {
       ? options.navigationPathname
       : options.currentPathname;
 
+  // Same-route directory searches render their own page-scoped loading dialog.
+  if (isEntitySearchPath(pendingPathname) && pendingPathname === options.currentPathname) {
+    return {
+      isLoading: false,
+      isSubmitting: false,
+      label: null
+    };
+  }
+
   if (isSubmitting && isAdminDataPath(pendingPathname)) {
     return {
       isLoading: true,
       isSubmitting: true,
       label: "Saving changes..."
-    };
-  }
-
-  if (pendingPathname === "/organizations") {
-    return {
-      isLoading: true,
-      isSubmitting,
-      label: "Searching organizations..."
-    };
-  }
-
-  if (pendingPathname === "/people") {
-    return {
-      isLoading: true,
-      isSubmitting,
-      label: "Searching people..."
     };
   }
 

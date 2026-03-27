@@ -41,7 +41,7 @@ test("loading overlay state stays idle when nothing is in flight", () => {
   );
 });
 
-test("loading overlay labels organization searches clearly", () => {
+test("app shell loading overlay ignores same-route organization searches", () => {
   assert.deepEqual(
     getAppLoadingOverlayState({
       currentPathname: "/organizations",
@@ -50,14 +50,14 @@ test("loading overlay labels organization searches clearly", () => {
       fetcherStates: []
     }),
     {
-      isLoading: true,
+      isLoading: false,
       isSubmitting: false,
-      label: "Searching organizations..."
+      label: null
     }
   );
 });
 
-test("loading overlay labels person searches clearly", () => {
+test("app shell loading overlay ignores same-route person searches", () => {
   assert.deepEqual(
     getAppLoadingOverlayState({
       currentPathname: "/people",
@@ -66,9 +66,9 @@ test("loading overlay labels person searches clearly", () => {
       fetcherStates: []
     }),
     {
-      isLoading: true,
+      isLoading: false,
       isSubmitting: false,
-      label: "Searching people..."
+      label: null
     }
   );
 });

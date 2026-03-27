@@ -11,7 +11,9 @@ while a search navigation is in flight.
   same-route GET search navigations directly.
 - Extracted the blocking loading UI into a shared component.
 - Search list pages now render their own blocking overlay while searching, in
-  addition to the app-level route overlay.
+  the page content area instead of taking over the full viewport.
+- The app shell no longer renders its full-screen overlay for same-route
+  organization and people searches.
 
 ## Why
 
