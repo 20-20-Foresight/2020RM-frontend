@@ -27,6 +27,9 @@ authoritative SIF taxonomy document stored at `crm.data.taxonomy:sif`.
 - The frontend targets `crm.data.taxonomy:sif` directly, matching the backend
   design documentation.
 - The editor preserves existing `id` and `slug` values when labels change.
+- Reserved node lifecycle flags such as `active` and `crosswalkOnly` are not
+  exposed in the normal inline editor UI so users do not accidentally change
+  them while editing descriptions.
 - New nodes generate ids using the backend naming pattern:
   - sector: `sector:<slug>`
   - industry: `industry:<sectorSlug>:<slug>`
