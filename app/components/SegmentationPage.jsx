@@ -19,7 +19,7 @@ import {
   VStack
 } from "@chakra-ui/react";
 import { Form, Link } from "@remix-run/react";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 import { writeCachedSifTaxonomy } from "../models/sif-taxonomy-cache";
 import { buildSegmentationPath } from "../models/sif-taxonomy";
@@ -60,23 +60,37 @@ function joinList(values) {
  * @returns {JSX.Element}
  */
 function ExpandableDescription({ text }) {
-  const [isExpanded, setIsExpanded] = useState(false);
   const description = typeof text === "string" ? text.trim() : "";
 
   if (!description) {
     return <Text color="gray.400">No description yet.</Text>;
   }
 
+  if (description.length <= 220) {
+    return <Text color="gray.700">{description}</Text>;
+  }
+
   return (
-    <Box>
-      <Text color="gray.700" noOfLines={isExpanded ? undefined : 4}>
+    <Box
+      as="details"
+      sx={{
+        "& > summary": {
+          listStyle: "none"
+        },
+        "& > summary::-webkit-details-marker": {
+          display: "none"
+        }
+      }}
+    >
+      <Box as="summary" cursor="pointer">
+        <Text color="gray.700">{`${description.slice(0, 220)}...`}</Text>
+        <Text mt={2} fontSize="sm" fontWeight="semibold" color="blue.600">
+          Show full description
+        </Text>
+      </Box>
+      <Text mt={3} color="gray.700">
         {description}
       </Text>
-      {description.length > 220 ? (
-        <Button mt={2} size="sm" variant="link" colorScheme="blue" onClick={() => setIsExpanded((value) => !value)}>
-          {isExpanded ? "Show less" : "Show more"}
-        </Button>
-      ) : null}
     </Box>
   );
 }
@@ -113,36 +127,52 @@ function MetadataRow({ label, value }) {
  * @returns {JSX.Element}
  */
 function TaxonomyNodeCard({ node, kind, childLinkLabel = null, childLinkPath = null, isSaving = false }) {
-  const [isEditing, setIsEditing] = useState(false);
-
   return (
-    <Box borderWidth="1px" borderColor="gray.200" borderRadius="lg" bg="white" p={{ base: 4, md: 5 }}>
-      <Flex justify="space-between" align={{ base: "start", md: "center" }} gap={4} wrap="wrap">
-        <Box>
-          <Heading size="sm">{node.label}</Heading>
-          <HStack spacing={2} mt={2} wrap="wrap">
-            {node.crosswalkOnly ? <Badge colorScheme="orange">Crosswalk Only</Badge> : null}
-            {node.active === false ? <Badge colorScheme="red">Inactive</Badge> : <Badge colorScheme="green">Active</Badge>}
-            {Array.isArray(node.examples) && node.examples.length ? (
-              <Badge colorScheme="purple">{node.examples.length} Examples</Badge>
-            ) : null}
-            {Array.isArray(node.seenInCrosswalks) && node.seenInCrosswalks.length ? (
-              <Badge colorScheme="cyan">{node.seenInCrosswalks.length} Crosswalk Sources</Badge>
-            ) : null}
-          </HStack>
-        </Box>
+    <Box
+      as="details"
+      borderWidth="1px"
+      borderColor="gray.200"
+      borderRadius="lg"
+      bg="white"
+      p={{ base: 4, md: 5 }}
+      sx={{
+        "& > summary": {
+          listStyle: "none"
+        },
+        "& > summary::-webkit-details-marker": {
+          display: "none"
+        }
+      }}
+    >
+      <Box as="summary" cursor="pointer">
+        <Flex justify="space-between" align={{ base: "start", md: "center" }} gap={4} wrap="wrap">
+          <Box>
+            <Heading size="sm">{node.label}</Heading>
+            <HStack spacing={2} mt={2} wrap="wrap">
+              {node.crosswalkOnly ? <Badge colorScheme="orange">Crosswalk Only</Badge> : null}
+              {node.active === false ? <Badge colorScheme="red">Inactive</Badge> : <Badge colorScheme="green">Active</Badge>}
+              {Array.isArray(node.examples) && node.examples.length ? (
+                <Badge colorScheme="purple">{node.examples.length} Examples</Badge>
+              ) : null}
+              {Array.isArray(node.seenInCrosswalks) && node.seenInCrosswalks.length ? (
+                <Badge colorScheme="cyan">{node.seenInCrosswalks.length} Crosswalk Sources</Badge>
+              ) : null}
+            </HStack>
+          </Box>
 
-        <HStack spacing={3} wrap="wrap">
-          {childLinkLabel && childLinkPath ? (
-            <Button as={Link} to={childLinkPath} variant="ghost" colorScheme="blue">
-              {childLinkLabel}
-            </Button>
-          ) : null}
-          <Button variant="outline" onClick={() => setIsEditing((value) => !value)}>
-            {isEditing ? "Cancel" : "Edit"}
+          <Button as="span" variant="outline">
+            Edit
+          </Button>
+        </Flex>
+      </Box>
+
+      {childLinkLabel && childLinkPath ? (
+        <HStack mt={4} mb={1}>
+          <Button as={Link} to={childLinkPath} variant="ghost" colorScheme="blue">
+            {childLinkLabel}
           </Button>
         </HStack>
-      </Flex>
+      ) : null}
 
       <Box mt={4}>
         <ExpandableDescription text={node.description || ""} />
@@ -158,82 +188,80 @@ function TaxonomyNodeCard({ node, kind, childLinkLabel = null, childLinkPath = n
         />
       </VStack>
 
-      {isEditing ? (
-        <Form method="post">
-          <input type="hidden" name="intent" value="update-node" />
-          <input type="hidden" name="kind" value={kind} />
-          <input type="hidden" name="nodeId" value={node.id || ""} />
+      <Form method="post">
+        <input type="hidden" name="intent" value="update-node" />
+        <input type="hidden" name="kind" value={kind} />
+        <input type="hidden" name="nodeId" value={node.id || ""} />
 
-          <VStack align="stretch" spacing={4} mt={5}>
-            <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={4}>
-              <FormControl isRequired>
-                <FormLabel>Label</FormLabel>
-                <Input name="label" defaultValue={node.label || ""} bg="white" />
-              </FormControl>
-
-              <FormControl>
-                <FormLabel>Aliases</FormLabel>
-                <Input name="aliases" defaultValue={Array.isArray(node.aliases) ? node.aliases.join(", ") : ""} bg="white" />
-              </FormControl>
-            </SimpleGrid>
-
-            <FormControl>
-              <FormLabel>Description</FormLabel>
-              <Textarea name="description" defaultValue={node.description || ""} minH="120px" bg="white" />
+        <VStack align="stretch" spacing={4} mt={5}>
+          <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={4}>
+            <FormControl isRequired>
+              <FormLabel>Label</FormLabel>
+              <Input name="label" defaultValue={node.label || ""} bg="white" />
             </FormControl>
 
-            <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={4}>
-              <FormControl>
-                <FormLabel>Examples</FormLabel>
-                <Textarea
-                  name="examples"
-                  defaultValue={joinList(node.examples)}
-                  minH="112px"
-                  placeholder="One example per line"
-                  bg="white"
-                />
-              </FormControl>
-
-              <FormControl>
-                <FormLabel>Seen In Crosswalks</FormLabel>
-                <Textarea
-                  name="seenInCrosswalks"
-                  defaultValue={joinList(node.seenInCrosswalks)}
-                  minH="112px"
-                  placeholder="One source per line"
-                  bg="white"
-                />
-              </FormControl>
-            </SimpleGrid>
-
             <FormControl>
-              <FormLabel>Why Here</FormLabel>
-              <Textarea name="whyHere" defaultValue={node.whyHere || ""} minH="112px" bg="white" />
+              <FormLabel>Aliases</FormLabel>
+              <Input name="aliases" defaultValue={Array.isArray(node.aliases) ? node.aliases.join(", ") : ""} bg="white" />
+            </FormControl>
+          </SimpleGrid>
+
+          <FormControl>
+            <FormLabel>Description</FormLabel>
+            <Textarea name="description" defaultValue={node.description || ""} minH="120px" bg="white" />
+          </FormControl>
+
+          <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={4}>
+            <FormControl>
+              <FormLabel>Examples</FormLabel>
+              <Textarea
+                name="examples"
+                defaultValue={joinList(node.examples)}
+                minH="112px"
+                placeholder="One example per line"
+                bg="white"
+              />
             </FormControl>
 
-            <HStack spacing={8} wrap="wrap">
-              <FormControl display="flex" alignItems="center" w="auto">
-                <Switch name="active" defaultChecked={node.active !== false} mr={3} />
-                <FormLabel mb={0}>Active</FormLabel>
-              </FormControl>
+            <FormControl>
+              <FormLabel>Seen In Crosswalks</FormLabel>
+              <Textarea
+                name="seenInCrosswalks"
+                defaultValue={joinList(node.seenInCrosswalks)}
+                minH="112px"
+                placeholder="One source per line"
+                bg="white"
+              />
+            </FormControl>
+          </SimpleGrid>
 
-              <FormControl display="flex" alignItems="center" w="auto">
-                <Switch name="crosswalkOnly" defaultChecked={node.crosswalkOnly === true} mr={3} />
-                <FormLabel mb={0}>Crosswalk Only</FormLabel>
-              </FormControl>
-            </HStack>
+          <FormControl>
+            <FormLabel>Why Here</FormLabel>
+            <Textarea name="whyHere" defaultValue={node.whyHere || ""} minH="112px" bg="white" />
+          </FormControl>
 
-            <HStack spacing={3}>
-              <Button type="submit" colorScheme="blue" isLoading={isSaving} loadingText="Saving">
-                Save Changes
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setIsEditing(false)}>
-                Cancel
-              </Button>
-            </HStack>
-          </VStack>
-        </Form>
-      ) : null}
+          <HStack spacing={8} wrap="wrap">
+            <FormControl display="flex" alignItems="center" w="auto">
+              <Switch name="active" defaultChecked={node.active !== false} mr={3} />
+              <FormLabel mb={0}>Active</FormLabel>
+            </FormControl>
+
+            <FormControl display="flex" alignItems="center" w="auto">
+              <Switch name="crosswalkOnly" defaultChecked={node.crosswalkOnly === true} mr={3} />
+              <FormLabel mb={0}>Crosswalk Only</FormLabel>
+            </FormControl>
+          </HStack>
+
+          <HStack spacing={3}>
+            <Button type="submit" colorScheme="blue" isLoading={isSaving} loadingText="Saving">
+              Save Changes
+            </Button>
+            <Text fontSize="sm" color="gray.500">
+              Click Edit again to collapse.
+            </Text>
+          </HStack>
+        </VStack>
+      </Form>
     </Box>
   );
 }
