@@ -763,7 +763,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                               draftValue={draftFilters[columnKey] || ""}
                               onToggle={() => toggleFilter(columnKey)}
                               onDraftChange={(value) => updateDraftFilter(columnKey, value)}
-                              onApply={() => applyFilter(columnKey)}
+                              onApply={(value) => applyFilter(columnKey, value)}
                               onClear={() => clearFilter(columnKey)}
                             />
                           </Th>
@@ -778,7 +778,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                           draftValue={draftFilters.sector || ""}
                           onToggle={() => toggleFilter("sector")}
                           onDraftChange={(value) => updateDraftFilter("sector", value)}
-                          onApply={() => applyFilter("sector")}
+                          onApply={(value) => applyFilter("sector", value)}
                           onClear={() => clearFilter("sector")}
                           selectOptions={taxonomyOptions.sectorOptions}
                         />
@@ -792,7 +792,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                           draftValue={draftFilters.industry || ""}
                           onToggle={() => toggleFilter("industry")}
                           onDraftChange={(value) => updateDraftFilter("industry", value)}
-                          onApply={() => applyFilter("industry")}
+                          onApply={(value) => applyFilter("industry", value)}
                           onClear={() => clearFilter("industry")}
                           selectOptions={taxonomyOptions.industryOptions}
                         />
@@ -806,7 +806,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                           draftValue={draftFilters.focus || ""}
                           onToggle={() => toggleFilter("focus")}
                           onDraftChange={(value) => updateDraftFilter("focus", value)}
-                          onApply={() => applyFilter("focus")}
+                          onApply={(value) => applyFilter("focus", value)}
                           onClear={() => clearFilter("focus")}
                           selectOptions={taxonomyOptions.focusOptions}
                         />
