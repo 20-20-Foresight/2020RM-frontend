@@ -17,7 +17,7 @@ import {
   resolveSegmentationDefaultEditorType
 } from "../models/segmentation-default-editor";
 
-const CUSTOM_SEGMENTATION_EDITOR_TYPES = new Set(["segmentation.default", "segmentation.code"]);
+const CUSTOM_SEGMENTATION_EDITOR_TYPES = new Set(["segmentation.default", "segmentation.code", "segmentation.list"]);
 
 /**
  * Builds a stable route error payload.

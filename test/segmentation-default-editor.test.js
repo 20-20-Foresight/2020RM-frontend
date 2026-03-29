@@ -244,11 +244,132 @@ test("buildSegmentationDefaultDocument saves segmentation.code rows with canonic
   });
 });
 
+test("buildSegmentationDefaultViewModel supports segmentation.list documents with non-SIF columns on the left", () => {
+  const document = {
+    sheet1: [
+      {
+        code: "11",
+        description: "Agriculture, Forestry, Fishing and Hunting",
+        sector: "Other"
+      },
+      {
+        code: "21",
+        description: "Mining, Quarrying, and Oil and Gas Extraction",
+        "focus(es)": "Mining",
+        sector: "Other"
+      },
+      {
+        code: "237",
+        description: "Heavy and Civil Engineering Construction",
+        sector: "Construction",
+        industry: "Civil Engineering"
+      }
+    ]
+  };
+
+  const viewModel = buildSegmentationDefaultViewModel({
+    editorType: "segmentation.list",
+    document
+  });
+
+  assert.equal(viewModel.structure, "list-rows");
+  assert.deepEqual(viewModel.categoryColumns, ["code", "description"]);
+  assert.deepEqual(viewModel.valueColumns, []);
+  assert.equal(viewModel.rows.length, 3);
+  assert.deepEqual(
+    viewModel.rows.map((row) => ({
+      left: row.categories,
+      sector: row.sector,
+      industry: row.industry,
+      focus: row.focus
+    })),
+    [
+      {
+        left: ["11", "Agriculture, Forestry, Fishing and Hunting"],
+        sector: "Other",
+        industry: "",
+        focus: ""
+      },
+      {
+        left: ["21", "Mining, Quarrying, and Oil and Gas Extraction"],
+        sector: "Other",
+        industry: "",
+        focus: "Mining"
+      },
+      {
+        left: ["237", "Heavy and Civil Engineering Construction"],
+        sector: "Construction",
+        industry: "Civil Engineering",
+        focus: ""
+      }
+    ]
+  );
+});
+
+test("buildSegmentationDefaultDocument saves segmentation.list rows back to the original array wrapper", () => {
+  const sourceDocument = {
+    sheet1: [
+      {
+        code: "21",
+        description: "Mining, Quarrying, and Oil and Gas Extraction",
+        "focus(es)": "Mining",
+        sector: "Other"
+      }
+    ]
+  };
+
+  const rebuilt = buildSegmentationDefaultDocument({
+    sourceDocument,
+    structure: "list-rows",
+    rows: [
+      {
+        categories: ["21", "Mining, Quarrying, and Oil and Gas Extraction"],
+        sector: "Energy",
+        industry: "Oil and Gas",
+        focus: "Mining",
+        notes: "Reviewed",
+        __branchFieldNames: ["code", "description"],
+        __extraLeafFields: {}
+      },
+      {
+        categories: ["237", "Heavy and Civil Engineering Construction"],
+        sector: "Construction",
+        industry: "Civil Engineering",
+        focus: "",
+        notes: "",
+        __branchFieldNames: ["code", "description"],
+        __extraLeafFields: {}
+      }
+    ]
+  });
+
+  assert.deepEqual(rebuilt, {
+    sheet1: [
+      {
+        code: "21",
+        description: "Mining, Quarrying, and Oil and Gas Extraction",
+        sector: "Energy",
+        industry: "Oil and Gas",
+        focus: "Mining",
+        notes: "Reviewed"
+      },
+      {
+        code: "237",
+        description: "Heavy and Civil Engineering Construction",
+        sector: "Construction",
+        industry: "Civil Engineering"
+      }
+    ]
+  });
+});
+
 test("resolveSegmentationDefaultEditorType honors explicit editor config and falls back to document inference", () => {
   assert.equal(resolveSegmentationDefaultEditorType("segmentation.default", null), "segmentation.default");
   assert.equal(resolveSegmentationDefaultEditorType({ type: "segmentation.default" }, null), "segmentation.default");
   assert.equal(resolveSegmentationDefaultEditorType("segmentation.code", null), "segmentation.code");
   assert.equal(resolveSegmentationDefaultEditorType({ type: "segmentation.code" }, null), "segmentation.code");
+  assert.equal(resolveSegmentationDefaultEditorType("segmentation.list", null), "segmentation.list");
+  assert.equal(resolveSegmentationDefaultEditorType({ type: "segmentation.list" }, null), "segmentation.list");
   assert.equal(
     resolveSegmentationDefaultEditorType(
       null,

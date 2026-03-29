@@ -124,6 +124,7 @@ function cloneSegmentationRows(rows, categoryDepth) {
 /**
  * Builds an empty editable row for the current category depth.
  * @param {number} categoryDepth
+ * @param {string[]} [branchFieldNames]
  * @returns {{
  *   categories: string[],
  *   description: string,
@@ -135,7 +136,7 @@ function cloneSegmentationRows(rows, categoryDepth) {
  *   __extraLeafFields: Record<string, unknown>
  * }}
  */
-function buildEmptySegmentationRow(categoryDepth) {
+function buildEmptySegmentationRow(categoryDepth, branchFieldNames = []) {
   return {
     categories: Array.from({ length: categoryDepth }, () => ""),
     description: "",
@@ -143,7 +144,7 @@ function buildEmptySegmentationRow(categoryDepth) {
     industry: "",
     focus: "",
     notes: "",
-    __branchFieldNames: [],
+    __branchFieldNames: Array.isArray(branchFieldNames) ? branchFieldNames.slice(0, categoryDepth) : [],
     __extraLeafFields: {}
   };
 }
@@ -425,6 +426,7 @@ function SearchableHeader({
  *     segmentationDefault: {
  *       structure: string,
  *       categoryColumns: string[],
+ *       categoryFieldNames?: string[],
  *       rows: Array<{
  *         categories: string[],
  *         description: string,
@@ -445,6 +447,9 @@ function SearchableHeader({
  */
 export function SegmentationDefaultEditorPage({ data, actionData, isSaving = false }) {
   const categoryDepth = data.segmentationDefault.categoryColumns.length;
+  const defaultBranchFieldNames = Array.isArray(data.segmentationDefault.categoryFieldNames)
+    ? data.segmentationDefault.categoryFieldNames
+    : [];
   const valueColumns = Array.isArray(data.segmentationDefault.valueColumns) ? data.segmentationDefault.valueColumns : [];
   const [description, setDescription] = useState(data.description || "");
   const [editorConfig, setEditorConfig] = useState(() =>
@@ -461,7 +466,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
   const [draftFilters, setDraftFilters] = useState({});
   const [openFilterKeys, setOpenFilterKeys] = useState({});
   const [editingRowIndex, setEditingRowIndex] = useState(null);
-  const [draftRow, setDraftRow] = useState(() => buildEmptySegmentationRow(categoryDepth));
+  const [draftRow, setDraftRow] = useState(() => buildEmptySegmentationRow(categoryDepth, defaultBranchFieldNames));
   const {
     isOpen: isRowModalOpen,
     onOpen: openRowModal,
@@ -508,8 +513,8 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
     setEditingRowIndex(rowIndex);
     setDraftRow(
       rowIndex == null
-        ? buildEmptySegmentationRow(categoryDepth)
-        : cloneSegmentationRows([rows[rowIndex]], categoryDepth)[0] || buildEmptySegmentationRow(categoryDepth)
+        ? buildEmptySegmentationRow(categoryDepth, defaultBranchFieldNames)
+        : cloneSegmentationRows([rows[rowIndex]], categoryDepth)[0] || buildEmptySegmentationRow(categoryDepth, defaultBranchFieldNames)
     );
     openRowModal();
   }
@@ -519,7 +524,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
    */
   function closeRowEditor() {
     setEditingRowIndex(null);
-    setDraftRow(buildEmptySegmentationRow(categoryDepth));
+    setDraftRow(buildEmptySegmentationRow(categoryDepth, defaultBranchFieldNames));
     closeRowModal();
   }
 

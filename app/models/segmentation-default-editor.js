@@ -1,5 +1,5 @@
 const SEGMENTATION_SETTING_KEYS = new Set(["sector", "industry", "focus", "notes"]);
-const SEGMENTATION_EDITOR_TYPES = new Set(["segmentation.default", "segmentation.code"]);
+const SEGMENTATION_EDITOR_TYPES = new Set(["segmentation.default", "segmentation.code", "segmentation.list"]);
 const SEGMENTATION_FIELD_ALIASES = new Map([["focus(es)", "focus"]]);
 
 /**
@@ -145,6 +145,40 @@ function buildDefaultBranchFieldName(index) {
 }
 
 /**
+ * Resolves the editable list wrapper for one segmentation.list document.
+ * @param {unknown} document
+ * @returns {{wrapperKey: string|null, value: unknown[]}}
+ */
+function resolveSegmentationListRoot(document) {
+  if (Array.isArray(document)) {
+    return {
+      wrapperKey: null,
+      value: document
+    };
+  }
+
+  if (!isPlainObject(document)) {
+    return {
+      wrapperKey: null,
+      value: []
+    };
+  }
+
+  const arrayKeys = Object.keys(document).filter((key) => Array.isArray(document[key]));
+  if (arrayKeys.length === 1) {
+    return {
+      wrapperKey: arrayKeys[0],
+      value: document[arrayKeys[0]]
+    };
+  }
+
+  return {
+    wrapperKey: null,
+    value: []
+  };
+}
+
+/**
  * Returns whether the current wrapper uses a flat crosswalk map.
  * @param {unknown} crosswalk
  * @returns {boolean}
@@ -162,7 +196,7 @@ function isFlatCrosswalk(crosswalk) {
  * Resolves whether the current document should use the segmentation.default editor.
  * @param {unknown} editorConfig
  * @param {unknown} document
- * @returns {"segmentation.default"|"segmentation.code"|null}
+ * @returns {"segmentation.default"|"segmentation.code"|"segmentation.list"|null}
  */
 function resolveSegmentationDefaultEditorType(editorConfig, document) {
   const explicitType =
@@ -185,6 +219,67 @@ function resolveSegmentationDefaultEditorType(editorConfig, document) {
   }
 
   return null;
+}
+
+/**
+ * Collects the non-SIF column names from one segmentation.list payload.
+ * @param {unknown[]} rows
+ * @returns {string[]}
+ */
+function collectSegmentationListColumns(rows) {
+  /** @type {Set<string>} */
+  const seen = new Set();
+  /** @type {string[]} */
+  const columns = [];
+
+  for (const row of rows) {
+    if (!isPlainObject(row)) {
+      continue;
+    }
+
+    for (const key of Object.keys(row)) {
+      const fieldName = readTrimmedString(key);
+      if (!fieldName) {
+        continue;
+      }
+
+      const normalizedFieldName = normalizeSegmentationFieldName(fieldName);
+      if (SEGMENTATION_SETTING_KEYS.has(normalizedFieldName)) {
+        continue;
+      }
+
+      const normalizedColumnKey = fieldName.toLowerCase();
+      if (seen.has(normalizedColumnKey)) {
+        continue;
+      }
+
+      seen.add(normalizedColumnKey);
+      columns.push(fieldName);
+    }
+  }
+
+  return columns;
+}
+
+/**
+ * Reads one non-SIF field value from a list row using loose field-name matching.
+ * @param {unknown} row
+ * @param {string} fieldName
+ * @returns {string}
+ */
+function readSegmentationListField(row, fieldName) {
+  if (!isPlainObject(row)) {
+    return "";
+  }
+
+  const normalizedFieldName = readTrimmedString(fieldName).toLowerCase();
+  for (const [key, value] of Object.entries(row)) {
+    if (readTrimmedString(key).toLowerCase() === normalizedFieldName) {
+      return normalizeBranchValue(value);
+    }
+  }
+
+  return "";
 }
 
 /**
@@ -260,6 +355,36 @@ function buildCodeCrosswalkRow(key, value) {
 }
 
 /**
+ * Builds one normalized row from a segmentation.list entry.
+ * @param {unknown} value
+ * @param {string[]} columns
+ * @returns {{
+ *   categories: string[],
+ *   description: string,
+ *   sector: string,
+ *   industry: string,
+ *   focus: string,
+ *   notes: string,
+ *   __branchFieldNames: string[],
+ *   __extraLeafFields: Record<string, unknown>
+ * }}
+ */
+function buildListRow(value, columns) {
+  const normalizedColumns = Array.isArray(columns) ? columns.map((column) => readTrimmedString(column)).filter(Boolean) : [];
+
+  return {
+    categories: normalizedColumns.map((column) => readSegmentationListField(value, column)),
+    description: "",
+    sector: readSegmentationLeafField(value, "sector"),
+    industry: readSegmentationLeafField(value, "industry"),
+    focus: readSegmentationLeafField(value, "focus"),
+    notes: readSegmentationLeafField(value, "notes"),
+    __branchFieldNames: normalizedColumns,
+    __extraLeafFields: collectExtraLeafFields(value, new Set(normalizedColumns.map((column) => column.toLowerCase())))
+  };
+}
+
+/**
  * Recursively flattens one nested segmentation tree into row records.
  * @param {unknown} node
  * @param {string[]} path
@@ -322,8 +447,9 @@ function resolveCrosswalkRoot(document) {
  * @param {{document: unknown}} options
  * @param {string|null|undefined} [options.editorType]
  * @returns {{
- *   structure: "flat-crosswalk"|"tree-crosswalk"|"code-crosswalk",
+ *   structure: "flat-crosswalk"|"tree-crosswalk"|"code-crosswalk"|"list-rows",
  *   categoryColumns: string[],
+ *   categoryFieldNames: string[],
  *   valueColumns: Array<{key: string, label: string}>,
  *   rows: Array<{
  *     categories: string[],
@@ -341,10 +467,24 @@ function buildSegmentationDefaultViewModel(options) {
   const editorType = resolveSegmentationDefaultEditorType(options?.editorType, options?.document);
   const crosswalk = resolveCrosswalkRoot(options?.document);
 
+  if (editorType === "segmentation.list") {
+    const { value } = resolveSegmentationListRoot(options?.document);
+    const categoryColumns = collectSegmentationListColumns(Array.isArray(value) ? value : []);
+
+    return {
+      structure: "list-rows",
+      categoryColumns,
+      categoryFieldNames: categoryColumns,
+      valueColumns: [],
+      rows: Array.isArray(value) ? value.filter((row) => isPlainObject(row)).map((row) => buildListRow(row, categoryColumns)) : []
+    };
+  }
+
   if (editorType === "segmentation.code") {
     return {
       structure: "code-crosswalk",
       categoryColumns: ["code"],
+      categoryFieldNames: ["code"],
       valueColumns: [
         {
           key: "description",
@@ -365,6 +505,7 @@ function buildSegmentationDefaultViewModel(options) {
   return {
     structure,
     categoryColumns: Array.from({ length: maxDepth }, (_, index) => buildCategoryColumnLabel(index)),
+    categoryFieldNames: [],
     valueColumns: [],
     rows
   };
@@ -420,18 +561,82 @@ function buildLeafPayload(row, options = {}) {
 }
 
 /**
+ * Applies an updated list payload back into the original document wrapper.
+ * @param {unknown} sourceDocument
+ * @param {Record<string, unknown>[]} nextList
+ * @returns {unknown}
+ */
+function applySegmentationListWrapper(sourceDocument, nextList) {
+  if (Array.isArray(sourceDocument)) {
+    return nextList;
+  }
+
+  if (isPlainObject(sourceDocument)) {
+    const arrayKeys = Object.keys(sourceDocument).filter((key) => Array.isArray(sourceDocument[key]));
+    if (arrayKeys.length === 1) {
+      return {
+        ...sourceDocument,
+        [arrayKeys[0]]: nextList
+      };
+    }
+  }
+
+  return nextList;
+}
+
+/**
  * Rebuilds one segmentation.default document from edited rows.
  * @param {{
  *   sourceDocument: unknown,
- *   structure: "flat-crosswalk"|"tree-crosswalk"|"code-crosswalk",
+ *   structure: "flat-crosswalk"|"tree-crosswalk"|"code-crosswalk"|"list-rows",
  *   rows: Record<string, unknown>[]
  * }} options
  * @returns {unknown}
  */
 function buildSegmentationDefaultDocument(options) {
   const rows = Array.isArray(options?.rows) ? options.rows.filter((row) => isPlainObject(row)) : [];
-  const sourceDocument = isPlainObject(options?.sourceDocument) ? options.sourceDocument : {};
+  const sourceDocument = options?.sourceDocument;
+  const sourceDocumentObject = isPlainObject(sourceDocument) ? sourceDocument : {};
   const structure = options?.structure === "tree-crosswalk" ? "tree-crosswalk" : "flat-crosswalk";
+
+  if (options?.structure === "list-rows") {
+    /** @type {Record<string, unknown>[]} */
+    const nextList = [];
+
+    for (const row of rows) {
+      const columnNames = Array.isArray(row.__branchFieldNames)
+        ? row.__branchFieldNames.map((name) => readTrimmedString(name)).filter(Boolean)
+        : [];
+      /** @type {Record<string, unknown>} */
+      const nextRow = {
+        ...(isPlainObject(row.__extraLeafFields) ? row.__extraLeafFields : {})
+      };
+
+      columnNames.forEach((fieldName, index) => {
+        const value = normalizeBranchValue(row.categories?.[index]);
+        if (value) {
+          nextRow[fieldName] = value;
+        }
+      });
+
+      Object.assign(
+        nextRow,
+        buildLeafPayload(
+          {
+            ...row,
+            __extraLeafFields: {}
+          },
+          {}
+        )
+      );
+
+      if (Object.keys(nextRow).length) {
+        nextList.push(nextRow);
+      }
+    }
+
+    return applySegmentationListWrapper(sourceDocument, nextList);
+  }
 
   if (options?.structure === "code-crosswalk") {
     /** @type {Record<string, unknown>} */
@@ -449,7 +654,7 @@ function buildSegmentationDefaultDocument(options) {
     }
 
     return {
-      ...sourceDocument,
+      ...sourceDocumentObject,
       crosswalk: nextCrosswalk
     };
   }
@@ -476,9 +681,9 @@ function buildSegmentationDefaultDocument(options) {
       cursor[categories[categories.length - 1]] = buildLeafPayload(row);
     }
 
-    if (isPlainObject(sourceDocument.crosswalk)) {
+    if (isPlainObject(sourceDocumentObject.crosswalk)) {
       return {
-        ...sourceDocument,
+        ...sourceDocumentObject,
         crosswalk: nextTree
       };
     }
@@ -509,7 +714,7 @@ function buildSegmentationDefaultDocument(options) {
   }
 
   return {
-    ...sourceDocument,
+    ...sourceDocumentObject,
     crosswalk: nextCrosswalk
   };
 }
