@@ -7,7 +7,7 @@ Remix + Chakra UI frontend with Express BFF for Microsoft OIDC and `/api/*` prox
 - Server: `src/server.js`
 - Design: `../2020-Design/phase1/auth-replan.md`
 - Search UI: `/organizations` and `/people` proxy to backend REST search endpoints
-- Detail UI: `/organization/:uuid`, `/organization/:uuid/people`, and `/person/:uuid` load singular records through the frontend BFF, with the organization people tab mirroring the current people directory list presentation
+- Detail UI: `/organization/:uuid`, `/organization/:uuid/people`, and `/person/:uuid` load singular records through the frontend BFF, with the organization info tab showing description plus segmentation chips and an explanation modal, and the organization people tab mirroring the current people directory list presentation
 - Admin data UI: `/admin/data` is a full-page list and `/admin/data/:id` is a dedicated full-page editor backed by `/api/rest/admin/data`, with a global loading overlay for route changes and saves
 - Admin segmentation UI: `/admin/segmentation` opens the SIF editor flow, with `/admin/segmentation/sectors`, `/admin/segmentation/:sectorSlug/industries`, and `/admin/segmentation/:sectorSlug/:industrySlug/focuses` backed by the authoritative `crm.data.taxonomy:sif` document
 - SIF taxonomy cache: the authenticated app shell keeps `crm.data.taxonomy:sif` refreshed in IndexedDB from `/api/rest/admin/data/crm.data.taxonomy:sif` so other UI areas can reuse the taxonomy without refetching from scratch
