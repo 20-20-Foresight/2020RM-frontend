@@ -2,7 +2,11 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { loadEntityDetailPage } = require("../app/models/entity-detail.server");
-const { buildEntityDetailPath, buildEntityListPath } = require("../app/models/entity-route");
+const {
+  buildEntityDetailPath,
+  buildEntityListPath,
+  buildOrganizationPeoplePath
+} = require("../app/models/entity-route");
 
 test("buildEntityDetailPath returns the singular organization route", () => {
   assert.equal(buildEntityDetailPath("organization", "org-1"), "/organization/org-1");
@@ -10,6 +14,10 @@ test("buildEntityDetailPath returns the singular organization route", () => {
 
 test("buildEntityDetailPath returns the singular person route", () => {
   assert.equal(buildEntityDetailPath("person", "person-1"), "/person/person-1");
+});
+
+test("buildOrganizationPeoplePath returns the organization people route", () => {
+  assert.equal(buildOrganizationPeoplePath("org-1"), "/organization/org-1/people");
 });
 
 test("buildEntityListPath returns the matching list route", () => {

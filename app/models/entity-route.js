@@ -22,7 +22,18 @@ function buildEntityDetailPath(entityType, uuid) {
   return `${basePath}/${encodeURIComponent(uuid.trim())}`;
 }
 
+/**
+ * Returns the organization people detail-tab route for one organization UUID.
+ * @param {string|null|undefined} uuid
+ * @returns {string|null}
+ */
+function buildOrganizationPeoplePath(uuid) {
+  const detailPath = buildEntityDetailPath("organization", uuid);
+  return detailPath ? `${detailPath}/people` : null;
+}
+
 module.exports = {
   buildEntityDetailPath,
-  buildEntityListPath
+  buildEntityListPath,
+  buildOrganizationPeoplePath
 };

@@ -30,6 +30,7 @@ test("isEntitySearchPath matches the list routes", () => {
 
 test("getEntityDetailTypeFromPath recognizes singular detail routes", () => {
   assert.equal(getEntityDetailTypeFromPath("/organization/org-1"), "organization");
+  assert.equal(getEntityDetailTypeFromPath("/organization/org-1/people"), "organization");
   assert.equal(getEntityDetailTypeFromPath("/person/person-1"), "person");
   assert.equal(getEntityDetailTypeFromPath("/people"), null);
 });
