@@ -22,6 +22,7 @@ import { Form, Link } from "@remix-run/react";
 import { useEffect } from "react";
 
 import { writeCachedSifTaxonomy } from "../models/sif-taxonomy-cache";
+import { buildSegmentationDocumentPath } from "../models/segmentation-document";
 import { buildSegmentationPath } from "../models/sif-taxonomy";
 
 /**
@@ -331,13 +332,34 @@ export function SegmentationLandingPage({ ruleItems = [], rulesError = null }) {
 
           {ruleItems.length ? (
             <VStack align="stretch" spacing={3} mt={5}>
-              {ruleItems.map((item) => (
-                <Box key={item.id || item.name} borderWidth="1px" borderColor="gray.200" borderRadius="md" px={4} py={3}>
-                  <Text fontWeight="semibold" color="gray.800">
-                    {item.name}
-                  </Text>
-                </Box>
-              ))}
+              {ruleItems.map((item) => {
+                const itemPath = buildSegmentationDocumentPath(item.id);
+
+                return (
+                  <Box
+                    key={item.id || item.name}
+                    borderWidth="1px"
+                    borderColor="gray.200"
+                    borderRadius="md"
+                    px={4}
+                    py={3}
+                    transition="border-color 0.2s ease, background-color 0.2s ease"
+                    _hover={item.id ? { borderColor: "blue.300", bg: "blue.50" } : undefined}
+                  >
+                    <Flex align="center" justify="space-between" gap={3}>
+                      <Text fontWeight="semibold" color="gray.800">
+                        {item.name}
+                      </Text>
+
+                      {item.id ? (
+                        <Button as={Link} to={itemPath} size="sm" colorScheme="blue" variant="outline">
+                          Open
+                        </Button>
+                      ) : null}
+                    </Flex>
+                  </Box>
+                );
+              })}
             </VStack>
           ) : rulesError?.message ? null : (
             <Text color="gray.500" mt={5}>
