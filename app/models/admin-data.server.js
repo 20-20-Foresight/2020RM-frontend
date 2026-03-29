@@ -132,6 +132,56 @@ function normalizeSummary(value) {
   };
 }
 
+const RAW_METADATA_EXCLUDED_KEYS = new Set([
+  "id",
+  "namespace",
+  "key",
+  "version",
+  "status",
+  "lastmodifieddate",
+  "lastmodifiedby",
+  "document",
+  "editor"
+]);
+
+/**
+ * Extracts raw admin-data metadata fields that should survive custom-editor saves.
+ * @param {unknown} value
+ * @returns {Record<string, string|number|boolean>}
+ */
+function extractRawMetadata(value) {
+  /** @type {Record<string, string|number|boolean>} */
+  const metadata = {};
+
+  if (!isPlainObject(value)) {
+    return metadata;
+  }
+
+  for (const [key, entry] of Object.entries(value)) {
+    const normalizedKey = readTrimmedString(key)?.toLowerCase();
+    if (!normalizedKey || RAW_METADATA_EXCLUDED_KEYS.has(normalizedKey)) {
+      continue;
+    }
+
+    const normalizedString = readTrimmedString(entry);
+    if (normalizedString) {
+      metadata[key] = normalizedString;
+      continue;
+    }
+
+    if (typeof entry === "number" && Number.isFinite(entry)) {
+      metadata[key] = entry;
+      continue;
+    }
+
+    if (typeof entry === "boolean") {
+      metadata[key] = entry;
+    }
+  }
+
+  return metadata;
+}
+
 /**
  * Reads one supported editor shape.
  * @param {unknown} value
@@ -755,7 +805,7 @@ async function loadAdminDataDocument(options) {
 /**
  * Loads the raw admin data document for custom editors that own the document shape.
  * @param {{request: Request, id: string, fetchImpl?: typeof fetch}} options
- * @returns {Promise<ReturnType<typeof normalizeSummary> & {document: unknown, editor: unknown}>}
+ * @returns {Promise<ReturnType<typeof normalizeSummary> & {document: unknown, editor: unknown, metadata: Record<string, string|number|boolean>}>}
  */
 async function loadRawAdminDataDocument(options) {
   const payload = await requestAdminDataApi({
@@ -768,7 +818,8 @@ async function loadRawAdminDataDocument(options) {
   return {
     ...normalizeSummary(result),
     document: result?.document ?? null,
-    editor: result?.editor ?? null
+    editor: result?.editor ?? null,
+    metadata: extractRawMetadata(result)
   };
 }
 
@@ -823,6 +874,7 @@ async function saveAdminDataDocument(options) {
  * @param {{
  *   request: Request,
  *   id: string,
+ *   metadata?: Record<string, unknown>|null,
  *   description?: string,
  *   expectedVersion?: number|null,
  *   editor?: object|null,
@@ -837,6 +889,7 @@ async function saveRawAdminDataDocument(options) {
     pathname: `/api/rest/admin/data/${encodeURIComponent(options.id)}`,
     method: "PUT",
     body: {
+      ...(isPlainObject(options.metadata) ? { metadata: options.metadata } : {}),
       description: typeof options.description === "string" ? options.description : "",
       expectedVersion: Number.isFinite(options.expectedVersion) ? Number(options.expectedVersion) : null,
       document: options.document ?? null,

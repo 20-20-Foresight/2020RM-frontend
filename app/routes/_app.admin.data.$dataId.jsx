@@ -147,6 +147,7 @@ export async function action({ request, params }) {
   const rows = parseJsonField(formData, "rows", []);
   const document = parseJsonField(formData, "document", null);
   const editor = parseJsonField(formData, "editor", null);
+  const metadata = parseJsonField(formData, "metadata", null);
   const segmentationStructure = readFormString(formData, "segmentationStructure").trim();
   const segmentationRows = parseJsonField(formData, "segmentationRows", []);
 
@@ -155,6 +156,7 @@ export async function action({ request, params }) {
       const saved = await saveRawAdminDataDocument({
         request,
         id,
+        metadata: metadata && typeof metadata === "object" ? metadata : null,
         description,
         expectedVersion,
         editor: editor && typeof editor === "object" ? editor : null,

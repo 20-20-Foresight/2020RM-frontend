@@ -612,6 +612,11 @@ test("raw admin data save forwards editor metadata without rebuilding the docume
     id: "crm.data:linkedin-crosswalk",
     description: "LinkedIn segmentation rules",
     expectedVersion: 12,
+    metadata: {
+      name: "LinkedIn Crosswalk",
+      type: "segmentation",
+      shape: "crosswalk"
+    },
     editor: {
       type: "segmentation.default"
     },
@@ -643,6 +648,11 @@ test("raw admin data save forwards editor metadata without rebuilding the docume
 
   assert.equal(calls.length, 1);
   assert.deepEqual(JSON.parse(calls[0].options.body), {
+    metadata: {
+      name: "LinkedIn Crosswalk",
+      type: "segmentation",
+      shape: "crosswalk"
+    },
     description: "LinkedIn segmentation rules",
     expectedVersion: 12,
     document: {

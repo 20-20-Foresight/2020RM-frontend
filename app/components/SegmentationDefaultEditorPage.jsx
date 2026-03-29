@@ -421,6 +421,7 @@ function SearchableHeader({
  *     version: number|null,
  *     lastmodifieddate: string|null,
  *     lastmodifiedby: string|null,
+ *     metadata?: Record<string, string|number|boolean>,
  *     document: unknown,
  *     editorType: string,
  *     segmentationDefault: {
@@ -738,6 +739,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
           }}
         >
           <input type="hidden" name="description" value={description} />
+          <input type="hidden" name="metadata" value={JSON.stringify(data.metadata ?? null)} />
           <input type="hidden" name="editor" value={JSON.stringify(editorConfig)} />
           <input type="hidden" name="editorType" value={data.editorType} />
           <input type="hidden" name="expectedVersion" value={data.version == null ? "" : String(data.version)} />
