@@ -20,6 +20,7 @@ import {
 import {
   buildEntityListPath
 } from "../models/entity-route";
+import { OrganizationSegmentationSection } from "./OrganizationSegmentationSection";
 
 const DESCRIPTION_FIELD_PATHS = [
   "description",
@@ -357,9 +358,12 @@ export function EntityDetailPage({ entityType, tabs = null, activeTabKey = "info
 
           <Box pt={6}>
             {children || (
-              <Text color={record ? "gray.700" : "gray.400"} whiteSpace="pre-wrap">
-                {description}
-              </Text>
+              <VStack align="stretch" spacing={6}>
+                <Text color={record ? "gray.700" : "gray.400"} whiteSpace="pre-wrap">
+                  {description}
+                </Text>
+                {entityType === "organization" ? <OrganizationSegmentationSection record={record} /> : null}
+              </VStack>
             )}
           </Box>
         </Box>
