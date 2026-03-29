@@ -299,9 +299,13 @@ function AddNodePanel({ kind, isSaving = false }) {
 
 /**
  * Renders the top-level segmentation landing page.
+ * @param {{
+ *   ruleItems?: Array<{id: string|null, name: string}>,
+ *   rulesError?: {message?: string}|null
+ * }} props
  * @returns {JSX.Element}
  */
-export function SegmentationLandingPage() {
+export function SegmentationLandingPage({ ruleItems = [], rulesError = null }) {
   return (
     <VStack align="stretch" spacing={6}>
       <Box>
@@ -315,11 +319,31 @@ export function SegmentationLandingPage() {
         <Box borderWidth="1px" borderColor="gray.200" borderRadius="lg" bg="white" p={{ base: 5, md: 6 }}>
           <Heading size="sm">Alter segmentation rules</Heading>
           <Text color="gray.600" mt={3}>
-            This workflow is reserved for the rules editor and is intentionally not wired yet.
+            Browse the available segmentation rule documents. This first pass lists the documents by name.
           </Text>
-          <Button mt={5} isDisabled>
-            Coming Soon
-          </Button>
+
+          {rulesError?.message ? (
+            <Alert status="error" borderRadius="md" mt={5}>
+              <AlertIcon />
+              <AlertDescription>{rulesError.message}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          {ruleItems.length ? (
+            <VStack align="stretch" spacing={3} mt={5}>
+              {ruleItems.map((item) => (
+                <Box key={item.id || item.name} borderWidth="1px" borderColor="gray.200" borderRadius="md" px={4} py={3}>
+                  <Text fontWeight="semibold" color="gray.800">
+                    {item.name}
+                  </Text>
+                </Box>
+              ))}
+            </VStack>
+          ) : rulesError?.message ? null : (
+            <Text color="gray.500" mt={5}>
+              No segmentation documents were returned.
+            </Text>
+          )}
         </Box>
 
         <Box borderWidth="1px" borderColor="blue.200" borderRadius="lg" bg="white" p={{ base: 5, md: 6 }}>

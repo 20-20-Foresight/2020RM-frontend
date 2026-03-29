@@ -62,6 +62,46 @@ test("admin data list loader calls the normalized admin data REST route", async 
   ]);
 });
 
+test("admin data list loader appends namespace and filter query parameters", async () => {
+  const calls = [];
+
+  await loadAdminDataList({
+    request: new Request("http://localhost:3000/admin/segmentation", {
+      headers: {
+        cookie: "sid=123"
+      }
+    }),
+    namespacePrefix: " crm.data ",
+    filter: {
+      type: " taxonomy ",
+      slug: " sif-taxonomy ",
+      empty: "   "
+    },
+    fetchImpl: async (url, options) => {
+      calls.push({
+        url: String(url),
+        options
+      });
+
+      return {
+        ok: true,
+        async json() {
+          return {
+            items: []
+          };
+        }
+      };
+    }
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(
+    calls[0].url,
+    "http://localhost:3000/api/rest/admin/data?namespacePrefix=crm.data&filter.type=taxonomy&filter.slug=sif-taxonomy"
+  );
+  assert.equal(calls[0].options.headers.cookie, "sid=123");
+});
+
 test("admin data detail loader calls the normalized admin data detail route", async () => {
   const calls = [];
   const detail = await loadAdminDataDocument({

@@ -40,6 +40,30 @@ function readTrimmedString(value) {
 }
 
 /**
+ * Normalizes one admin data list filter object.
+ * @param {unknown} value
+ * @returns {Record<string, string>|null}
+ */
+function normalizeListFilter(value) {
+  if (!isPlainObject(value)) {
+    return null;
+  }
+
+  /** @type {Record<string, string>} */
+  const normalized = {};
+
+  for (const [key, entry] of Object.entries(value)) {
+    const normalizedKey = readTrimmedString(key);
+    const normalizedValue = readTrimmedString(entry);
+    if (normalizedKey && normalizedValue) {
+      normalized[normalizedKey] = normalizedValue;
+    }
+  }
+
+  return Object.keys(normalized).length ? normalized : null;
+}
+
+/**
  * Reads a JSON response body without assuming shape.
  * @param {{ json?: Function }} response
  * @returns {Promise<Record<string, unknown>|null>}
@@ -657,14 +681,46 @@ async function requestAdminDataApi(options) {
 }
 
 /**
+ * Builds the admin data list path with optional namespace/filter query parameters.
+ * @param {{namespacePrefix?: string|null, filter?: Record<string, unknown>|null}} options
+ * @returns {string}
+ */
+function buildAdminDataListPath(options = {}) {
+  const pathname = "/api/rest/admin/data";
+  const namespacePrefix = readTrimmedString(options.namespacePrefix);
+  const filter = normalizeListFilter(options.filter);
+
+  if (!namespacePrefix && !filter) {
+    return pathname;
+  }
+
+  const searchParams = new URLSearchParams();
+  if (namespacePrefix) {
+    searchParams.append("namespacePrefix", namespacePrefix);
+  }
+
+  if (filter) {
+    for (const [key, value] of Object.entries(filter)) {
+      searchParams.append(`filter.${key}`, value);
+    }
+  }
+
+  const search = searchParams.toString();
+  return search ? `${pathname}?${search}` : pathname;
+}
+
+/**
  * Loads the admin data summaries for `/admin/data`.
- * @param {{request: Request, fetchImpl?: typeof fetch}} options
+ * @param {{request: Request, namespacePrefix?: string|null, filter?: Record<string, unknown>|null, fetchImpl?: typeof fetch}} options
  * @returns {Promise<ReturnType<typeof normalizeSummary>[]>}
  */
 async function loadAdminDataList(options) {
   const payload = await requestAdminDataApi({
     request: options.request,
-    pathname: "/api/rest/admin/data",
+    pathname: buildAdminDataListPath({
+      namespacePrefix: options.namespacePrefix,
+      filter: options.filter
+    }),
     fetchImpl: options.fetchImpl
   });
 
