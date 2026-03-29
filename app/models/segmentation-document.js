@@ -5,7 +5,7 @@
  * @returns {string}
  */
 function buildSegmentationDocumentPath(id) {
-  return id ? `/admin/data/${encodeURIComponent(id)}` : "/admin/segmentation";
+  return id ? `/admin/data/${encodeURIComponent(id)}` : "/admin/segmentation/crosswalks";
 }
 
 module.exports = {

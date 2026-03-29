@@ -101,9 +101,14 @@ export const navItems = [
         to: "/admin/data"
       },
       {
-        key: "admin-segmentation",
-        label: "Segmentation",
-        to: "/admin/segmentation"
+        key: "admin-segmentation-types",
+        label: "Segmentation Types",
+        to: "/admin/segmentation/sectors"
+      },
+      {
+        key: "admin-segmentation-crosswalks",
+        label: "Segmentation Crosswalks",
+        to: "/admin/segmentation/crosswalks"
       }
     ]
   },

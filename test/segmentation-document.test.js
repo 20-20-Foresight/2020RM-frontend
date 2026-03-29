@@ -8,7 +8,7 @@ test("buildSegmentationDocumentPath reuses the admin data editor route for named
   assert.equal(buildSegmentationDocumentPath("crm.data:segmentation rules"), "/admin/data/crm.data%3Asegmentation%20rules");
 });
 
-test("buildSegmentationDocumentPath falls back to the segmentation landing route when the id is missing", () => {
-  assert.equal(buildSegmentationDocumentPath(""), "/admin/segmentation");
-  assert.equal(buildSegmentationDocumentPath(null), "/admin/segmentation");
+test("buildSegmentationDocumentPath falls back to the segmentation crosswalks route when the id is missing", () => {
+  assert.equal(buildSegmentationDocumentPath(""), "/admin/segmentation/crosswalks");
+  assert.equal(buildSegmentationDocumentPath(null), "/admin/segmentation/crosswalks");
 });

@@ -14,8 +14,14 @@ import {
   Input,
   SimpleGrid,
   Switch,
+  Table,
+  Tbody,
+  Td,
   Text,
+  Th,
+  Thead,
   Textarea,
+  Tr,
   VStack
 } from "@chakra-ui/react";
 import { Form, Link } from "@remix-run/react";
@@ -299,86 +305,103 @@ function AddNodePanel({ kind, isSaving = false }) {
 }
 
 /**
- * Renders the top-level segmentation landing page.
+ * Renders the segmentation crosswalk list page.
  * @param {{
- *   ruleItems?: Array<{id: string|null, name: string}>,
- *   rulesError?: {message?: string}|null
+ *   items: Array<{
+ *     id: string|null,
+ *     name: string,
+ *     description: string,
+ *     version: number|null,
+ *     lastmodifiedby: string|null
+ *   }>,
+ *   error?: {message?: string}|null
  * }} props
  * @returns {JSX.Element}
  */
-export function SegmentationLandingPage({ ruleItems = [], rulesError = null }) {
+export function SegmentationCrosswalkListPage({ items, error }) {
   return (
-    <VStack align="stretch" spacing={6}>
-      <Box>
-        <Heading size="md">Segmentation</Heading>
+    <Box bg="white" h="100%" minH="0" display="flex" flexDirection="column">
+      <Box px={{ base: 4, md: 6 }} py={{ base: 4, md: 5 }} borderBottomWidth="1px" bg="white">
+        <Heading size="md">Segmentation Crosswalks</Heading>
         <Text color="gray.600" mt={2}>
-          Choose which segmentation admin workflow to open.
+          Browse segmentation documents and open one in the document editor.
         </Text>
       </Box>
 
-      <SimpleGrid columns={{ base: 1, xl: 2 }} spacing={5}>
-        <Box borderWidth="1px" borderColor="gray.200" borderRadius="lg" bg="white" p={{ base: 5, md: 6 }}>
-          <Heading size="sm">Alter segmentation rules</Heading>
-          <Text color="gray.600" mt={3}>
-            Browse the available segmentation rule documents. This first pass lists the documents by name.
-          </Text>
+      <Box px={{ base: 4, md: 6 }} py={{ base: 4, md: 5 }} flex="1" minH="0" display="flex" flexDirection="column">
+        {error?.message ? (
+          <Alert status="error" borderRadius="md" mb={4}>
+            <AlertIcon />
+            <AlertDescription>{error.message}</AlertDescription>
+          </Alert>
+        ) : null}
 
-          {rulesError?.message ? (
-            <Alert status="error" borderRadius="md" mt={5}>
-              <AlertIcon />
-              <AlertDescription>{rulesError.message}</AlertDescription>
-            </Alert>
-          ) : null}
+        {items.length ? (
+          <Box borderWidth="1px" borderColor="gray.200" borderRadius="md" overflow="hidden" flex="1" minH="0">
+            <Box h="100%" overflow="auto">
+              <Table size="sm" variant="simple">
+                <Thead bg="gray.50">
+                  <Tr>
+                    <Th position="sticky" top={0} bg="gray.50" zIndex={1}>
+                      Name
+                    </Th>
+                    <Th position="sticky" top={0} bg="gray.50" zIndex={1}>
+                      Description
+                    </Th>
+                    <Th position="sticky" top={0} bg="gray.50" zIndex={1}>
+                      Version
+                    </Th>
+                    <Th position="sticky" top={0} bg="gray.50" zIndex={1}>
+                      Last Edited By
+                    </Th>
+                    <Th position="sticky" top={0} bg="gray.50" zIndex={1}>
+                      Edit
+                    </Th>
+                  </Tr>
+                </Thead>
+                <Tbody>
+                  {items.map((item) => {
+                    const itemPath = buildSegmentationDocumentPath(item.id);
 
-          {ruleItems.length ? (
-            <VStack align="stretch" spacing={3} mt={5}>
-              {ruleItems.map((item) => {
-                const itemPath = buildSegmentationDocumentPath(item.id);
-
-                return (
-                  <Box
-                    key={item.id || item.name}
-                    borderWidth="1px"
-                    borderColor="gray.200"
-                    borderRadius="md"
-                    px={4}
-                    py={3}
-                    transition="border-color 0.2s ease, background-color 0.2s ease"
-                    _hover={item.id ? { borderColor: "blue.300", bg: "blue.50" } : undefined}
-                  >
-                    <Flex align="center" justify="space-between" gap={3}>
-                      <Text fontWeight="semibold" color="gray.800">
-                        {item.name}
-                      </Text>
-
-                      {item.id ? (
-                        <Button as={Link} to={itemPath} size="sm" colorScheme="blue" variant="outline">
-                          Open
-                        </Button>
-                      ) : null}
-                    </Flex>
-                  </Box>
-                );
-              })}
-            </VStack>
-          ) : rulesError?.message ? null : (
-            <Text color="gray.500" mt={5}>
-              No segmentation documents were returned.
-            </Text>
-          )}
-        </Box>
-
-        <Box borderWidth="1px" borderColor="blue.200" borderRadius="lg" bg="white" p={{ base: 5, md: 6 }}>
-          <Heading size="sm">Alter sector / industry / focus</Heading>
-          <Text color="gray.600" mt={3}>
-            Edit the authoritative SIF taxonomy document, including sector, industry, and focus descriptions.
-          </Text>
-          <Button as={Link} to={buildSegmentationPath("sectors")} mt={5} colorScheme="blue">
-            Open Editor
-          </Button>
-        </Box>
-      </SimpleGrid>
-    </VStack>
+                    return (
+                      <Tr key={item.id || item.name} _hover={{ bg: item.id ? "gray.50" : "transparent" }}>
+                        <Td verticalAlign="top">
+                          <Text color="gray.800" fontWeight="semibold">
+                            {item.name}
+                          </Text>
+                        </Td>
+                        <Td verticalAlign="top">
+                          <Text color={item.description ? "gray.700" : "gray.400"} noOfLines={3}>
+                            {item.description || "No description"}
+                          </Text>
+                        </Td>
+                        <Td verticalAlign="top">
+                          <Text color="gray.800">{item.version == null ? "Unknown" : String(item.version)}</Text>
+                        </Td>
+                        <Td verticalAlign="top">
+                          <Text color="gray.800">{item.lastmodifiedby || "Unknown"}</Text>
+                        </Td>
+                        <Td verticalAlign="top">
+                          {item.id ? (
+                            <Button as={Link} to={itemPath} size="sm" colorScheme="blue" variant="outline">
+                              Edit
+                            </Button>
+                          ) : (
+                            <Text color="gray.400">Unavailable</Text>
+                          )}
+                        </Td>
+                      </Tr>
+                    );
+                  })}
+                </Tbody>
+              </Table>
+            </Box>
+          </Box>
+        ) : (
+          <Text color="gray.600">No segmentation documents were returned.</Text>
+        )}
+      </Box>
+    </Box>
   );
 }
 

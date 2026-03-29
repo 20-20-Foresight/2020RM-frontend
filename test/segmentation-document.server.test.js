@@ -3,10 +3,10 @@ const assert = require("node:assert/strict");
 
 const { loadSegmentationDocuments } = require("../app/models/segmentation-document.server");
 
-test("loadSegmentationDocuments requests taxonomy admin data for the segmentation landing page", async () => {
+test("loadSegmentationDocuments requests segmentation admin data for the crosswalks page", async () => {
   const calls = [];
   const items = await loadSegmentationDocuments({
-    request: new Request("http://localhost:3000/admin/segmentation", {
+    request: new Request("http://localhost:3000/admin/segmentation/crosswalks", {
       headers: {
         cookie: "sid=123"
       }
@@ -23,9 +23,9 @@ test("loadSegmentationDocuments requests taxonomy admin data for the segmentatio
           return {
             items: [
               {
-                namespace: "crm.data.taxonomy",
-                key: "sif",
-                name: "SIF Taxonomy"
+                namespace: "crm.data.segmentation",
+                key: "real-estate-crosswalk",
+                name: "Real Estate Crosswalk"
               }
             ]
           };
@@ -35,14 +35,14 @@ test("loadSegmentationDocuments requests taxonomy admin data for the segmentatio
   });
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, "http://localhost:3000/api/rest/admin/data?namespacePrefix=crm.data&filter.type=taxonomy");
+  assert.equal(calls[0].url, "http://localhost:3000/api/rest/admin/data?namespacePrefix=crm.data&filter.type=segmentation");
   assert.equal(calls[0].options.headers.cookie, "sid=123");
   assert.deepEqual(items, [
     {
-      id: "crm.data.taxonomy:sif",
-      namespace: "crm.data.taxonomy",
-      key: "sif",
-      name: "SIF Taxonomy",
+      id: "crm.data.segmentation:real-estate-crosswalk",
+      namespace: "crm.data.segmentation",
+      key: "real-estate-crosswalk",
+      name: "Real Estate Crosswalk",
       description: "",
       shape: null,
       version: null,

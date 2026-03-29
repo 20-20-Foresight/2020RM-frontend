@@ -1,7 +1,7 @@
 const { loadAdminDataList } = require("./admin-data.server");
 
 /**
- * Loads the segmentation rule documents for `/admin/segmentation`.
+ * Loads the segmentation documents for `/admin/segmentation/crosswalks`.
  * @param {{request: Request, fetchImpl?: typeof fetch}} options
  * @returns {Promise<ReturnType<typeof loadAdminDataList>>}
  */
@@ -10,7 +10,7 @@ async function loadSegmentationDocuments(options) {
     request: options.request,
     namespacePrefix: "crm.data",
     filter: {
-      type: "taxonomy"
+      type: "segmentation"
     },
     fetchImpl: options.fetchImpl
   });
