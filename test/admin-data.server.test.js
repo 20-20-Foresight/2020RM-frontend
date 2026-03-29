@@ -5,6 +5,7 @@ const {
   loadAdminDataList,
   loadAdminDataDocument,
   saveAdminDataDocument,
+  saveRawAdminDataDocument,
   buildDocumentFromEditor
 } = require("../app/models/admin-data.server");
 
@@ -597,6 +598,64 @@ test("admin data save surfaces handled upstream errors with status information",
       return true;
     }
   );
+});
+
+test("raw admin data save forwards editor metadata without rebuilding the document", async () => {
+  const calls = [];
+
+  await saveRawAdminDataDocument({
+    request: new Request("http://localhost:3000/admin/data/crm.data%3Alinkedin-crosswalk", {
+      headers: {
+        cookie: "sid=123"
+      }
+    }),
+    id: "crm.data:linkedin-crosswalk",
+    description: "LinkedIn segmentation rules",
+    expectedVersion: 12,
+    editor: {
+      type: "segmentation.default"
+    },
+    document: {
+      crosswalk: {
+        Blogs: {
+          sector: "Other"
+        }
+      }
+    },
+    fetchImpl: async (url, options) => {
+      calls.push({
+        url: String(url),
+        options
+      });
+
+      return {
+        ok: true,
+        async json() {
+          return {
+            data: {
+              id: "crm.data:linkedin-crosswalk"
+            }
+          };
+        }
+      };
+    }
+  });
+
+  assert.equal(calls.length, 1);
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    description: "LinkedIn segmentation rules",
+    expectedVersion: 12,
+    document: {
+      crosswalk: {
+        Blogs: {
+          sector: "Other"
+        }
+      }
+    },
+    editor: {
+      type: "segmentation.default"
+    }
+  });
 });
 
 test("admin data list includes the HTTP status in the error when the REST route is missing", async () => {

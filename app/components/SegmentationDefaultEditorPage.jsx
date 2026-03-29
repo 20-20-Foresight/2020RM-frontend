@@ -2,7 +2,6 @@ import {
   Alert,
   AlertDescription,
   AlertIcon,
-  Badge,
   Box,
   Button,
   Flex,
@@ -20,6 +19,9 @@ import {
   ModalHeader,
   ModalOverlay,
   Select,
+  Tag,
+  TagCloseButton,
+  TagLabel,
   Table,
   Tbody,
   Td,
@@ -27,13 +29,15 @@ import {
   Textarea,
   Th,
   Thead,
+  Tooltip,
   Tr,
   useDisclosure,
   VStack
 } from "@chakra-ui/react";
 import { EditIcon, SearchIcon } from "@chakra-ui/icons";
-import { Form, Link } from "@remix-run/react";
+import { Form } from "@remix-run/react";
 import { useEffect, useState } from "react";
+import { MdDescription } from "react-icons/md";
 
 /**
  * Returns whether a value is a plain object.
@@ -306,33 +310,64 @@ function rowMatchesFilters(row, filters) {
  *   columnKey: string,
  *   label: string,
  *   isOpen: boolean,
- *   value: string,
+ *   activeValue: string,
+ *   draftValue?: string,
  *   onToggle: () => void,
- *   onChange: (value: string) => void,
+ *   onDraftChange: (value: string) => void,
+ *   onApply: (value?: string) => void,
+ *   onClear: () => void,
  *   selectOptions?: string[]|null,
  *   disabled?: boolean
  * }} props
  * @returns {JSX.Element}
  */
-function SearchableHeader({ columnKey, label, isOpen, value, onToggle, onChange, selectOptions = null, disabled = false }) {
+function SearchableHeader({
+  columnKey,
+  label,
+  isOpen,
+  activeValue,
+  draftValue = "",
+  onToggle,
+  onDraftChange,
+  onApply,
+  onClear,
+  selectOptions = null,
+  disabled = false
+}) {
   return (
     <VStack align="stretch" spacing={2}>
       <HStack spacing={2} align="center">
         <Text>{label}</Text>
-        {disabled ? null : (
+        {disabled || activeValue ? null : (
           <IconButton
             aria-label={`Search ${columnKey}`}
             icon={<SearchIcon />}
             size="xs"
+            type="button"
             variant={isOpen ? "solid" : "ghost"}
             colorScheme={isOpen ? "blue" : "gray"}
             onClick={onToggle}
           />
         )}
       </HStack>
-      {isOpen ? (
+      {activeValue ? (
+        <Tag size="sm" colorScheme="blue" alignSelf="flex-start" maxW="100%">
+          <TagLabel overflow="hidden" textOverflow="ellipsis">
+            {activeValue}
+          </TagLabel>
+          <TagCloseButton onClick={onClear} />
+        </Tag>
+      ) : isOpen ? (
         Array.isArray(selectOptions) ? (
-          <Select size="xs" value={value} onChange={(event) => onChange(event.target.value)} bg="white">
+          <Select
+            size="xs"
+            value={draftValue}
+            onChange={(event) => {
+              onDraftChange(event.target.value);
+              onApply(event.target.value);
+            }}
+            bg="white"
+          >
             <option value="">All</option>
             {selectOptions.map((option) => (
               <option key={`${columnKey}-${option}`} value={option}>
@@ -341,7 +376,20 @@ function SearchableHeader({ columnKey, label, isOpen, value, onToggle, onChange,
             ))}
           </Select>
         ) : (
-          <Input size="xs" value={value} onChange={(event) => onChange(event.target.value)} bg="white" />
+          <Input
+            size="xs"
+            value={draftValue}
+            onChange={(event) => onDraftChange(event.target.value)}
+            onBlur={onApply}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                onApply();
+              }
+            }}
+            bg="white"
+            autoFocus
+          />
         )
       ) : null}
     </VStack>
@@ -383,19 +431,48 @@ function SearchableHeader({ columnKey, label, isOpen, value, onToggle, onChange,
 export function SegmentationDefaultEditorPage({ data, actionData, isSaving = false }) {
   const categoryDepth = data.segmentationDefault.categoryColumns.length;
   const [description, setDescription] = useState(data.description || "");
+  const [editorConfig, setEditorConfig] = useState(() =>
+    isPlainObject(data.editor)
+      ? { ...data.editor }
+      : data.editorType
+        ? {
+            type: data.editorType
+          }
+        : {}
+  );
   const [rows, setRows] = useState(() => cloneSegmentationRows(data.segmentationDefault.rows, categoryDepth));
   const [filters, setFilters] = useState({});
+  const [draftFilters, setDraftFilters] = useState({});
   const [openFilterKeys, setOpenFilterKeys] = useState({});
   const [editingRowIndex, setEditingRowIndex] = useState(null);
   const [draftRow, setDraftRow] = useState(() => buildEmptySegmentationRow(categoryDepth));
-  const { isOpen, onOpen, onClose } = useDisclosure();
+  const {
+    isOpen: isRowModalOpen,
+    onOpen: openRowModal,
+    onClose: closeRowModal
+  } = useDisclosure();
+  const {
+    isOpen: isMetadataModalOpen,
+    onOpen: openMetadataModal,
+    onClose: closeMetadataModal
+  } = useDisclosure();
 
   useEffect(() => {
     setDescription(data.description || "");
+    setEditorConfig(
+      isPlainObject(data.editor)
+        ? { ...data.editor }
+        : data.editorType
+          ? {
+              type: data.editorType
+            }
+          : {}
+    );
     setRows(cloneSegmentationRows(data.segmentationDefault.rows, categoryDepth));
     setFilters({});
+    setDraftFilters({});
     setOpenFilterKeys({});
-  }, [categoryDepth, data.description, data.id, data.segmentationDefault.rows, data.version]);
+  }, [categoryDepth, data.description, data.editor, data.editorType, data.id, data.segmentationDefault.rows, data.version]);
 
   const taxonomyOptions = buildTaxonomyOptions(data.taxonomyDocument, rows);
   const filteredRows = rows.filter((row) => rowMatchesFilters(row, filters));
@@ -418,7 +495,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
         ? buildEmptySegmentationRow(categoryDepth)
         : cloneSegmentationRows([rows[rowIndex]], categoryDepth)[0] || buildEmptySegmentationRow(categoryDepth)
     );
-    onOpen();
+    openRowModal();
   }
 
   /**
@@ -427,7 +504,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
   function closeRowEditor() {
     setEditingRowIndex(null);
     setDraftRow(buildEmptySegmentationRow(categoryDepth));
-    onClose();
+    closeRowModal();
   }
 
   /**
@@ -527,12 +604,71 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
    * @param {string} key
    * @param {string} value
    */
-  function updateFilter(key, value) {
-    setFilters((currentFilters) => ({
+  function updateDraftFilter(key, value) {
+    setDraftFilters((currentFilters) => ({
       ...currentFilters,
       [key]: value
     }));
   }
+
+  /**
+   * Applies one pending filter value and closes its editor.
+   * @param {string} key
+   * @param {string} [explicitValue]
+   */
+  function applyFilter(key, explicitValue) {
+    const nextValue = readTrimmedString(typeof explicitValue === "string" ? explicitValue : draftFilters[key]);
+
+    setFilters((currentFilters) => {
+      if (!nextValue) {
+        const nextFilters = { ...currentFilters };
+        delete nextFilters[key];
+        return nextFilters;
+      }
+
+      return {
+        ...currentFilters,
+        [key]: nextValue
+      };
+    });
+
+    setOpenFilterKeys((currentKeys) => ({
+      ...currentKeys,
+      [key]: false
+    }));
+  }
+
+  /**
+   * Clears one active filter.
+   * @param {string} key
+   */
+  function clearFilter(key) {
+    setFilters((currentFilters) => {
+      const nextFilters = { ...currentFilters };
+      delete nextFilters[key];
+      return nextFilters;
+    });
+
+    setDraftFilters((currentFilters) => ({
+      ...currentFilters,
+      [key]: ""
+    }));
+  }
+
+  /**
+   * Updates one editor metadata value.
+   * @param {string} key
+   * @param {string} value
+   */
+  function updateEditorConfig(key, value) {
+    setEditorConfig((currentConfig) => ({
+      ...(isPlainObject(currentConfig) ? currentConfig : {}),
+      [key]: value
+    }));
+  }
+
+  const displayDescription = readTrimmedString(description);
+  const editorTypeLabel = readTrimmedString(editorConfig?.type) || data.editorType || "segmentation.default";
 
   return (
     <Box bg="white" h="100%" minH="0" display="flex" flexDirection="column">
@@ -540,23 +676,16 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
         <Flex justify="space-between" align={{ base: "start", md: "center" }} gap={4} wrap="wrap">
           <Box>
             <Heading size="md">{data.name}</Heading>
-            <Text color="gray.600" mt={2}>
-              {`${data.id || "Unknown id"}${data.lastmodifiedby ? ` • Last modified ${formatTimestamp(data.lastmodifieddate)} by ${data.lastmodifiedby}` : ""}`}
-            </Text>
+            {data.lastmodifiedby ? (
+              <Text color="gray.600" mt={2}>
+                {`Last modified ${formatTimestamp(data.lastmodifieddate)} by ${data.lastmodifiedby}`}
+              </Text>
+            ) : null}
           </Box>
           <HStack spacing={3} align="center" flexWrap="wrap">
-            <Link
-              to="/admin/data"
-              style={{
-                color: "#2B6CB0",
-                fontWeight: 600,
-                textDecoration: "none"
-              }}
-            >
-              Back To Data Sets
-            </Link>
-            <Badge colorScheme="purple">{data.editorType}</Badge>
-            {data.version != null ? <Badge colorScheme="gray">Version {data.version}</Badge> : null}
+            <Button variant="link" size="sm" colorScheme="blue" onClick={openMetadataModal}>
+              edit metadata
+            </Button>
           </HStack>
         </Flex>
       </Box>
@@ -587,6 +716,8 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
             minHeight: 0
           }}
         >
+          <input type="hidden" name="description" value={description} />
+          <input type="hidden" name="editor" value={JSON.stringify(editorConfig)} />
           <input type="hidden" name="editorType" value={data.editorType} />
           <input type="hidden" name="expectedVersion" value={data.version == null ? "" : String(data.version)} />
           <input type="hidden" name="document" value={JSON.stringify(data.document ?? null)} />
@@ -594,18 +725,16 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
           <input type="hidden" name="segmentationRows" value={JSON.stringify(rows)} />
 
           <VStack align="stretch" spacing={4} h="100%" minH="0">
-            <Flex justify="space-between" align={{ base: "stretch", xl: "end" }} gap={4} wrap="wrap">
-              <FormControl maxW={{ base: "100%", xl: "420px" }}>
-                <FormLabel>Description</FormLabel>
-                <Textarea
-                  name="description"
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                  resize="vertical"
-                  minH="112px"
-                />
-              </FormControl>
+            {displayDescription ? (
+              <Box borderWidth="1px" borderColor="gray.200" borderRadius="md" bg="gray.50" px={4} py={3}>
+                <Text color="gray.700" whiteSpace="pre-wrap">
+                  {displayDescription}
+                </Text>
+              </Box>
+            ) : null}
 
+            <Flex justify="space-between" align={{ base: "stretch", xl: "end" }} gap={4} wrap="wrap">
+              <Box />
               <HStack spacing={3} align="center" flexWrap="wrap">
                 <Button type="button" variant="outline" onClick={() => openRowEditor(null)}>
                   Add Row
@@ -630,21 +759,27 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                               columnKey={columnKey}
                               label={columnLabel}
                               isOpen={Boolean(openFilterKeys[columnKey])}
-                              value={filters[columnKey] || ""}
+                              activeValue={filters[columnKey] || ""}
+                              draftValue={draftFilters[columnKey] || ""}
                               onToggle={() => toggleFilter(columnKey)}
-                              onChange={(value) => updateFilter(columnKey, value)}
+                              onDraftChange={(value) => updateDraftFilter(columnKey, value)}
+                              onApply={() => applyFilter(columnKey)}
+                              onClear={() => clearFilter(columnKey)}
                             />
                           </Th>
                         );
                       })}
-                      <Th position="sticky" top={0} bg="gray.50" zIndex={1}>
+                      <Th position="sticky" top={0} bg="gray.50" zIndex={1} sx={{ borderLeft: "4px double", borderLeftColor: "#CBD5E0" }}>
                         <SearchableHeader
                           columnKey="sector"
                           label="Sector"
                           isOpen={Boolean(openFilterKeys.sector)}
-                          value={filters.sector || ""}
+                          activeValue={filters.sector || ""}
+                          draftValue={draftFilters.sector || ""}
                           onToggle={() => toggleFilter("sector")}
-                          onChange={(value) => updateFilter("sector", value)}
+                          onDraftChange={(value) => updateDraftFilter("sector", value)}
+                          onApply={() => applyFilter("sector")}
+                          onClear={() => clearFilter("sector")}
                           selectOptions={taxonomyOptions.sectorOptions}
                         />
                       </Th>
@@ -653,9 +788,12 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                           columnKey="industry"
                           label="Industry"
                           isOpen={Boolean(openFilterKeys.industry)}
-                          value={filters.industry || ""}
+                          activeValue={filters.industry || ""}
+                          draftValue={draftFilters.industry || ""}
                           onToggle={() => toggleFilter("industry")}
-                          onChange={(value) => updateFilter("industry", value)}
+                          onDraftChange={(value) => updateDraftFilter("industry", value)}
+                          onApply={() => applyFilter("industry")}
+                          onClear={() => clearFilter("industry")}
                           selectOptions={taxonomyOptions.industryOptions}
                         />
                       </Th>
@@ -664,22 +802,17 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                           columnKey="focus"
                           label="Focus"
                           isOpen={Boolean(openFilterKeys.focus)}
-                          value={filters.focus || ""}
+                          activeValue={filters.focus || ""}
+                          draftValue={draftFilters.focus || ""}
                           onToggle={() => toggleFilter("focus")}
-                          onChange={(value) => updateFilter("focus", value)}
+                          onDraftChange={(value) => updateDraftFilter("focus", value)}
+                          onApply={() => applyFilter("focus")}
+                          onClear={() => clearFilter("focus")}
                           selectOptions={taxonomyOptions.focusOptions}
                         />
                       </Th>
                       <Th position="sticky" top={0} bg="gray.50" zIndex={1}>
-                        <SearchableHeader
-                          columnKey="notes"
-                          label="Notes"
-                          isOpen={false}
-                          value=""
-                          onToggle={() => {}}
-                          onChange={() => {}}
-                          disabled
-                        />
+                        Notes
                       </Th>
                       <Th position="sticky" top={0} bg="gray.50" zIndex={1} textAlign="right">
                         Actions
@@ -693,15 +826,27 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                           {data.segmentationDefault.categoryColumns.map((_, categoryIndex) => (
                             <Td key={`${rowIndex}-category-${categoryIndex}`}>{row.categories[categoryIndex] || ""}</Td>
                           ))}
-                          <Td>{row.sector || ""}</Td>
+                          <Td sx={{ borderLeft: "4px double", borderLeftColor: "#CBD5E0" }}>{row.sector || ""}</Td>
                           <Td>{row.industry || ""}</Td>
                           <Td>{row.focus || ""}</Td>
-                          <Td>{row.notes || ""}</Td>
+                          <Td>
+                            <Tooltip label={row.notes || "No notes"} hasArrow openDelay={200}>
+                              <IconButton
+                                aria-label={`View notes for row ${rowIndex + 1}`}
+                                icon={<MdDescription />}
+                                size="sm"
+                                type="button"
+                                variant="ghost"
+                                colorScheme={row.notes ? "blue" : "gray"}
+                              />
+                            </Tooltip>
+                          </Td>
                           <Td textAlign="right" whiteSpace="nowrap">
                             <IconButton
                               aria-label={`Edit row ${rowIndex + 1}`}
                               icon={<EditIcon />}
                               size="sm"
+                              type="button"
                               variant="ghost"
                               colorScheme="blue"
                               onClick={() => openRowEditor(rows.indexOf(row))}
@@ -724,7 +869,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
         </Form>
       </Box>
 
-      <Modal isOpen={isOpen} onClose={closeRowEditor} size="4xl" scrollBehavior="inside">
+      <Modal isOpen={isRowModalOpen} onClose={closeRowEditor} size="4xl" scrollBehavior="inside">
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>{editingRowIndex == null ? "Add Row" : "Edit Row"}</ModalHeader>
@@ -803,6 +948,40 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                 Apply
               </Button>
             </HStack>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={isMetadataModalOpen} onClose={closeMetadataModal} size="xl" scrollBehavior="inside">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Metadata</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb={6}>
+            <VStack align="stretch" spacing={4}>
+              <FormControl>
+                <FormLabel>Name</FormLabel>
+                <Input value={data.name} isReadOnly bg="gray.50" />
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Namespace</FormLabel>
+                <Input value={data.namespace || ""} isReadOnly bg="gray.50" />
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Editor</FormLabel>
+                <Input value={editorTypeLabel} onChange={(event) => updateEditorConfig("type", event.target.value)} bg="white" />
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Description</FormLabel>
+                <Textarea value={description} onChange={(event) => setDescription(event.target.value)} minH="120px" bg="white" />
+              </FormControl>
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button onClick={closeMetadataModal}>Done</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

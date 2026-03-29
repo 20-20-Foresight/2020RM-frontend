@@ -825,6 +825,7 @@ async function saveAdminDataDocument(options) {
  *   id: string,
  *   description?: string,
  *   expectedVersion?: number|null,
+ *   editor?: object|null,
  *   document?: unknown,
  *   fetchImpl?: typeof fetch
  * }} options
@@ -838,7 +839,8 @@ async function saveRawAdminDataDocument(options) {
     body: {
       description: typeof options.description === "string" ? options.description : "",
       expectedVersion: Number.isFinite(options.expectedVersion) ? Number(options.expectedVersion) : null,
-      document: options.document ?? null
+      document: options.document ?? null,
+      ...(isPlainObject(options.editor) ? { editor: options.editor } : {})
     },
     fetchImpl: options.fetchImpl
   });

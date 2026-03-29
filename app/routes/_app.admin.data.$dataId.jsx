@@ -143,6 +143,7 @@ export async function action({ request, params }) {
   const columns = parseJsonField(formData, "columns", []);
   const rows = parseJsonField(formData, "rows", []);
   const document = parseJsonField(formData, "document", null);
+  const editor = parseJsonField(formData, "editor", null);
   const segmentationStructure = readFormString(formData, "segmentationStructure").trim();
   const segmentationRows = parseJsonField(formData, "segmentationRows", []);
 
@@ -153,6 +154,7 @@ export async function action({ request, params }) {
         id,
         description,
         expectedVersion,
+        editor: editor && typeof editor === "object" ? editor : null,
         document: buildSegmentationDefaultDocument({
           sourceDocument: document,
           structure: segmentationStructure,
