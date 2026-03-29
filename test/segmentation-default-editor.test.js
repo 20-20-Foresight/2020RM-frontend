@@ -375,6 +375,38 @@ test("resolveSegmentationDefaultEditorType honors explicit editor config and fal
       null,
       {
         crosswalk: {
+          "21": {
+            description: "Mining, Quarrying, and Oil and Gas Extraction",
+            "focus(es)": "Mining",
+            sector: "Other"
+          }
+        }
+      },
+      "segmentation"
+    ),
+    "segmentation.code"
+  );
+  assert.equal(
+    resolveSegmentationDefaultEditorType(
+      null,
+      {
+        sheet1: [
+          {
+            code: "21",
+            description: "Mining, Quarrying, and Oil and Gas Extraction",
+            sector: "Other"
+          }
+        ]
+      },
+      "segmentation"
+    ),
+    "segmentation.list"
+  );
+  assert.equal(
+    resolveSegmentationDefaultEditorType(
+      null,
+      {
+        crosswalk: {
           Blogs: {
             sector: "Other",
             focus: "Electric Power Transmission, Control, and Distribution",

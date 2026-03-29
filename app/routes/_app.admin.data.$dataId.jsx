@@ -91,7 +91,7 @@ export async function loader({ request, params }) {
       request,
       id
     });
-    const editorType = resolveSegmentationDefaultEditorType(rawData.editor, rawData.document);
+    const editorType = resolveSegmentationDefaultEditorType(rawData.editor, rawData.document, rawData.metadata?.type);
 
     if (CUSTOM_SEGMENTATION_EDITOR_TYPES.has(editorType)) {
       const taxonomyData = await loadSifTaxonomyDocument({

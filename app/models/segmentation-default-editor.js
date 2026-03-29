@@ -193,12 +193,40 @@ function isFlatCrosswalk(crosswalk) {
 }
 
 /**
+ * Returns whether the current wrapper uses the segmentation.code crosswalk shape.
+ * @param {unknown} crosswalk
+ * @returns {boolean}
+ */
+function isCodeCrosswalk(crosswalk) {
+  if (!isPlainObject(crosswalk)) {
+    return false;
+  }
+
+  const values = Object.values(crosswalk);
+  if (!values.length) {
+    return false;
+  }
+
+  return values.every((value) => {
+    if (!isPlainObject(value)) {
+      return false;
+    }
+
+    return Object.keys(value).every((key) => {
+      const normalizedFieldName = normalizeSegmentationFieldName(key);
+      return SEGMENTATION_SETTING_KEYS.has(normalizedFieldName) || normalizedFieldName === "description";
+    });
+  });
+}
+
+/**
  * Resolves whether the current document should use the segmentation.default editor.
  * @param {unknown} editorConfig
  * @param {unknown} document
+ * @param {unknown} [documentType]
  * @returns {"segmentation.default"|"segmentation.code"|"segmentation.list"|null}
  */
-function resolveSegmentationDefaultEditorType(editorConfig, document) {
+function resolveSegmentationDefaultEditorType(editorConfig, document, documentType = null) {
   const explicitType =
     readTrimmedString(editorConfig) ||
     readTrimmedString(editorConfig?.type) ||
@@ -209,7 +237,19 @@ function resolveSegmentationDefaultEditorType(editorConfig, document) {
     return explicitType;
   }
 
+  const normalizedDocumentType = readTrimmedString(documentType);
+  if (normalizedDocumentType === "segmentation") {
+    const { value } = resolveSegmentationListRoot(document);
+    if (Array.isArray(value) && value.some((row) => isPlainObject(row))) {
+      return "segmentation.list";
+    }
+  }
+
   const crosswalk = resolveCrosswalkRoot(document);
+  if (normalizedDocumentType === "segmentation" && isCodeCrosswalk(crosswalk)) {
+    return "segmentation.code";
+  }
+
   if (isFlatCrosswalk(crosswalk)) {
     return "segmentation.default";
   }
