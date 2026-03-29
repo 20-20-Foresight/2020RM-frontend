@@ -2,11 +2,20 @@ import { json } from "@remix-run/node";
 import { useActionData, useLoaderData, useNavigation } from "@remix-run/react";
 import { Alert, AlertDescription, AlertIcon } from "@chakra-ui/react";
 import { AdminDataDetailEditor } from "../components/AdminDataPage";
+import { SegmentationDefaultEditorPage } from "../components/SegmentationDefaultEditorPage";
 import {
   AdminDataApiError,
+  loadRawAdminDataDocument,
   loadAdminDataDocument,
-  saveAdminDataDocument
+  saveAdminDataDocument,
+  saveRawAdminDataDocument
 } from "../models/admin-data.server";
+import { loadSifTaxonomyDocument } from "../models/sif-taxonomy.server";
+import {
+  buildSegmentationDefaultDocument,
+  buildSegmentationDefaultViewModel,
+  resolveSegmentationDefaultEditorType
+} from "../models/segmentation-default-editor";
 
 /**
  * Builds a stable route error payload.
@@ -76,6 +85,30 @@ export async function loader({ request, params }) {
   const id = typeof params.dataId === "string" ? params.dataId : "";
 
   try {
+    const rawData = await loadRawAdminDataDocument({
+      request,
+      id
+    });
+    const editorType = resolveSegmentationDefaultEditorType(rawData.editor, rawData.document);
+
+    if (editorType === "segmentation.default") {
+      const taxonomyData = await loadSifTaxonomyDocument({
+        request
+      });
+
+      return json({
+        data: {
+          ...rawData,
+          editorType,
+          segmentationDefault: buildSegmentationDefaultViewModel({
+            document: rawData.document
+          }),
+          taxonomyDocument: taxonomyData.document
+        },
+        error: null
+      });
+    }
+
     const data = await loadAdminDataDocument({
       request,
       id
@@ -104,13 +137,36 @@ export async function action({ request, params }) {
   const id = typeof params.dataId === "string" ? params.dataId : "";
   const formData = await request.formData();
   const description = readFormString(formData, "description");
+  const editorType = readFormString(formData, "editorType").trim();
   const shape = readFormString(formData, "shape");
   const expectedVersion = readFormNumber(formData, "expectedVersion");
   const columns = parseJsonField(formData, "columns", []);
   const rows = parseJsonField(formData, "rows", []);
   const document = parseJsonField(formData, "document", null);
+  const segmentationStructure = readFormString(formData, "segmentationStructure").trim();
+  const segmentationRows = parseJsonField(formData, "segmentationRows", []);
 
   try {
+    if (editorType === "segmentation.default") {
+      const saved = await saveRawAdminDataDocument({
+        request,
+        id,
+        description,
+        expectedVersion,
+        document: buildSegmentationDefaultDocument({
+          sourceDocument: document,
+          structure: segmentationStructure,
+          rows: Array.isArray(segmentationRows) ? segmentationRows : []
+        })
+      });
+
+      return json({
+        ok: true,
+        saved,
+        error: null
+      });
+    }
+
     const saved = await saveAdminDataDocument({
       request,
       id,
@@ -154,6 +210,16 @@ export default function AdminDataDetailRoute() {
         <AlertIcon />
         <AlertDescription>{error?.message || "Unable to load this data set."}</AlertDescription>
       </Alert>
+    );
+  }
+
+  if (data.editorType === "segmentation.default") {
+    return (
+      <SegmentationDefaultEditorPage
+        data={data}
+        actionData={actionData}
+        isSaving={navigation.state === "submitting"}
+      />
     );
   }
 
