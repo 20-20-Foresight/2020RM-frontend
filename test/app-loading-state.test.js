@@ -30,6 +30,7 @@ test("isEntitySearchPath matches the list routes", () => {
 
 test("getEntityDetailTypeFromPath recognizes singular detail routes", () => {
   assert.equal(getEntityDetailTypeFromPath("/organization/org-1"), "organization");
+  assert.equal(getEntityDetailTypeFromPath("/organization/org-1/people"), "organization");
   assert.equal(getEntityDetailTypeFromPath("/person/person-1"), "person");
   assert.equal(getEntityDetailTypeFromPath("/people"), null);
 });
@@ -93,6 +94,22 @@ test("loading overlay labels organization detail navigations clearly", () => {
       isLoading: true,
       isSubmitting: false,
       label: "Loading organization..."
+    }
+  );
+});
+
+test("loading overlay ignores same-organization detail tab navigations so the page can render its inline loader", () => {
+  assert.deepEqual(
+    getAppLoadingOverlayState({
+      currentPathname: "/organization/org-1",
+      navigationState: "loading",
+      navigationPathname: "/organization/org-1/people",
+      fetcherStates: []
+    }),
+    {
+      isLoading: false,
+      isSubmitting: false,
+      label: null
     }
   );
 });
