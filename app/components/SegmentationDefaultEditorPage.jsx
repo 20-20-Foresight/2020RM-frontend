@@ -86,6 +86,7 @@ function formatTimestamp(value) {
  * Clones one editable row list into mutable state.
  * @param {Array<{
  *   categories?: string[],
+ *   description?: string,
  *   sector?: string,
  *   industry?: string,
  *   focus?: string,
@@ -96,6 +97,7 @@ function formatTimestamp(value) {
  * @param {number} categoryDepth
  * @returns {Array<{
  *   categories: string[],
+ *   description: string,
  *   sector: string,
  *   industry: string,
  *   focus: string,
@@ -108,6 +110,7 @@ function cloneSegmentationRows(rows, categoryDepth) {
   return Array.isArray(rows)
     ? rows.map((row) => ({
         categories: Array.from({ length: categoryDepth }, (_, index) => readTrimmedString(row.categories?.[index])),
+        description: readTrimmedString(row.description),
         sector: readTrimmedString(row.sector),
         industry: readTrimmedString(row.industry),
         focus: readTrimmedString(row.focus),
@@ -123,6 +126,7 @@ function cloneSegmentationRows(rows, categoryDepth) {
  * @param {number} categoryDepth
  * @returns {{
  *   categories: string[],
+ *   description: string,
  *   sector: string,
  *   industry: string,
  *   focus: string,
@@ -134,6 +138,7 @@ function cloneSegmentationRows(rows, categoryDepth) {
 function buildEmptySegmentationRow(categoryDepth) {
   return {
     categories: Array.from({ length: categoryDepth }, () => ""),
+    description: "",
     sector: "",
     industry: "",
     focus: "",
@@ -272,6 +277,7 @@ function buildTaxonomyOptions(taxonomyDocument, rows) {
  * Returns whether one row matches the active filter set.
  * @param {{
  *   categories: string[],
+ *   description?: string,
  *   sector: string,
  *   industry: string,
  *   focus: string
@@ -289,6 +295,14 @@ function rowMatchesFilters(row, filters) {
     if (key.startsWith("category-")) {
       const index = Number(key.slice("category-".length));
       const cellValue = readTrimmedString(row.categories?.[index]).toLowerCase();
+      if (!cellValue.includes(normalizedFilter.toLowerCase())) {
+        return false;
+      }
+      continue;
+    }
+
+    if (key === "description") {
+      const cellValue = readTrimmedString(row.description).toLowerCase();
       if (!cellValue.includes(normalizedFilter.toLowerCase())) {
         return false;
       }
@@ -413,6 +427,7 @@ function SearchableHeader({
  *       categoryColumns: string[],
  *       rows: Array<{
  *         categories: string[],
+ *         description: string,
  *         sector: string,
  *         industry: string,
  *         focus: string,
@@ -430,6 +445,7 @@ function SearchableHeader({
  */
 export function SegmentationDefaultEditorPage({ data, actionData, isSaving = false }) {
   const categoryDepth = data.segmentationDefault.categoryColumns.length;
+  const valueColumns = Array.isArray(data.segmentationDefault.valueColumns) ? data.segmentationDefault.valueColumns : [];
   const [description, setDescription] = useState(data.description || "");
   const [editorConfig, setEditorConfig] = useState(() =>
     isPlainObject(data.editor)
@@ -549,7 +565,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
 
   /**
    * Updates one SIF field on the draft row.
-   * @param {"sector"|"industry"|"focus"|"notes"} field
+   * @param {"description"|"sector"|"industry"|"focus"|"notes"} field
    * @param {string} value
    */
   function updateDraftField(field, value) {
@@ -769,6 +785,21 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                           </Th>
                         );
                       })}
+                      {valueColumns.map((column) => (
+                        <Th key={column.key} position="sticky" top={0} bg="gray.50" zIndex={1}>
+                          <SearchableHeader
+                            columnKey={column.key}
+                            label={column.label}
+                            isOpen={Boolean(openFilterKeys[column.key])}
+                            activeValue={filters[column.key] || ""}
+                            draftValue={draftFilters[column.key] || ""}
+                            onToggle={() => toggleFilter(column.key)}
+                            onDraftChange={(value) => updateDraftFilter(column.key, value)}
+                            onApply={(value) => applyFilter(column.key, value)}
+                            onClear={() => clearFilter(column.key)}
+                          />
+                        </Th>
+                      ))}
                       <Th position="sticky" top={0} bg="gray.50" zIndex={1} sx={{ borderLeft: "4px double", borderLeftColor: "#CBD5E0" }}>
                         <SearchableHeader
                           columnKey="sector"
@@ -826,6 +857,9 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                           {data.segmentationDefault.categoryColumns.map((_, categoryIndex) => (
                             <Td key={`${rowIndex}-category-${categoryIndex}`}>{row.categories[categoryIndex] || ""}</Td>
                           ))}
+                          {valueColumns.map((column) => (
+                            <Td key={`${rowIndex}-${column.key}`}>{readTrimmedString(row[column.key])}</Td>
+                          ))}
                           <Td sx={{ borderLeft: "4px double", borderLeftColor: "#CBD5E0" }}>{row.sector || ""}</Td>
                           <Td>{row.industry || ""}</Td>
                           <Td>{row.focus || ""}</Td>
@@ -856,7 +890,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                       ))
                     ) : (
                       <Tr>
-                        <Td colSpan={data.segmentationDefault.categoryColumns.length + 5}>
+                        <Td colSpan={data.segmentationDefault.categoryColumns.length + valueColumns.length + 5}>
                           <Text color="gray.500">No rows match the active filters.</Text>
                         </Td>
                       </Tr>
@@ -882,6 +916,17 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                   <Input
                     value={draftRow.categories[index] || ""}
                     onChange={(event) => updateDraftCategory(index, event.target.value)}
+                    bg="white"
+                  />
+                </FormControl>
+              ))}
+
+              {valueColumns.map((column) => (
+                <FormControl key={`draft-value-${column.key}`}>
+                  <FormLabel>{column.label}</FormLabel>
+                  <Input
+                    value={readTrimmedString(draftRow[column.key])}
+                    onChange={(event) => updateDraftField(column.key, event.target.value)}
                     bg="white"
                   />
                 </FormControl>

@@ -17,6 +17,8 @@ import {
   resolveSegmentationDefaultEditorType
 } from "../models/segmentation-default-editor";
 
+const CUSTOM_SEGMENTATION_EDITOR_TYPES = new Set(["segmentation.default", "segmentation.code"]);
+
 /**
  * Builds a stable route error payload.
  * @param {unknown} error
@@ -91,7 +93,7 @@ export async function loader({ request, params }) {
     });
     const editorType = resolveSegmentationDefaultEditorType(rawData.editor, rawData.document);
 
-    if (editorType === "segmentation.default") {
+    if (CUSTOM_SEGMENTATION_EDITOR_TYPES.has(editorType)) {
       const taxonomyData = await loadSifTaxonomyDocument({
         request
       });
@@ -101,6 +103,7 @@ export async function loader({ request, params }) {
           ...rawData,
           editorType,
           segmentationDefault: buildSegmentationDefaultViewModel({
+            editorType,
             document: rawData.document
           }),
           taxonomyDocument: taxonomyData.document
@@ -148,7 +151,7 @@ export async function action({ request, params }) {
   const segmentationRows = parseJsonField(formData, "segmentationRows", []);
 
   try {
-    if (editorType === "segmentation.default") {
+    if (CUSTOM_SEGMENTATION_EDITOR_TYPES.has(editorType)) {
       const saved = await saveRawAdminDataDocument({
         request,
         id,
@@ -215,7 +218,7 @@ export default function AdminDataDetailRoute() {
     );
   }
 
-  if (data.editorType === "segmentation.default") {
+  if (CUSTOM_SEGMENTATION_EDITOR_TYPES.has(data.editorType)) {
     return (
       <SegmentationDefaultEditorPage
         data={data}

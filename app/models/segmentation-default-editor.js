@@ -1,4 +1,6 @@
 const SEGMENTATION_SETTING_KEYS = new Set(["sector", "industry", "focus", "notes"]);
+const SEGMENTATION_EDITOR_TYPES = new Set(["segmentation.default", "segmentation.code"]);
+const SEGMENTATION_FIELD_ALIASES = new Map([["focus(es)", "focus"]]);
 
 /**
  * Returns whether a value is a plain object.
@@ -20,6 +22,16 @@ function readTrimmedString(value) {
   }
 
   return value.trim();
+}
+
+/**
+ * Normalizes one leaf field name to its canonical segmentation key.
+ * @param {unknown} fieldName
+ * @returns {string}
+ */
+function normalizeSegmentationFieldName(fieldName) {
+  const normalizedFieldName = readTrimmedString(fieldName).toLowerCase();
+  return SEGMENTATION_FIELD_ALIASES.get(normalizedFieldName) || normalizedFieldName;
 }
 
 /**
@@ -66,7 +78,53 @@ function isSegmentationLeaf(value) {
     return false;
   }
 
-  return Object.keys(value).some((key) => SEGMENTATION_SETTING_KEYS.has(key.trim().toLowerCase()));
+  return Object.keys(value).some((key) => SEGMENTATION_SETTING_KEYS.has(normalizeSegmentationFieldName(key)));
+}
+
+/**
+ * Reads one canonical segmentation leaf field from an object.
+ * @param {unknown} value
+ * @param {string} key
+ * @returns {string}
+ */
+function readSegmentationLeafField(value, key) {
+  if (!isPlainObject(value)) {
+    return "";
+  }
+
+  for (const [fieldName, fieldValue] of Object.entries(value)) {
+    if (normalizeSegmentationFieldName(fieldName) === key) {
+      return readTrimmedString(fieldValue);
+    }
+  }
+
+  return "";
+}
+
+/**
+ * Collects non-canonical leaf fields so they can round-trip through edits.
+ * @param {unknown} value
+ * @param {Set<string>} excludedFields
+ * @returns {Record<string, unknown>}
+ */
+function collectExtraLeafFields(value, excludedFields = new Set()) {
+  /** @type {Record<string, unknown>} */
+  const extraLeafFields = {};
+
+  if (!isPlainObject(value)) {
+    return extraLeafFields;
+  }
+
+  for (const [fieldName, fieldValue] of Object.entries(value)) {
+    const normalizedFieldName = normalizeSegmentationFieldName(fieldName);
+    if (SEGMENTATION_SETTING_KEYS.has(normalizedFieldName) || excludedFields.has(normalizedFieldName)) {
+      continue;
+    }
+
+    extraLeafFields[fieldName] = fieldValue;
+  }
+
+  return extraLeafFields;
 }
 
 /**
@@ -104,7 +162,7 @@ function isFlatCrosswalk(crosswalk) {
  * Resolves whether the current document should use the segmentation.default editor.
  * @param {unknown} editorConfig
  * @param {unknown} document
- * @returns {"segmentation.default"|null}
+ * @returns {"segmentation.default"|"segmentation.code"|null}
  */
 function resolveSegmentationDefaultEditorType(editorConfig, document) {
   const explicitType =
@@ -113,8 +171,8 @@ function resolveSegmentationDefaultEditorType(editorConfig, document) {
     readTrimmedString(editorConfig?.editor) ||
     readTrimmedString(editorConfig?.name);
 
-  if (explicitType === "segmentation.default") {
-    return "segmentation.default";
+  if (SEGMENTATION_EDITOR_TYPES.has(explicitType)) {
+    return explicitType;
   }
 
   const crosswalk = resolveCrosswalkRoot(document);
@@ -148,12 +206,10 @@ function buildFlatCrosswalkRow(key, value) {
   const branchFieldNames = [];
   /** @type {string[]} */
   const categories = [];
-  /** @type {Record<string, unknown>} */
-  const extraLeafFields = {};
 
   for (const [fieldName, fieldValue] of Object.entries(value)) {
-    const normalizedFieldName = fieldName.trim().toLowerCase();
-    if (SEGMENTATION_SETTING_KEYS.has(normalizedFieldName)) {
+    const normalizedFieldName = normalizeSegmentationFieldName(fieldName);
+    if (SEGMENTATION_SETTING_KEYS.has(normalizedFieldName) || normalizedFieldName === "description") {
       continue;
     }
 
@@ -163,21 +219,43 @@ function buildFlatCrosswalkRow(key, value) {
 
   categories.push(readTrimmedString(key));
 
-  for (const [fieldName, fieldValue] of Object.entries(value)) {
-    const normalizedFieldName = fieldName.trim().toLowerCase();
-    if (!SEGMENTATION_SETTING_KEYS.has(normalizedFieldName) && !branchFieldNames.includes(fieldName)) {
-      extraLeafFields[fieldName] = fieldValue;
-    }
-  }
-
   return {
     categories,
-    sector: readTrimmedString(value.sector),
-    industry: readTrimmedString(value.industry),
-    focus: readTrimmedString(value.focus),
-    notes: readTrimmedString(value.notes),
+    description: "",
+    sector: readSegmentationLeafField(value, "sector"),
+    industry: readSegmentationLeafField(value, "industry"),
+    focus: readSegmentationLeafField(value, "focus"),
+    notes: readSegmentationLeafField(value, "notes"),
     __branchFieldNames: branchFieldNames,
-    __extraLeafFields: extraLeafFields
+    __extraLeafFields: collectExtraLeafFields(value)
+  };
+}
+
+/**
+ * Builds one normalized row from a segmentation.code flat crosswalk entry.
+ * @param {string} key
+ * @param {Record<string, unknown>} value
+ * @returns {{
+ *   categories: string[],
+ *   description: string,
+ *   sector: string,
+ *   industry: string,
+ *   focus: string,
+ *   notes: string,
+ *   __branchFieldNames: string[],
+ *   __extraLeafFields: Record<string, unknown>
+ * }}
+ */
+function buildCodeCrosswalkRow(key, value) {
+  return {
+    categories: [readTrimmedString(key)],
+    description: readSegmentationLeafField(value, "description"),
+    sector: readSegmentationLeafField(value, "sector"),
+    industry: readSegmentationLeafField(value, "industry"),
+    focus: readSegmentationLeafField(value, "focus"),
+    notes: readSegmentationLeafField(value, "notes"),
+    __branchFieldNames: [],
+    __extraLeafFields: collectExtraLeafFields(value, new Set(["description"]))
   };
 }
 
@@ -207,24 +285,15 @@ function flattenNestedTree(node, path = []) {
     const nextPath = [...path, readTrimmedString(key)];
 
     if (isSegmentationLeaf(value)) {
-      /** @type {Record<string, unknown>} */
-      const extraLeafFields = {};
-
-      for (const [fieldName, fieldValue] of Object.entries(value)) {
-        const normalizedFieldName = fieldName.trim().toLowerCase();
-        if (!SEGMENTATION_SETTING_KEYS.has(normalizedFieldName)) {
-          extraLeafFields[fieldName] = fieldValue;
-        }
-      }
-
       rows.push({
         categories: nextPath,
-        sector: readTrimmedString(value.sector),
-        industry: readTrimmedString(value.industry),
-        focus: readTrimmedString(value.focus),
-        notes: readTrimmedString(value.notes),
+        description: "",
+        sector: readSegmentationLeafField(value, "sector"),
+        industry: readSegmentationLeafField(value, "industry"),
+        focus: readSegmentationLeafField(value, "focus"),
+        notes: readSegmentationLeafField(value, "notes"),
         __branchFieldNames: [],
-        __extraLeafFields: extraLeafFields
+        __extraLeafFields: collectExtraLeafFields(value)
       });
       continue;
     }
@@ -251,11 +320,14 @@ function resolveCrosswalkRoot(document) {
 /**
  * Builds one view model for the segmentation.default editor.
  * @param {{document: unknown}} options
+ * @param {string|null|undefined} [options.editorType]
  * @returns {{
- *   structure: "flat-crosswalk"|"tree-crosswalk",
+ *   structure: "flat-crosswalk"|"tree-crosswalk"|"code-crosswalk",
  *   categoryColumns: string[],
+ *   valueColumns: Array<{key: string, label: string}>,
  *   rows: Array<{
  *     categories: string[],
+ *     description: string,
  *     sector: string,
  *     industry: string,
  *     focus: string,
@@ -266,7 +338,23 @@ function resolveCrosswalkRoot(document) {
  * }}
  */
 function buildSegmentationDefaultViewModel(options) {
+  const editorType = resolveSegmentationDefaultEditorType(options?.editorType, options?.document);
   const crosswalk = resolveCrosswalkRoot(options?.document);
+
+  if (editorType === "segmentation.code") {
+    return {
+      structure: "code-crosswalk",
+      categoryColumns: ["code"],
+      valueColumns: [
+        {
+          key: "description",
+          label: "description"
+        }
+      ],
+      rows: Object.entries(crosswalk || {}).map(([key, value]) => buildCodeCrosswalkRow(key, value))
+    };
+  }
+
   const structure = isFlatCrosswalk(crosswalk) ? "flat-crosswalk" : "tree-crosswalk";
   const rows =
     structure === "flat-crosswalk"
@@ -277,6 +365,7 @@ function buildSegmentationDefaultViewModel(options) {
   return {
     structure,
     categoryColumns: Array.from({ length: maxDepth }, (_, index) => buildCategoryColumnLabel(index)),
+    valueColumns: [],
     rows
   };
 }
@@ -295,16 +384,21 @@ function normalizeCategoryArray(value) {
  * @param {Record<string, unknown>} row
  * @returns {Record<string, unknown>}
  */
-function buildLeafPayload(row) {
+function buildLeafPayload(row, options = {}) {
   /** @type {Record<string, unknown>} */
   const payload = {
     ...(isPlainObject(row.__extraLeafFields) ? row.__extraLeafFields : {})
   };
 
+  const description = readTrimmedString(row.description);
   const sector = readTrimmedString(row.sector);
   const industry = readTrimmedString(row.industry);
   const focus = readTrimmedString(row.focus);
   const notes = readTrimmedString(row.notes);
+
+  if (options.includeDescription && description) {
+    payload.description = description;
+  }
 
   if (sector) {
     payload.sector = sector;
@@ -329,7 +423,7 @@ function buildLeafPayload(row) {
  * Rebuilds one segmentation.default document from edited rows.
  * @param {{
  *   sourceDocument: unknown,
- *   structure: "flat-crosswalk"|"tree-crosswalk",
+ *   structure: "flat-crosswalk"|"tree-crosswalk"|"code-crosswalk",
  *   rows: Record<string, unknown>[]
  * }} options
  * @returns {unknown}
@@ -338,6 +432,27 @@ function buildSegmentationDefaultDocument(options) {
   const rows = Array.isArray(options?.rows) ? options.rows.filter((row) => isPlainObject(row)) : [];
   const sourceDocument = isPlainObject(options?.sourceDocument) ? options.sourceDocument : {};
   const structure = options?.structure === "tree-crosswalk" ? "tree-crosswalk" : "flat-crosswalk";
+
+  if (options?.structure === "code-crosswalk") {
+    /** @type {Record<string, unknown>} */
+    const nextCrosswalk = {};
+
+    for (const row of rows) {
+      const code = normalizeBranchValue(row.categories?.[0]);
+      if (!code) {
+        continue;
+      }
+
+      nextCrosswalk[code] = buildLeafPayload(row, {
+        includeDescription: true
+      });
+    }
+
+    return {
+      ...sourceDocument,
+      crosswalk: nextCrosswalk
+    };
+  }
 
   if (structure === "tree-crosswalk") {
     /** @type {Record<string, unknown>} */

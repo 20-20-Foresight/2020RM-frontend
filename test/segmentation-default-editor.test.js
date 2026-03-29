@@ -11,7 +11,7 @@ test("buildSegmentationDefaultViewModel derives category columns from flat cross
   const document = {
     crosswalk: {
       Blogs: {
-        focus: "Electric Power Transmission, Control, and Distribution",
+        "focus(es)": "Electric Power Transmission, Control, and Distribution",
         sector: "Other",
         "category heading": "Technology, Information and Media ",
         "subcategory heading": " Technology, Information and Internet "
@@ -117,9 +117,138 @@ test("buildSegmentationDefaultDocument rebuilds the flat crosswalk structure and
   });
 });
 
+test("buildSegmentationDefaultViewModel supports segmentation.code documents with code and description columns", () => {
+  const document = {
+    crosswalk: {
+      "11": {
+        sector: "Other",
+        description: "Agriculture, Forestry, Fishing and Hunting"
+      },
+      "21": {
+        sector: "Other",
+        "focus(es)": "Mining",
+        description: "Mining, Quarrying, and Oil and Gas Extraction"
+      },
+      "237": {
+        sector: "Construction",
+        industry: "Civil Engineering",
+        description: "Heavy and Civil Engineering Construction"
+      }
+    },
+    sheet1: []
+  };
+
+  const viewModel = buildSegmentationDefaultViewModel({
+    editorType: "segmentation.code",
+    document
+  });
+
+  assert.equal(viewModel.structure, "code-crosswalk");
+  assert.deepEqual(viewModel.categoryColumns, ["code"]);
+  assert.deepEqual(viewModel.valueColumns, [
+    {
+      key: "description",
+      label: "description"
+    }
+  ]);
+  assert.equal(viewModel.rows.length, 3);
+  assert.deepEqual(
+    viewModel.rows.map((row) => ({
+      code: row.categories[0],
+      description: row.description,
+      sector: row.sector,
+      industry: row.industry,
+      focus: row.focus
+    })),
+    [
+      {
+        code: "11",
+        description: "Agriculture, Forestry, Fishing and Hunting",
+        sector: "Other",
+        industry: "",
+        focus: ""
+      },
+      {
+        code: "21",
+        description: "Mining, Quarrying, and Oil and Gas Extraction",
+        sector: "Other",
+        industry: "",
+        focus: "Mining"
+      },
+      {
+        code: "237",
+        description: "Heavy and Civil Engineering Construction",
+        sector: "Construction",
+        industry: "Civil Engineering",
+        focus: ""
+      }
+    ]
+  );
+});
+
+test("buildSegmentationDefaultDocument saves segmentation.code rows with canonical focus fields", () => {
+  const sourceDocument = {
+    crosswalk: {
+      "21": {
+        sector: "Other",
+        "focus(es)": "Mining",
+        description: "Mining, Quarrying, and Oil and Gas Extraction"
+      }
+    },
+    sheet1: []
+  };
+
+  const rebuilt = buildSegmentationDefaultDocument({
+    sourceDocument,
+    structure: "code-crosswalk",
+    rows: [
+      {
+        categories: ["21"],
+        description: "Mining, Quarrying, and Oil and Gas Extraction",
+        sector: "Energy",
+        industry: "Oil and Gas",
+        focus: "Mining",
+        notes: "Reviewed",
+        __branchFieldNames: [],
+        __extraLeafFields: {}
+      },
+      {
+        categories: ["237"],
+        description: "Heavy and Civil Engineering Construction",
+        sector: "Construction",
+        industry: "Civil Engineering",
+        focus: "",
+        notes: "",
+        __branchFieldNames: [],
+        __extraLeafFields: {}
+      }
+    ]
+  });
+
+  assert.deepEqual(rebuilt, {
+    crosswalk: {
+      "21": {
+        description: "Mining, Quarrying, and Oil and Gas Extraction",
+        sector: "Energy",
+        industry: "Oil and Gas",
+        focus: "Mining",
+        notes: "Reviewed"
+      },
+      "237": {
+        description: "Heavy and Civil Engineering Construction",
+        sector: "Construction",
+        industry: "Civil Engineering"
+      }
+    },
+    sheet1: []
+  });
+});
+
 test("resolveSegmentationDefaultEditorType honors explicit editor config and falls back to document inference", () => {
   assert.equal(resolveSegmentationDefaultEditorType("segmentation.default", null), "segmentation.default");
   assert.equal(resolveSegmentationDefaultEditorType({ type: "segmentation.default" }, null), "segmentation.default");
+  assert.equal(resolveSegmentationDefaultEditorType("segmentation.code", null), "segmentation.code");
+  assert.equal(resolveSegmentationDefaultEditorType({ type: "segmentation.code" }, null), "segmentation.code");
   assert.equal(
     resolveSegmentationDefaultEditorType(
       null,
