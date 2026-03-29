@@ -98,6 +98,22 @@ test("loading overlay labels organization detail navigations clearly", () => {
   );
 });
 
+test("loading overlay ignores same-organization detail tab navigations so the page can render its inline loader", () => {
+  assert.deepEqual(
+    getAppLoadingOverlayState({
+      currentPathname: "/organization/org-1",
+      navigationState: "loading",
+      navigationPathname: "/organization/org-1/people",
+      fetcherStates: []
+    }),
+    {
+      isLoading: false,
+      isSubmitting: false,
+      label: null
+    }
+  );
+});
+
 test("loading overlay labels person detail navigations clearly", () => {
   assert.deepEqual(
     getAppLoadingOverlayState({
