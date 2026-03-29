@@ -452,6 +452,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
     ? data.segmentationDefault.categoryFieldNames
     : [];
   const valueColumns = Array.isArray(data.segmentationDefault.valueColumns) ? data.segmentationDefault.valueColumns : [];
+  const [metadata, setMetadata] = useState(() => (isPlainObject(data.metadata) ? { ...data.metadata } : {}));
   const [description, setDescription] = useState(data.description || "");
   const [editorConfig, setEditorConfig] = useState(() =>
     isPlainObject(data.editor)
@@ -480,6 +481,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
   } = useDisclosure();
 
   useEffect(() => {
+    setMetadata(isPlainObject(data.metadata) ? { ...data.metadata } : {});
     setDescription(data.description || "");
     setEditorConfig(
       isPlainObject(data.editor)
@@ -494,7 +496,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
     setFilters({});
     setDraftFilters({});
     setOpenFilterKeys({});
-  }, [categoryDepth, data.description, data.editor, data.editorType, data.id, data.segmentationDefault.rows, data.version]);
+  }, [categoryDepth, data.description, data.editor, data.editorType, data.id, data.metadata, data.segmentationDefault.rows, data.version]);
 
   const taxonomyOptions = buildTaxonomyOptions(data.taxonomyDocument, rows);
   const filteredRows = rows.filter((row) => rowMatchesFilters(row, filters));
@@ -689,7 +691,20 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
     }));
   }
 
+  /**
+   * Updates one saved metadata field.
+   * @param {string} key
+   * @param {string} value
+   */
+  function updateMetadata(key, value) {
+    setMetadata((currentMetadata) => ({
+      ...(isPlainObject(currentMetadata) ? currentMetadata : {}),
+      [key]: value
+    }));
+  }
+
   const displayDescription = readTrimmedString(description);
+  const displayName = readTrimmedString(metadata?.name) || data.name;
   const editorTypeLabel = readTrimmedString(editorConfig?.type) || data.editorType || "segmentation.default";
 
   return (
@@ -697,7 +712,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
       <Box px={{ base: 4, md: 6 }} py={{ base: 4, md: 5 }} borderBottomWidth="1px" bg="white">
         <Flex justify="space-between" align={{ base: "start", md: "center" }} gap={4} wrap="wrap">
           <Box>
-            <Heading size="md">{data.name}</Heading>
+            <Heading size="md">{displayName}</Heading>
             {data.lastmodifiedby ? (
               <Text color="gray.600" mt={2}>
                 {`Last modified ${formatTimestamp(data.lastmodifieddate)} by ${data.lastmodifiedby}`}
@@ -739,7 +754,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
           }}
         >
           <input type="hidden" name="description" value={description} />
-          <input type="hidden" name="metadata" value={JSON.stringify(data.metadata ?? null)} />
+          <input type="hidden" name="metadata" value={JSON.stringify(metadata)} />
           <input type="hidden" name="editor" value={JSON.stringify(editorConfig)} />
           <input type="hidden" name="editorType" value={data.editorType} />
           <input type="hidden" name="expectedVersion" value={data.version == null ? "" : String(data.version)} />
@@ -1013,12 +1028,17 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
             <VStack align="stretch" spacing={4}>
               <FormControl>
                 <FormLabel>Name</FormLabel>
-                <Input value={data.name} isReadOnly bg="gray.50" />
+                <Input value={readTrimmedString(metadata?.name)} onChange={(event) => updateMetadata("name", event.target.value)} bg="white" />
               </FormControl>
 
               <FormControl>
                 <FormLabel>Namespace</FormLabel>
                 <Input value={data.namespace || ""} isReadOnly bg="gray.50" />
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Type</FormLabel>
+                <Input value={readTrimmedString(metadata?.type)} onChange={(event) => updateMetadata("type", event.target.value)} bg="white" />
               </FormControl>
 
               <FormControl>

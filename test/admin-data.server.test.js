@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   loadAdminDataList,
   loadAdminDataDocument,
+  loadRawAdminDataDocument,
   saveAdminDataDocument,
   saveRawAdminDataDocument,
   buildDocumentFromEditor
@@ -185,6 +186,48 @@ test("admin data detail loader calls the normalized admin data detail route", as
         }
       ]
     }
+  });
+});
+
+test("raw admin data detail loader preserves editable metadata fields for custom editors", async () => {
+  const detail = await loadRawAdminDataDocument({
+    request: new Request("http://localhost:3000/admin/data/crm.data%3Alinkedin-crosswalk", {
+      headers: {
+        cookie: "sid=123"
+      }
+    }),
+    id: "crm.data:linkedin-crosswalk",
+    fetchImpl: async () => ({
+      ok: true,
+      async json() {
+        return {
+          data: {
+            id: "crm.data:linkedin-crosswalk",
+            namespace: "crm.data",
+            key: "linkedin-crosswalk",
+            name: "LinkedIn Crosswalk",
+            type: "segmentation",
+            description: "LinkedIn segmentation rules",
+            shape: "crosswalk",
+            status: "active",
+            version: 4,
+            document: {
+              crosswalk: {}
+            },
+            editor: {
+              type: "segmentation.default"
+            }
+          }
+        };
+      }
+    })
+  });
+
+  assert.deepEqual(detail.metadata, {
+    name: "LinkedIn Crosswalk",
+    type: "segmentation",
+    description: "LinkedIn segmentation rules",
+    shape: "crosswalk"
   });
 });
 
