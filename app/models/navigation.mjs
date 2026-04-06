@@ -160,3 +160,49 @@ export function getExpandedNavItemKeys(pathname) {
     .filter((item) => Array.isArray(item.children) && item.children.length && isNavItemActive(item, pathname))
     .map((item) => item.key);
 }
+
+/**
+ * Returns the navigation model filtered by the current permission payload.
+ * @param {{permissions?: {admin_access?: {system?: string[]}}}|null|undefined} meta
+ * @returns {typeof navItems}
+ */
+export function getNavigationItems(meta) {
+  const adminActions = Array.isArray(meta?.permissions?.admin_access?.system)
+    ? meta.permissions.admin_access.system
+    : [];
+
+  return navItems
+    .map((item) => {
+      if (item.key !== "admin") {
+        return item;
+      }
+
+      const children = (item.children || []).filter((child) => {
+        if (child.key === "admin-user-management") {
+          return adminActions.includes("access_control");
+        }
+
+        if (
+          child.key === "admin-data" ||
+          child.key === "admin-segmentation-types" ||
+          child.key === "admin-segmentation-crosswalks"
+        ) {
+          return adminActions.includes("object_editing");
+        }
+
+        return false;
+      });
+
+      return {
+        ...item,
+        children
+      };
+    })
+    .filter((item) => {
+      if (item.key !== "admin") {
+        return true;
+      }
+
+      return Array.isArray(item.children) && item.children.length > 0;
+    });
+}
