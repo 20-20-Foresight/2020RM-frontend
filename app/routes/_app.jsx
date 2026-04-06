@@ -1,29 +1,29 @@
 import { json, redirect } from "@remix-run/node";
 import { Outlet, useLoaderData } from "@remix-run/react";
 import { AppLayout } from "../components/AppLayout";
+import { BlockedAccessPage } from "../components/BlockedAccessPage";
+const { loadSessionMeta } = require("../models/session-meta.server");
 
 export async function loader({ request }) {
-  const apiUrl = new URL("/api/meta", request.url);
-  const res = await fetch(apiUrl.toString(), {
-    headers: {
-      cookie: request.headers.get("cookie") || ""
-    }
-  });
-
-  if (res.status === 401) {
+  const meta = await loadSessionMeta({ request });
+  if (meta.redirectToSignin) {
     return redirect("/signin");
   }
 
-  const user = await res.json();
-  return json({ user });
+  return json({ meta });
 }
 
 export default function AppRoute() {
-  const { user } = useLoaderData();
+  const { meta } = useLoaderData();
+  const user = meta?.user || null;
+
+  if (meta?.blocked) {
+    return <BlockedAccessPage meta={meta} />;
+  }
+
   return (
-    <AppLayout user={user}>
+    <AppLayout user={user} meta={meta}>
       <Outlet />
     </AppLayout>
   );
 }
-
