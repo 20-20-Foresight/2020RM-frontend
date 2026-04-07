@@ -4,7 +4,7 @@ export default function PeopleAdvancedSearchPage() {
   return (
     <PlaceholderSectionPage
       title="People Advanced Search"
-      description="Advanced person filtering will appear here. (Prototype placeholder)"
+      description="Advanced person filtering will appear here."
     />
   );
 }

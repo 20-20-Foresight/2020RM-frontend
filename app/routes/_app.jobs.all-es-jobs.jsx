@@ -4,7 +4,7 @@ export default function AllEsJobsPage() {
   return (
     <PlaceholderSectionPage
       title="All ES Jobs"
-      description="All ES jobs will appear here. (Prototype placeholder)"
+      description="All ES jobs will appear here."
     />
   );
 }

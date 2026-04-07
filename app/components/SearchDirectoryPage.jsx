@@ -2,11 +2,9 @@ import {
   Box,
   Button,
   FormControl,
-  FormHelperText,
   Heading,
   HStack,
   Input,
-  Text,
   VStack
 } from "@chakra-ui/react";
 import { Form, useLocation, useNavigation } from "@remix-run/react";
@@ -72,9 +70,6 @@ export function SearchDirectoryPage({
       <VStack align="stretch" spacing={6}>
         <Box>
           <Heading size="md">{title}</Heading>
-          <Text color="gray.600" mt={2}>
-            Search by name through the backend REST interface.
-          </Text>
         </Box>
 
         <Box bg="white" borderRadius="lg" shadow="sm" p={5}>
@@ -87,7 +82,6 @@ export function SearchDirectoryPage({
                   defaultValue={data.query.name}
                   bg="gray.50"
                 />
-                <FormHelperText>Only name search is available in the current RPC source.</FormHelperText>
               </FormControl>
               <Button type="submit" colorScheme="blue" minW="112px" isLoading={isSearching} loadingText="Searching">
                 Search
