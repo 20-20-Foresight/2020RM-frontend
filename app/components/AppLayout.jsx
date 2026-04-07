@@ -27,7 +27,7 @@ import {
 } from "react-icons/md";
 import { FiLogOut } from "react-icons/fi";
 import {
-  navItems,
+  getNavigationItems,
   isPathWithinItem,
   isNavItemActive,
   getExpandedNavItemKeys
@@ -160,8 +160,9 @@ function NavItem({ item, pathname, expandedItems, onToggle, onNavigate }) {
   );
 }
 
-function SidebarContent({ user, onNavigate }) {
+function SidebarContent({ user, meta, onNavigate }) {
   const location = useLocation();
+  const navItems = getNavigationItems(meta);
   const [expandedItems, setExpandedItems] = useState(() =>
     Object.fromEntries(getExpandedNavItemKeys(location.pathname).map((key) => [key, true]))
   );
@@ -235,6 +236,11 @@ function SidebarContent({ user, onNavigate }) {
           <Text fontSize="xs" color="gray.500">
             {user?.email}
           </Text>
+          {meta?.personas?.current ? (
+            <Text fontSize="xs" color="gray.500">
+              Persona: {meta.personas.current}
+            </Text>
+          ) : null}
         </Box>
       </HStack>
       <NavLink to="/auth/logout" style={{ textDecoration: "none" }}>
@@ -247,7 +253,7 @@ function SidebarContent({ user, onNavigate }) {
   );
 }
 
-export function AppLayout({ user, children }) {
+export function AppLayout({ user, meta, children }) {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const location = useLocation();
   const navigation = useNavigation();
@@ -294,12 +300,12 @@ export function AppLayout({ user, children }) {
   return (
     <Flex minH="100vh" bg="gray.50" color="gray.900" position="relative">
       <Box display={{ base: "none", md: "block" }} w="250px" bg="white" borderRightWidth="1px">
-        <SidebarContent user={user} />
+        <SidebarContent user={user} meta={meta} />
       </Box>
 
       <Drawer isOpen={isOpen} placement="left" onClose={onClose} size="xs">
         <DrawerContent>
-          <SidebarContent user={user} onNavigate={onClose} />
+          <SidebarContent user={user} meta={meta} onNavigate={onClose} />
         </DrawerContent>
       </Drawer>
 

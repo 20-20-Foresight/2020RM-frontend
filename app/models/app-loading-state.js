@@ -1,3 +1,5 @@
+const { isSameOrganizationDetailNavigation } = require("./organization-detail-tabs");
+
 /**
  * Returns whether one pathname belongs to the admin data area.
  * @param {string|null|undefined} pathname
@@ -98,6 +100,19 @@ function getAppLoadingOverlayState(options) {
       isLoading: true,
       isSubmitting: true,
       label: "Saving changes..."
+    };
+  }
+
+  if (
+    isSameOrganizationDetailNavigation({
+      currentPathname: options.currentPathname,
+      navigationPathname: pendingPathname
+    })
+  ) {
+    return {
+      isLoading: false,
+      isSubmitting: false,
+      label: null
     };
   }
 

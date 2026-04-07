@@ -25,7 +25,7 @@ test("navigation model defines the requested subsection labels", async () => {
       },
       {
         label: "Admin",
-        children: ["User Management", "Data", "Segmentation"]
+        children: ["User Management", "Data", "Segmentation Types", "Segmentation Crosswalks"]
       }
     ]
   );
@@ -58,4 +58,35 @@ test("getExpandedNavItemKeys expands the matching section for subsection routes"
   const { getExpandedNavItemKeys } = await import("../app/models/navigation.mjs");
   assert.deepEqual(getExpandedNavItemKeys("/jobs/all-em-jobs"), ["jobs"]);
   assert.deepEqual(getExpandedNavItemKeys("/admin/user-management"), ["admin"]);
+});
+
+test("getNavigationItems hides admin children when the session lacks admin permissions", async () => {
+  const { getNavigationItems } = await import("../app/models/navigation.mjs");
+  const items = getNavigationItems({
+    permissions: {
+      entity_access: {
+        organization: ["read"]
+      },
+      options_access: {},
+      admin_access: {}
+    }
+  });
+
+  assert.equal(items.some((item) => item.key === "admin"), false);
+});
+
+test("getNavigationItems exposes only the allowed admin subsections", async () => {
+  const { getNavigationItems } = await import("../app/models/navigation.mjs");
+  const items = getNavigationItems({
+    permissions: {
+      entity_access: {},
+      options_access: {},
+      admin_access: {
+        system: ["access_control"]
+      }
+    }
+  });
+  const adminItem = items.find((item) => item.key === "admin");
+
+  assert.deepEqual(adminItem.children.map((child) => child.label), ["User Management"]);
 });

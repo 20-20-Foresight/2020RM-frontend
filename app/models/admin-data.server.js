@@ -40,6 +40,30 @@ function readTrimmedString(value) {
 }
 
 /**
+ * Normalizes one admin data list filter object.
+ * @param {unknown} value
+ * @returns {Record<string, string>|null}
+ */
+function normalizeListFilter(value) {
+  if (!isPlainObject(value)) {
+    return null;
+  }
+
+  /** @type {Record<string, string>} */
+  const normalized = {};
+
+  for (const [key, entry] of Object.entries(value)) {
+    const normalizedKey = readTrimmedString(key);
+    const normalizedValue = readTrimmedString(entry);
+    if (normalizedKey && normalizedValue) {
+      normalized[normalizedKey] = normalizedValue;
+    }
+  }
+
+  return Object.keys(normalized).length ? normalized : null;
+}
+
+/**
  * Reads a JSON response body without assuming shape.
  * @param {{ json?: Function }} response
  * @returns {Promise<Record<string, unknown>|null>}
@@ -106,6 +130,56 @@ function normalizeSummary(value) {
     lastmodifiedby: readTrimmedString(value?.lastmodifiedby),
     status: readTrimmedString(value?.status)
   };
+}
+
+const RAW_METADATA_EXCLUDED_KEYS = new Set([
+  "id",
+  "namespace",
+  "key",
+  "version",
+  "status",
+  "lastmodifieddate",
+  "lastmodifiedby",
+  "document",
+  "editor"
+]);
+
+/**
+ * Extracts raw admin-data metadata fields that should survive custom-editor saves.
+ * @param {unknown} value
+ * @returns {Record<string, string|number|boolean>}
+ */
+function extractRawMetadata(value) {
+  /** @type {Record<string, string|number|boolean>} */
+  const metadata = {};
+
+  if (!isPlainObject(value)) {
+    return metadata;
+  }
+
+  for (const [key, entry] of Object.entries(value)) {
+    const normalizedKey = readTrimmedString(key)?.toLowerCase();
+    if (!normalizedKey || RAW_METADATA_EXCLUDED_KEYS.has(normalizedKey)) {
+      continue;
+    }
+
+    const normalizedString = readTrimmedString(entry);
+    if (normalizedString) {
+      metadata[key] = normalizedString;
+      continue;
+    }
+
+    if (typeof entry === "number" && Number.isFinite(entry)) {
+      metadata[key] = entry;
+      continue;
+    }
+
+    if (typeof entry === "boolean") {
+      metadata[key] = entry;
+    }
+  }
+
+  return metadata;
 }
 
 /**
@@ -657,14 +731,46 @@ async function requestAdminDataApi(options) {
 }
 
 /**
+ * Builds the admin data list path with optional namespace/filter query parameters.
+ * @param {{namespacePrefix?: string|null, filter?: Record<string, unknown>|null}} options
+ * @returns {string}
+ */
+function buildAdminDataListPath(options = {}) {
+  const pathname = "/api/rest/admin/data";
+  const namespacePrefix = readTrimmedString(options.namespacePrefix);
+  const filter = normalizeListFilter(options.filter);
+
+  if (!namespacePrefix && !filter) {
+    return pathname;
+  }
+
+  const searchParams = new URLSearchParams();
+  if (namespacePrefix) {
+    searchParams.append("namespacePrefix", namespacePrefix);
+  }
+
+  if (filter) {
+    for (const [key, value] of Object.entries(filter)) {
+      searchParams.append(`filter.${key}`, value);
+    }
+  }
+
+  const search = searchParams.toString();
+  return search ? `${pathname}?${search}` : pathname;
+}
+
+/**
  * Loads the admin data summaries for `/admin/data`.
- * @param {{request: Request, fetchImpl?: typeof fetch}} options
+ * @param {{request: Request, namespacePrefix?: string|null, filter?: Record<string, unknown>|null, fetchImpl?: typeof fetch}} options
  * @returns {Promise<ReturnType<typeof normalizeSummary>[]>}
  */
 async function loadAdminDataList(options) {
   const payload = await requestAdminDataApi({
     request: options.request,
-    pathname: "/api/rest/admin/data",
+    pathname: buildAdminDataListPath({
+      namespacePrefix: options.namespacePrefix,
+      filter: options.filter
+    }),
     fetchImpl: options.fetchImpl
   });
 
@@ -699,7 +805,7 @@ async function loadAdminDataDocument(options) {
 /**
  * Loads the raw admin data document for custom editors that own the document shape.
  * @param {{request: Request, id: string, fetchImpl?: typeof fetch}} options
- * @returns {Promise<ReturnType<typeof normalizeSummary> & {document: unknown, editor: unknown}>}
+ * @returns {Promise<ReturnType<typeof normalizeSummary> & {document: unknown, editor: unknown, metadata: Record<string, string|number|boolean>}>}
  */
 async function loadRawAdminDataDocument(options) {
   const payload = await requestAdminDataApi({
@@ -712,7 +818,8 @@ async function loadRawAdminDataDocument(options) {
   return {
     ...normalizeSummary(result),
     document: result?.document ?? null,
-    editor: result?.editor ?? null
+    editor: result?.editor ?? null,
+    metadata: extractRawMetadata(result)
   };
 }
 
@@ -767,8 +874,10 @@ async function saveAdminDataDocument(options) {
  * @param {{
  *   request: Request,
  *   id: string,
+ *   metadata?: Record<string, unknown>|null,
  *   description?: string,
  *   expectedVersion?: number|null,
+ *   editor?: object|null,
  *   document?: unknown,
  *   fetchImpl?: typeof fetch
  * }} options
@@ -780,9 +889,11 @@ async function saveRawAdminDataDocument(options) {
     pathname: `/api/rest/admin/data/${encodeURIComponent(options.id)}`,
     method: "PUT",
     body: {
+      ...(isPlainObject(options.metadata) ? { metadata: options.metadata } : {}),
       description: typeof options.description === "string" ? options.description : "",
       expectedVersion: Number.isFinite(options.expectedVersion) ? Number(options.expectedVersion) : null,
-      document: options.document ?? null
+      document: options.document ?? null,
+      ...(isPlainObject(options.editor) ? { editor: options.editor } : {})
     },
     fetchImpl: options.fetchImpl
   });

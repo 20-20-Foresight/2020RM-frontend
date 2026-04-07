@@ -1,6 +1,10 @@
-import { SegmentationLandingPage } from "../components/SegmentationPage";
+import { redirect } from "@remix-run/node";
 
-export default function AdminSegmentationIndexRoute() {
-  return <SegmentationLandingPage />;
+export async function loader({ request }) {
+  void request;
+  return redirect("/admin/segmentation/sectors");
 }
 
+export default function AdminSegmentationIndexRoute() {
+  return null;
+}

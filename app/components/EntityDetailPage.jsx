@@ -6,13 +6,9 @@ import {
   Box,
   Grid,
   Heading,
+  HStack,
   Link as ChakraLink,
   SimpleGrid,
-  Tab,
-  TabList,
-  TabPanel,
-  TabPanels,
-  Tabs,
   Text,
   VStack
 } from "@chakra-ui/react";
@@ -21,7 +17,10 @@ import {
   getSearchResultFieldValue,
   resolveSchemaFieldPath
 } from "../models/search-result";
-import { buildEntityListPath } from "../models/entity-route";
+import {
+  buildEntityListPath
+} from "../models/entity-route";
+import { OrganizationSegmentationSection } from "./OrganizationSegmentationSection";
 
 const DESCRIPTION_FIELD_PATHS = [
   "description",
@@ -249,6 +248,8 @@ function HighlightField({ field }) {
  * Renders the shared detail page shell for organizations and people.
  * @param {{
  *   entityType: "organization"|"person",
+ *   tabs?: Array<{key: string, label: string, to?: string|null}>,
+ *   activeTabKey?: string,
  *   data: {
  *     status: string,
  *     statusExplained: string,
@@ -256,11 +257,12 @@ function HighlightField({ field }) {
  *     locations: object[],
  *     schema: object|null,
  *     error: string|null
- *   }
+ *   },
+ *   children?: import("react").ReactNode
  * }} props
  * @returns {JSX.Element}
  */
-export function EntityDetailPage({ entityType, data }) {
+export function EntityDetailPage({ entityType, tabs = null, activeTabKey = "info", data, children = null }) {
   const listPath = buildEntityListPath(entityType);
   const record = data.record && typeof data.record === "object" ? data.record : null;
   const entityLabel = getEntityLabel(entityType);
@@ -306,18 +308,64 @@ export function EntityDetailPage({ entityType, data }) {
         alignItems="start"
       >
         <Box bg="white" borderRadius="lg" shadow="sm" p={6}>
-          <Tabs variant="enclosed">
-            <TabList>
-              <Tab>Info</Tab>
-            </TabList>
-            <TabPanels>
-              <TabPanel px={0} pb={0}>
+          <Box borderBottomWidth="1px" borderColor="gray.200">
+            <HStack spacing={2} align="flex-end">
+              {(Array.isArray(tabs) && tabs.length
+                ? tabs
+                : [
+                    {
+                      key: "info",
+                      label: "Info",
+                      to: null
+                    }
+                  ]).map((tab) => {
+                const isActive = tab.key === activeTabKey;
+                const sharedProps = {
+                  px: 4,
+                  py: 2,
+                  fontWeight: "semibold",
+                  borderTopRadius: "md",
+                  borderWidth: "1px",
+                  borderColor: isActive ? "gray.200" : "transparent",
+                  borderBottomColor: isActive ? "white" : "transparent",
+                  bg: isActive ? "white" : "transparent",
+                  color: isActive ? "gray.800" : "gray.600",
+                  mb: "-1px"
+                };
+
+                if (tab.to) {
+                  return (
+                    <ChakraLink
+                      key={tab.key}
+                      as={RemixLink}
+                      to={tab.to}
+                      _hover={{ textDecoration: "none", color: "gray.800", bg: "gray.50" }}
+                      {...sharedProps}
+                    >
+                      {tab.label}
+                    </ChakraLink>
+                  );
+                }
+
+                return (
+                  <Box key={tab.key} {...sharedProps}>
+                    {tab.label}
+                  </Box>
+                );
+              })}
+            </HStack>
+          </Box>
+
+          <Box pt={6}>
+            {children || (
+              <VStack align="stretch" spacing={6}>
                 <Text color={record ? "gray.700" : "gray.400"} whiteSpace="pre-wrap">
                   {description}
                 </Text>
-              </TabPanel>
-            </TabPanels>
-          </Tabs>
+                {entityType === "organization" ? <OrganizationSegmentationSection record={record} /> : null}
+              </VStack>
+            )}
+          </Box>
         </Box>
 
         <Box bg="white" borderRadius="lg" shadow="sm" p={6}>
