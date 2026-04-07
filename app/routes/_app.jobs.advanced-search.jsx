@@ -4,7 +4,7 @@ export default function JobsAdvancedSearchPage() {
   return (
     <PlaceholderSectionPage
       title="Jobs Advanced Search"
-      description="Advanced job filtering will appear here. (Prototype placeholder)"
+      description="Advanced job filtering will appear here."
     />
   );
 }

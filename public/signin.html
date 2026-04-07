@@ -6,48 +6,71 @@
     <title>2020RM — Sign In</title>
     <style>
       :root {
-        color-scheme: light dark;
-        --bg: #0b1020;
-        --panel: rgba(255, 255, 255, 0.06);
-        --text: rgba(255, 255, 255, 0.92);
+        --bg: #000000;
+        --panel: rgba(255, 255, 255, 0.94);
+        --text: #1a202c;
         --muted: rgba(255, 255, 255, 0.72);
-        --btn: #2b6cb0;
-        --btnHover: #2c5282;
-      }
-      @media (prefers-color-scheme: light) {
-        :root {
-          --bg: #f7fafc;
-          --panel: #ffffff;
-          --text: #1a202c;
-          --muted: #4a5568;
-          --btn: #2b6cb0;
-          --btnHover: #2c5282;
-        }
+        --btn: #0078d4;
+        --btnHover: #106ebe;
+        --btnActive: #005a9e;
       }
       body {
         margin: 0;
         font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
         background: var(--bg);
-        color: var(--text);
         min-height: 100vh;
-        display: grid;
-        place-items: center;
+        display: flex;
+        align-items: center;
+      }
+      .hero {
+        position: relative;
+        width: 100%;
+        min-height: 420px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        padding: 2.5rem 1rem;
+      }
+      #hero-video {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+      }
+      .content {
+        position: relative;
+        z-index: 1;
+        width: min(440px, calc(100vw - 2rem));
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1.5rem;
+      }
+      .logo {
+        width: min(340px, 80vw);
+        height: auto;
+        display: block;
       }
       .card {
-        width: min(520px, calc(100vw - 2rem));
+        width: 100%;
         background: var(--panel);
-        border-radius: 14px;
-        padding: 1.5rem;
+        border-radius: 18px;
+        padding: 1.75rem;
         box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+        backdrop-filter: blur(6px);
       }
       h1 {
-        margin: 0 0 0.5rem;
-        font-size: 1.25rem;
-      }
-      p {
         margin: 0 0 1.25rem;
-        color: var(--muted);
-        line-height: 1.4;
+        font-size: 1.25rem;
+        text-align: center;
+        color: var(--text);
       }
       a.button {
         display: inline-flex;
@@ -60,29 +83,74 @@
         color: white;
         text-decoration: none;
         font-weight: 600;
+        width: 100%;
       }
       a.button:hover {
         background: var(--btnHover);
+      }
+      a.button:active {
+        background: var(--btnActive);
+      }
+      .windows-icon {
+        width: 1rem;
+        height: 1rem;
+        display: inline-block;
       }
       .hint {
         margin-top: 1rem;
         font-size: 0.875rem;
         color: var(--muted);
+        text-align: center;
       }
-      code {
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      @media (min-width: 768px) {
+        .hero {
+          min-height: 520px;
+          padding: 3.5rem 2rem;
+        }
+        .card {
+          padding: 2rem;
+        }
       }
     </style>
   </head>
   <body>
-    <main class="card">
-      <h1>Sign in</h1>
-      <p>Microsoft-only sign-in for Phase 1.</p>
-      <a class="button" href="/auth/login">Sign in with Microsoft</a>
-      <div class="hint">
-        Backend must be running. Visit <code>/hello.html</code> after successful sign-in.
+    <main class="hero">
+      <video autoplay loop muted playsinline preload="auto" id="hero-video">
+        <source src="https://www.2020foresight.com/wp-content/uploads/2022/02/2020-foresight-ambient-touchpoints-v2.mp4" type="video/mp4">
+      </video>
+      <div class="overlay"></div>
+      <div class="content">
+        <img
+          class="logo"
+          src="https://www.2020foresight.com/wp-content/uploads/2023/11/2020-foresight-executive-talent-solutions-logo-inverse.webp"
+          alt="2020 Foresight Executive Talent Solutions"
+        />
+        <section class="card" aria-labelledby="signin-heading">
+          <h1 id="signin-heading">Sign In</h1>
+          <a class="button" href="/auth/login">
+            <svg class="windows-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path
+                fill="currentColor"
+                d="M1 3.5 10.5 2v9H1v-7.5Zm10.5-.2L23 1.5V11H11.5V3.3ZM1 12.5h9.5v9L1 20v-7.5Zm10.5 0H23v9.5L11.5 20.4v-7.9Z"
+              />
+            </svg>
+            <span>Sign in with Microsoft</span>
+          </a>
+          <p class="sr-only">After sign-in you will land on the dashboard.</p>
+        </section>
+        <div class="hint">Backend must be running.</div>
       </div>
     </main>
   </body>
 </html>
-

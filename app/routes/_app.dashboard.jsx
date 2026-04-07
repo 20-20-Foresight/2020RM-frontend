@@ -1,4 +1,4 @@
-import { Heading, Text, SimpleGrid, Box, Stat, StatLabel, StatNumber } from "@chakra-ui/react";
+import { Heading, SimpleGrid, Box, Stat, StatLabel, StatNumber } from "@chakra-ui/react";
 
 const stats = [
   { label: "Organizations", value: "128" },
@@ -13,10 +13,7 @@ export default function DashboardPage() {
       <Heading size="md" mb={2}>
         Welcome back
       </Heading>
-      <Text color="gray.600" mb={6}>
-        High-level view of your objects.
-      </Text>
-      <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={4}>
+      <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={4} mt={6}>
         {stats.map((item) => (
           <Stat key={item.label} bg="white" borderRadius="lg" p={4} shadow="sm">
             <StatLabel>{item.label}</StatLabel>
@@ -27,4 +24,3 @@ export default function DashboardPage() {
     </Box>
   );
 }
-
