@@ -2,6 +2,8 @@ import { json } from "@remix-run/node";
 import { useActionData, useLoaderData, useNavigation } from "@remix-run/react";
 import { Alert, AlertDescription, AlertIcon } from "@chakra-ui/react";
 import { AdminDataDetailEditor } from "../components/AdminDataPage";
+import { CategoryEditorPage } from "../components/CategoryEditorPage";
+import { DimensionDefinitionEditorPage } from "../components/DimensionDefinitionEditorPage";
 import { SegmentationDefaultEditorPage } from "../components/SegmentationDefaultEditorPage";
 import {
   AdminDataApiError,
@@ -10,12 +12,21 @@ import {
   saveAdminDataDocument,
   saveRawAdminDataDocument
 } from "../models/admin-data.server";
-import { loadSifTaxonomyDocument } from "../models/sif-taxonomy.server";
+import {
+  buildDimensionDefinitionDocument,
+  buildDimensionDefinitionViewModel
+} from "../models/dimension-definition-document.mjs";
+import {
+  buildCategoryDocument,
+  buildCategoryViewModel
+} from "../models/segmentation-category-document.mjs";
+import { loadSegmentationCategoryCatalog } from "../models/segmentation-category-catalog.server";
+import { loadSegmentationDimensionCatalog } from "../models/segmentation-dimension-catalog.server";
 import {
   buildSegmentationDefaultDocument,
   buildSegmentationDefaultViewModel,
   resolveSegmentationDefaultEditorType
-} from "../models/segmentation-default-editor";
+} from "../models/segmentation-default-editor.mjs";
 
 const CUSTOM_SEGMENTATION_EDITOR_TYPES = new Set(["segmentation.default", "segmentation.code", "segmentation.list"]);
 
@@ -91,10 +102,45 @@ export async function loader({ request, params }) {
       request,
       id
     });
+    const documentType = rawData.metadata?.type;
     const editorType = resolveSegmentationDefaultEditorType(rawData.editor, rawData.document, rawData.metadata?.type);
 
+    if (documentType === "dimension-definition") {
+      return json({
+        data: {
+          ...rawData,
+          dimensionDefinition: buildDimensionDefinitionViewModel({
+            document: rawData.document
+          })
+        },
+        error: null
+      });
+    }
+
+    if (documentType === "categories") {
+      const supportsPreference = String(rawData.name || "").trim().toLowerCase() === "industry";
+      const dimensionCatalog = await loadSegmentationDimensionCatalog({
+        request
+      });
+
+      return json({
+        data: {
+          ...rawData,
+          dimensionCatalog,
+          categoryEditor: {
+            ...buildCategoryViewModel({
+              document: rawData.document,
+              supportsPreference
+            }),
+            supportsPreference
+          }
+        },
+        error: null
+      });
+    }
+
     if (CUSTOM_SEGMENTATION_EDITOR_TYPES.has(editorType)) {
-      const taxonomyData = await loadSifTaxonomyDocument({
+      const categoryCatalog = await loadSegmentationCategoryCatalog({
         request
       });
 
@@ -106,7 +152,7 @@ export async function loader({ request, params }) {
             editorType,
             document: rawData.document
           }),
-          taxonomyDocument: taxonomyData.document
+          categoryCatalog
         },
         error: null
       });
@@ -150,8 +196,55 @@ export async function action({ request, params }) {
   const metadata = parseJsonField(formData, "metadata", null);
   const segmentationStructure = readFormString(formData, "segmentationStructure").trim();
   const segmentationRows = parseJsonField(formData, "segmentationRows", []);
+  const dimensionDefinitionRows = parseJsonField(formData, "dimensionDefinitionRows", []);
+  const categoryRows = parseJsonField(formData, "categoryRows", []);
+  const customDocumentType = readFormString(formData, "customDocumentType").trim();
+  const supportsPreference = readFormString(formData, "supportsPreference").trim() === "true";
 
   try {
+    if (customDocumentType === "dimension-definition") {
+      const saved = await saveRawAdminDataDocument({
+        request,
+        id,
+        metadata: metadata && typeof metadata === "object" ? metadata : null,
+        description,
+        expectedVersion,
+        editor: editor && typeof editor === "object" ? editor : null,
+        document: buildDimensionDefinitionDocument({
+          sourceDocument: document,
+          rows: Array.isArray(dimensionDefinitionRows) ? dimensionDefinitionRows : []
+        })
+      });
+
+      return json({
+        ok: true,
+        saved,
+        error: null
+      });
+    }
+
+    if (customDocumentType === "categories") {
+      const saved = await saveRawAdminDataDocument({
+        request,
+        id,
+        metadata: metadata && typeof metadata === "object" ? metadata : null,
+        description,
+        expectedVersion,
+        editor: editor && typeof editor === "object" ? editor : null,
+        document: buildCategoryDocument({
+          sourceDocument: document,
+          rows: Array.isArray(categoryRows) ? categoryRows : [],
+          supportsPreference
+        })
+      });
+
+      return json({
+        ok: true,
+        saved,
+        error: null
+      });
+    }
+
     if (CUSTOM_SEGMENTATION_EDITOR_TYPES.has(editorType)) {
       const saved = await saveRawAdminDataDocument({
         request,
@@ -223,6 +316,26 @@ export default function AdminDataDetailRoute() {
   if (CUSTOM_SEGMENTATION_EDITOR_TYPES.has(data.editorType)) {
     return (
       <SegmentationDefaultEditorPage
+        data={data}
+        actionData={actionData}
+        isSaving={navigation.state === "submitting"}
+      />
+    );
+  }
+
+  if (data.metadata?.type === "dimension-definition") {
+    return (
+      <DimensionDefinitionEditorPage
+        data={data}
+        actionData={actionData}
+        isSaving={navigation.state === "submitting"}
+      />
+    );
+  }
+
+  if (data.metadata?.type === "categories") {
+    return (
+      <CategoryEditorPage
         data={data}
         actionData={actionData}
         isSaving={navigation.state === "submitting"}

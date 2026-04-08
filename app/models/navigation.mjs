@@ -99,16 +99,6 @@ export const navItems = [
         key: "admin-data",
         label: "Data",
         to: "/admin/data"
-      },
-      {
-        key: "admin-segmentation-types",
-        label: "Segmentation Types",
-        to: "/admin/segmentation/sectors"
-      },
-      {
-        key: "admin-segmentation-crosswalks",
-        label: "Segmentation Crosswalks",
-        to: "/admin/segmentation/crosswalks"
       }
     ]
   },
@@ -182,11 +172,7 @@ export function getNavigationItems(meta) {
           return adminActions.includes("access_control");
         }
 
-        if (
-          child.key === "admin-data" ||
-          child.key === "admin-segmentation-types" ||
-          child.key === "admin-segmentation-crosswalks"
-        ) {
+        if (child.key === "admin-data") {
           return adminActions.includes("object_editing");
         }
 

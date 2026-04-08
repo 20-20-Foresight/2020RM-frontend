@@ -52,7 +52,31 @@ test("entity detail loader calls the organization detail REST endpoint and retur
             record: {
               uuid: "org-1",
               name: "Acme",
-              description: "Industrial manufacturer."
+              description: "Industrial manufacturer.",
+              entityDimensionProjection: {
+                industry: [
+                  {
+                    name: "Industrial",
+                    score: 7,
+                    reasons: [
+                      {
+                        crosswalk: "Description Rules",
+                        rule: "row-1",
+                        reason: {
+                          description: "Keyword match"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                focus: [
+                  {
+                    name: "Manufacturing",
+                    score: 3,
+                    reasons: []
+                  }
+                ]
+              }
             },
             locations: [
               {
@@ -91,7 +115,31 @@ test("entity detail loader calls the organization detail REST endpoint and retur
     record: {
       uuid: "org-1",
       name: "Acme",
-      description: "Industrial manufacturer."
+      description: "Industrial manufacturer.",
+      entityDimensionProjection: {
+        industry: [
+          {
+            name: "Industrial",
+            score: 7,
+            reasons: [
+              {
+                crosswalk: "Description Rules",
+                rule: "row-1",
+                reason: {
+                  description: "Keyword match"
+                }
+              }
+            ]
+          }
+        ],
+        focus: [
+          {
+            name: "Manufacturing",
+            score: 3,
+            reasons: []
+          }
+        ]
+      }
     },
     locations: [
       {

@@ -12,8 +12,8 @@ Remix + Chakra UI frontend with Express BFF for Microsoft OIDC and `/api/*` prox
 - Session meta/UI access state: the app shell now consumes the richer `/api/meta` payload so blocked users see an access-pending page and the sidebar hides admin areas the session cannot use
 - Branded shell/sign-in UI: the sign-in screen now uses a black ambient-video hero with 2020 Foresight branding, and the authenticated shell uses a black top bar, a branded collapsible sidebar, and an account dropdown in the header
 - Admin user management UI: `/admin/user-management` now loads the access-control role catalog and user list through `/api/admin/access/*`
-- Admin segmentation UI: the Admin nav now exposes `/admin/segmentation/sectors` for segmentation types and `/admin/segmentation/crosswalks` for `type=segmentation` document lists, while `/admin/segmentation/:sectorSlug/industries` and `/admin/segmentation/:sectorSlug/:industrySlug/focuses` stay backed by the authoritative `crm.data.taxonomy:sif` document
-- SIF taxonomy cache: the authenticated app shell keeps `crm.data.taxonomy:sif` refreshed in IndexedDB from `/api/rest/admin/data/crm.data.taxonomy:sif` so other UI areas can reuse the taxonomy without refetching from scratch
+- Admin segmentation UI: the Admin nav now exposes `/admin/segmentation/dimensions`, `/admin/segmentation/categories`, and `/admin/segmentation/crosswalks`, each backed by the generic admin-data editor routes under `/admin/data/:id`
+- Legacy SIF routes now redirect into the new dimensions/categories workspace while the remaining rule-editor internals are migrated off the old taxonomy model
 
 ## Run (dev)
 

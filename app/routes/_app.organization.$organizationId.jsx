@@ -11,7 +11,7 @@ import {
 import {
   getOrganizationDetailTabUiState,
   shouldRevalidateOrganizationDetailRoute
-} from "../models/organization-detail-tabs";
+} from "../models/organization-detail-tabs.mjs";
 
 export async function loader({ request, params }) {
   return json(

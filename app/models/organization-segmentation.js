@@ -45,7 +45,7 @@ function escapeRegExp(value) {
 }
 
 /**
- * Returns a de-duplicated list of string values.
+ * Builds one de-duplicated list of strings.
  * @param {unknown} value
  * @returns {string[]}
  */
@@ -70,22 +70,6 @@ function normalizeChoiceList(value) {
   }
 
   return normalized;
-}
-
-/**
- * Returns the segmentation payload from one organization record.
- * @param {unknown} record
- * @returns {Record<string, unknown>|null}
- */
-function readSegmentation(record) {
-  const metadataSegmentation = isObjectLike(record?.metadata?.segmentation)
-    ? record.metadata.segmentation
-    : null;
-  if (metadataSegmentation) {
-    return metadataSegmentation;
-  }
-
-  return isObjectLike(record?.segmentation) ? record.segmentation : null;
 }
 
 /**
@@ -131,43 +115,151 @@ function buildHighlightedReasonHtml(match, phrase) {
  * @returns {string}
  */
 function buildSegmentationReasonHtml(reason) {
-  const trueReason = readTrimmedString(reason.trueReason);
+  const reasonPayload = isObjectLike(reason?.reason) ? reason.reason : reason;
+  const trueReason = readTrimmedString(reasonPayload.trueReason);
   if (trueReason) {
     return escapeHtml(trueReason);
   }
 
   const highlightedReason = buildHighlightedReasonHtml(
-    readTrimmedString(reason.match),
-    readTrimmedString(reason.phrase)
+    readTrimmedString(reasonPayload.match),
+    readTrimmedString(reasonPayload.phrase)
   );
   if (highlightedReason) {
     return highlightedReason;
   }
 
   const fallback =
-    readTrimmedString(reason.description) ||
-    readTrimmedString(reason.reason) ||
-    readTrimmedString(reason.match);
+    readTrimmedString(reasonPayload.description) ||
+    readTrimmedString(reasonPayload.reason) ||
+    readTrimmedString(reasonPayload.match);
 
   return fallback ? escapeHtml(fallback) : "";
 }
 
 /**
+ * Returns one legacy segmentation payload when available.
+ * @param {unknown} record
+ * @returns {Record<string, unknown>|null}
+ */
+function readLegacySegmentation(record) {
+  const metadataSegmentation = isObjectLike(record?.metadata?.segmentation)
+    ? record.metadata.segmentation
+    : null;
+  if (metadataSegmentation) {
+    return metadataSegmentation;
+  }
+
+  return isObjectLike(record?.segmentation) ? record.segmentation : null;
+}
+
+/**
+ * Normalizes one scored dimension list from strings or objects.
+ * @param {unknown} value
+ * @returns {Array<{name: string, score: number, reasons: object[], sourceDocumentId: string|null, sourceDocumentName: string|null}>}
+ */
+function normalizeScoredEntries(value) {
+  const list = Array.isArray(value) ? value : [];
+  return list
+    .map((entry) => {
+      if (typeof entry === "string") {
+        const name = readTrimmedString(entry);
+        return name
+          ? {
+              name,
+              score: 1,
+              reasons: [],
+              sourceDocumentId: null,
+              sourceDocumentName: null
+            }
+          : null;
+      }
+
+      if (!isObjectLike(entry)) {
+        return null;
+      }
+
+      const name =
+        readTrimmedString(entry.name) ||
+        readTrimmedString(entry.label) ||
+        readTrimmedString(entry.valueName) ||
+        readTrimmedString(entry.value);
+      const score = Number(entry.score);
+
+      if (!name || !Number.isFinite(score) || score <= 0) {
+        return null;
+      }
+
+      return {
+        name,
+        score,
+        reasons: Array.isArray(entry.reasons) ? entry.reasons.filter((reason) => isObjectLike(reason)) : [],
+        sourceDocumentId: readTrimmedString(entry.sourceDocumentId),
+        sourceDocumentName: readTrimmedString(entry.sourceDocumentName)
+      };
+    })
+    .filter(Boolean);
+}
+
+/**
+ * Builds the best available industry/focus projection from one record.
+ * @param {unknown} record
+ * @returns {{industry: ReturnType<typeof normalizeScoredEntries>, focus: ReturnType<typeof normalizeScoredEntries>, sectors: string[], legacyReasons: object[]}|null}
+ */
+function readSegmentationProjection(record) {
+  const legacySegmentation = readLegacySegmentation(record);
+  const legacyIndustryScores = normalizeScoredEntries(
+    legacySegmentation?.industryScores || legacySegmentation?.industry
+  );
+  const legacyFocusScores = normalizeScoredEntries(
+    legacySegmentation?.focusScores || legacySegmentation?.focus
+  );
+
+  const projection =
+    isObjectLike(record?.entityDimensionProjection)
+      ? record.entityDimensionProjection
+      : isObjectLike(record?.entity_dimension_projection)
+        ? record.entity_dimension_projection
+        : null;
+
+  const industry =
+    normalizeScoredEntries(projection?.industry).length
+      ? normalizeScoredEntries(projection?.industry)
+      : legacyIndustryScores;
+  const focus =
+    normalizeScoredEntries(projection?.focus).length
+      ? normalizeScoredEntries(projection?.focus)
+      : legacyFocusScores;
+  const sectors = normalizeChoiceList(legacySegmentation?.sector);
+  const legacyReasons = Array.isArray(legacySegmentation?.reasons)
+    ? legacySegmentation.reasons.filter((reason) => isObjectLike(reason))
+    : [];
+
+  if (!industry.length && !focus.length && !sectors.length && !legacyReasons.length) {
+    return null;
+  }
+
+  return {
+    industry,
+    focus,
+    sectors,
+    legacyReasons
+  };
+}
+
+/**
  * Orders sectors by frequency first, then original discovery order.
- * @param {Record<string, unknown>} segmentation
+ * @param {string[]} sectors
+ * @param {object[]} reasons
  * @returns {string[]}
  */
-function buildOrderedSectors(segmentation) {
+function buildOrderedSectors(sectors, reasons) {
   const counts = new Map();
   const firstIndexByKey = new Map();
   let seenIndex = 0;
 
-  for (const reason of Array.isArray(segmentation?.reasons) ? segmentation.reasons : []) {
-    if (!isObjectLike(reason)) {
-      continue;
-    }
-
-    const sector = readTrimmedString(reason.sector);
+  for (const reason of Array.isArray(reasons) ? reasons : []) {
+    const sector = readTrimmedString(reason?.sector);
     if (!sector) {
       continue;
     }
@@ -197,7 +289,7 @@ function buildOrderedSectors(segmentation) {
     })
     .map((entry) => entry[1].value);
 
-  for (const sector of normalizeChoiceList(segmentation?.sector)) {
+  for (const sector of sectors) {
     if (orderedSectors.some((value) => value.toLowerCase() === sector.toLowerCase())) {
       continue;
     }
@@ -209,30 +301,68 @@ function buildOrderedSectors(segmentation) {
 }
 
 /**
- * Builds explanation rows for one segmentation payload.
- * @param {Record<string, unknown>} segmentation
- * @returns {Array<{source: string|null, sector: string|null, industry: string|null, focus: string|null, reasonHtml: string}>}
+ * Builds explanation rows from the new projection-style nested reasons.
+ * @param {{dimension: string, values: ReturnType<typeof normalizeScoredEntries>}} options
+ * @returns {Array<{source: string|null, dimension: string, value: string, score: number|null, crosswalkDocumentName: string|null, rule: string|null, reasonHtml: string}>}
  */
-function buildExplanationRows(segmentation) {
-  return (Array.isArray(segmentation?.reasons) ? segmentation.reasons : [])
+function buildProjectionExplanationRows(options) {
+  const rows = [];
+
+  for (const value of Array.isArray(options.values) ? options.values : []) {
+    if (!Array.isArray(value.reasons) || !value.reasons.length) {
+      continue;
+    }
+
+    for (const reason of value.reasons) {
+      rows.push({
+        source: readTrimmedString(reason?.reason?.source) || null,
+        dimension: options.dimension,
+        value: value.name,
+        score: Number.isFinite(value.score) ? value.score : null,
+        crosswalkDocumentName:
+          readTrimmedString(reason?.crosswalkDocumentName) ||
+          readTrimmedString(reason?.crosswalk) ||
+          value.sourceDocumentName ||
+          null,
+        rule: readTrimmedString(reason?.rule) || null,
+        reasonHtml: buildSegmentationReasonHtml(reason)
+      });
+    }
+  }
+
+  return rows;
+}
+
+/**
+ * Builds explanation rows from the legacy flat reasons payload.
+ * @param {object[]} reasons
+ * @returns {Array<{source: string|null, dimension: string, value: string, score: number|null, crosswalkDocumentName: string|null, rule: string|null, reasonHtml: string}>}
+ */
+function buildLegacyExplanationRows(reasons) {
+  return (Array.isArray(reasons) ? reasons : [])
     .map((reason) => {
-      if (!isObjectLike(reason)) {
+      const industry = readTrimmedString(reason?.industry);
+      const focus = readTrimmedString(reason?.focus);
+      const sector = readTrimmedString(reason?.sector);
+      const value = focus || industry || sector;
+      const dimension = focus ? "Focus" : industry ? "Industry" : sector ? "Sector" : null;
+
+      if (!value || !dimension) {
         return null;
       }
 
-      const row = {
-        source: readTrimmedString(reason.source),
-        sector: readTrimmedString(reason.sector),
-        industry: readTrimmedString(reason.industry),
-        focus: readTrimmedString(reason.focus),
+      return {
+        source: readTrimmedString(reason?.source),
+        dimension,
+        value,
+        score: null,
+        crosswalkDocumentName:
+          readTrimmedString(reason?.sourceDocumentName) ||
+          readTrimmedString(reason?.crosswalk) ||
+          null,
+        rule: readTrimmedString(reason?.rule) || readTrimmedString(reason?.uuid) || null,
         reasonHtml: buildSegmentationReasonHtml(reason)
       };
-
-      if (!row.sector && !row.industry && !row.focus && !row.reasonHtml) {
-        return null;
-      }
-
-      return row;
     })
     .filter(Boolean);
 }
@@ -245,19 +375,29 @@ function buildExplanationRows(segmentation) {
  *   sectors: string[],
  *   industries: string[],
  *   focuses: string[],
- *   explanations: Array<{source: string|null, sector: string|null, industry: string|null, focus: string|null, reasonHtml: string}>
+ *   explanations: Array<{source: string|null, dimension: string, value: string, score: number|null, crosswalkDocumentName: string|null, rule: string|null, reasonHtml: string}>
  * }|null}
  */
 function buildOrganizationSegmentationViewModel(record) {
-  const segmentation = readSegmentation(record);
-  if (!segmentation) {
+  const projection = readSegmentationProjection(record);
+  if (!projection) {
     return null;
   }
 
-  const sectors = buildOrderedSectors(segmentation);
-  const industries = normalizeChoiceList(segmentation.industry);
-  const focuses = normalizeChoiceList(segmentation.focus);
-  const explanations = buildExplanationRows(segmentation);
+  const sectors = buildOrderedSectors(projection.sectors, projection.legacyReasons);
+  const industries = projection.industry.map((entry) => entry.name);
+  const focuses = projection.focus.map((entry) => entry.name);
+  const explanations = [
+    ...buildProjectionExplanationRows({
+      dimension: "Industry",
+      values: projection.industry
+    }),
+    ...buildProjectionExplanationRows({
+      dimension: "Focus",
+      values: projection.focus
+    }),
+    ...buildLegacyExplanationRows(projection.legacyReasons)
+  ];
 
   if (!sectors.length && !industries.length && !focuses.length && !explanations.length) {
     return null;

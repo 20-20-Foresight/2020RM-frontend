@@ -25,7 +25,7 @@ test("navigation model defines the requested subsection labels", async () => {
       },
       {
         label: "Admin",
-        children: ["User Management", "Data", "Segmentation Types", "Segmentation Crosswalks"]
+        children: ["User Management", "Data"]
       }
     ]
   );

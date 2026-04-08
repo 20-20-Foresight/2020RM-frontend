@@ -7,6 +7,42 @@ const {
   resolveSegmentationDefaultEditorType
 } = require("../app/models/segmentation-default-editor");
 
+test("buildSegmentationDefaultViewModel reads scored industry and focus targets from crosswalk rows", () => {
+  const document = {
+    crosswalk: {
+      REIT: {
+        rowId: "row-reit-1",
+        sector: "Financial Services",
+        industries: [
+          { name: "Real Estate", score: 5 },
+          { name: "Investment Firm", score: 2 }
+        ],
+        focuses: [
+          { name: "REIT", score: 5 },
+          { name: "Investment Firm", score: 2 }
+        ],
+        "category heading": "Financial Services"
+      }
+    }
+  };
+
+  const viewModel = buildSegmentationDefaultViewModel({
+    document
+  });
+
+  assert.deepEqual(viewModel.rows[0].industryTargets, [
+    { name: "Real Estate", score: 5 },
+    { name: "Investment Firm", score: 2 }
+  ]);
+  assert.deepEqual(viewModel.rows[0].focusTargets, [
+    { name: "REIT", score: 5 },
+    { name: "Investment Firm", score: 2 }
+  ]);
+  assert.equal(viewModel.rows[0].industry, "Real Estate");
+  assert.equal(viewModel.rows[0].focus, "REIT");
+  assert.equal(viewModel.rows[0].rowId, "row-reit-1");
+});
+
 test("buildSegmentationDefaultViewModel derives category columns from flat crosswalk rows when no categories tree is present", () => {
   const document = {
     crosswalk: {
@@ -57,6 +93,7 @@ test("buildSegmentationDefaultDocument rebuilds the flat crosswalk structure and
   const sourceDocument = {
     crosswalk: {
       Blogs: {
+        rowId: "row-blogs-1",
         focus: "Electric Power Transmission, Control, and Distribution",
         sector: "Other",
         "category heading": "Technology, Information and Media ",
@@ -76,6 +113,8 @@ test("buildSegmentationDefaultDocument rebuilds the flat crosswalk structure and
           sector: "Financial Services",
           industry: "Banking Services",
           focus: "Commercial Banking",
+          industryTargets: [{ name: "Banking Services", score: 3 }],
+          focusTargets: [{ name: "Commercial Banking", score: 3 }],
           notes: "Manually reviewed"
         }
       : row
@@ -85,6 +124,8 @@ test("buildSegmentationDefaultDocument rebuilds the flat crosswalk structure and
     sector: "Real Estate",
     industry: "Real Estate Services",
     focus: "Brokerage",
+    industryTargets: [{ name: "Real Estate Services", score: 4 }],
+    focusTargets: [{ name: "Brokerage", score: 5 }],
     notes: "",
     __branchFieldNames: ["category heading", "subcategory heading"]
   });
@@ -95,26 +136,83 @@ test("buildSegmentationDefaultDocument rebuilds the flat crosswalk structure and
     rows: nextRows
   });
 
-  assert.deepEqual(rebuilt, {
-    crosswalk: {
-      Blogs: {
-        sector: "Financial Services",
-        industry: "Banking Services",
-        focus: "Commercial Banking",
-        notes: "Manually reviewed",
-        "category heading": "Technology, Information and Media",
-        "subcategory heading": "Technology, Information and Internet"
-      },
-      Brokerage: {
-        sector: "Real Estate",
-        industry: "Real Estate Services",
-        focus: "Brokerage",
-        "category heading": "Real Estate",
-        "subcategory heading": "Real Estate Services"
+  assert.equal(rebuilt.crosswalk.Blogs.rowId, "row-blogs-1");
+  assert.match(rebuilt.crosswalk.Brokerage.rowId, /^[0-9a-f-]{36}$/i);
+  assert.deepEqual(
+    {
+      ...rebuilt,
+      crosswalk: {
+        ...rebuilt.crosswalk,
+        Brokerage: {
+          ...rebuilt.crosswalk.Brokerage,
+          rowId: "<generated>"
+        }
       }
     },
-    "linkedin categories": []
+    {
+      crosswalk: {
+        Blogs: {
+          rowId: "row-blogs-1",
+          sector: "Financial Services",
+          industry: "Banking Services",
+          industries: [{ name: "Banking Services", score: 3 }],
+          focus: "Commercial Banking",
+          focuses: [{ name: "Commercial Banking", score: 3 }],
+          notes: "Manually reviewed",
+          "category heading": "Technology, Information and Media",
+          "subcategory heading": "Technology, Information and Internet"
+        },
+        Brokerage: {
+          rowId: "<generated>",
+          sector: "Real Estate",
+          industry: "Real Estate Services",
+          industries: [{ name: "Real Estate Services", score: 4 }],
+          focus: "Brokerage",
+          focuses: [{ name: "Brokerage", score: 5 }],
+          "category heading": "Real Estate",
+          "subcategory heading": "Real Estate Services"
+        }
+      },
+      "linkedin categories": []
+    }
+  );
+});
+
+test("buildSegmentationDefaultDocument preserves existing row ids and generates new ones when missing", () => {
+  const rebuilt = buildSegmentationDefaultDocument({
+    sourceDocument: {
+      crosswalk: {}
+    },
+    structure: "flat-crosswalk",
+    rows: [
+      {
+        rowId: "row-existing-1",
+        categories: ["Real Estate", "Brokerage"],
+        sector: "",
+        industry: "",
+        focus: "",
+        industryTargets: [],
+        focusTargets: [],
+        notes: "",
+        __branchFieldNames: ["category heading"],
+        __extraLeafFields: {}
+      },
+      {
+        categories: ["Financial Services", "REIT"],
+        sector: "",
+        industry: "",
+        focus: "",
+        industryTargets: [{ name: "Real Estate", score: 5 }],
+        focusTargets: [{ name: "REIT", score: 5 }],
+        notes: "",
+        __branchFieldNames: ["category heading"],
+        __extraLeafFields: {}
+      }
+    ]
   });
+
+  assert.equal(rebuilt.crosswalk.Brokerage.rowId, "row-existing-1");
+  assert.match(rebuilt.crosswalk.REIT.rowId, /^[0-9a-f-]{36}$/i);
 });
 
 test("buildSegmentationDefaultViewModel supports segmentation.code documents with code and description columns", () => {
@@ -225,23 +323,43 @@ test("buildSegmentationDefaultDocument saves segmentation.code rows with canonic
     ]
   });
 
-  assert.deepEqual(rebuilt, {
-    crosswalk: {
-      "21": {
-        description: "Mining, Quarrying, and Oil and Gas Extraction",
-        sector: "Energy",
-        industry: "Oil and Gas",
-        focus: "Mining",
-        notes: "Reviewed"
-      },
-      "237": {
-        description: "Heavy and Civil Engineering Construction",
-        sector: "Construction",
-        industry: "Civil Engineering"
+  assert.match(rebuilt.crosswalk["21"].rowId, /^[0-9a-f-]{36}$/i);
+  assert.match(rebuilt.crosswalk["237"].rowId, /^[0-9a-f-]{36}$/i);
+  assert.deepEqual(
+    {
+      ...rebuilt,
+      crosswalk: {
+        ...rebuilt.crosswalk,
+        "21": {
+          ...rebuilt.crosswalk["21"],
+          rowId: "<generated>"
+        },
+        "237": {
+          ...rebuilt.crosswalk["237"],
+          rowId: "<generated>"
+        }
       }
     },
-    sheet1: []
-  });
+    {
+      crosswalk: {
+        "21": {
+          description: "Mining, Quarrying, and Oil and Gas Extraction",
+          sector: "Energy",
+          industry: "Oil and Gas",
+          focus: "Mining",
+          notes: "Reviewed",
+          rowId: "<generated>"
+        },
+        "237": {
+          description: "Heavy and Civil Engineering Construction",
+          sector: "Construction",
+          industry: "Civil Engineering",
+          rowId: "<generated>"
+        }
+      },
+      sheet1: []
+    }
+  );
 });
 
 test("buildSegmentationDefaultViewModel supports segmentation.list documents with non-SIF columns on the left", () => {
@@ -343,24 +461,37 @@ test("buildSegmentationDefaultDocument saves segmentation.list rows back to the 
     ]
   });
 
-  assert.deepEqual(rebuilt, {
-    sheet1: [
-      {
-        code: "21",
-        description: "Mining, Quarrying, and Oil and Gas Extraction",
-        sector: "Energy",
-        industry: "Oil and Gas",
-        focus: "Mining",
-        notes: "Reviewed"
-      },
-      {
-        code: "237",
-        description: "Heavy and Civil Engineering Construction",
-        sector: "Construction",
-        industry: "Civil Engineering"
-      }
-    ]
-  });
+  assert.match(rebuilt.sheet1[0].rowId, /^[0-9a-f-]{36}$/i);
+  assert.match(rebuilt.sheet1[1].rowId, /^[0-9a-f-]{36}$/i);
+  assert.deepEqual(
+    {
+      ...rebuilt,
+      sheet1: rebuilt.sheet1.map((row) => ({
+        ...row,
+        rowId: "<generated>"
+      }))
+    },
+    {
+      sheet1: [
+        {
+          code: "21",
+          description: "Mining, Quarrying, and Oil and Gas Extraction",
+          sector: "Energy",
+          industry: "Oil and Gas",
+          focus: "Mining",
+          notes: "Reviewed",
+          rowId: "<generated>"
+        },
+        {
+          code: "237",
+          description: "Heavy and Civil Engineering Construction",
+          sector: "Construction",
+          industry: "Civil Engineering",
+          rowId: "<generated>"
+        }
+      ]
+    }
+  );
 });
 
 test("resolveSegmentationDefaultEditorType honors explicit editor config and falls back to document inference", () => {

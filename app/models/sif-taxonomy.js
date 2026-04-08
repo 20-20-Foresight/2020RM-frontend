@@ -537,14 +537,15 @@ function addSifTaxonomyNode(document, options) {
   });
 }
 
-module.exports = {
-  SIF_TAXONOMY_DATA_ID,
-  SIF_TAXONOMY_DESCRIPTION,
-  addSifTaxonomyNode,
-  buildSegmentationPath,
-  findIndustryBySlug,
-  findSectorBySlug,
-  normalizeSifTaxonomyDocument,
-  updateSifTaxonomyNode
-};
-
+if (typeof module !== "undefined") {
+  module.exports = {
+    SIF_TAXONOMY_DATA_ID,
+    SIF_TAXONOMY_DESCRIPTION,
+    addSifTaxonomyNode,
+    buildSegmentationPath,
+    findIndustryBySlug,
+    findSectorBySlug,
+    normalizeSifTaxonomyDocument,
+    updateSifTaxonomyNode
+  };
+}

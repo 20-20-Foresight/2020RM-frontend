@@ -3,7 +3,7 @@
  * @param {string|null|undefined} pathname
  * @returns {{organizationUUID: string, tabKey: "info"|"people"}|null}
  */
-function parseOrganizationDetailPath(pathname) {
+export function parseOrganizationDetailPath(pathname) {
   if (typeof pathname !== "string") {
     return null;
   }
@@ -27,7 +27,7 @@ function parseOrganizationDetailPath(pathname) {
  * }} options
  * @returns {boolean}
  */
-function isSameOrganizationDetailNavigation(options) {
+export function isSameOrganizationDetailNavigation(options) {
   const current = parseOrganizationDetailPath(options.currentPathname);
   const pending = parseOrganizationDetailPath(options.navigationPathname);
 
@@ -44,7 +44,7 @@ function isSameOrganizationDetailNavigation(options) {
  * }} options
  * @returns {{activeTabKey: "info"|"people", isLoading: boolean, label: string|null}}
  */
-function getOrganizationDetailTabUiState(options) {
+export function getOrganizationDetailTabUiState(options) {
   const current = parseOrganizationDetailPath(options.currentPathname);
   const pending = parseOrganizationDetailPath(options.navigationPathname);
   const normalizedOrganizationUUID =
@@ -82,7 +82,7 @@ function getOrganizationDetailTabUiState(options) {
  * }} args
  * @returns {boolean}
  */
-function shouldRevalidateOrganizationDetailRoute(args) {
+export function shouldRevalidateOrganizationDetailRoute(args) {
   const formMethod =
     typeof args.formMethod === "string" && args.formMethod.trim()
       ? args.formMethod.trim().toUpperCase()
@@ -101,13 +101,4 @@ function shouldRevalidateOrganizationDetailRoute(args) {
   }
 
   return args.defaultShouldRevalidate;
-}
-
-if (typeof module !== "undefined") {
-  module.exports = {
-    getOrganizationDetailTabUiState,
-    isSameOrganizationDetailNavigation,
-    parseOrganizationDetailPath,
-    shouldRevalidateOrganizationDetailRoute
-  };
 }

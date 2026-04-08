@@ -924,7 +924,7 @@ function buildSegmentationDefaultDocument(options) {
   };
 }
 
-module.exports = {
+export {
   buildSegmentationDefaultDocument,
   buildSegmentationDefaultViewModel,
   resolveSegmentationDefaultEditorType
