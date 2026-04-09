@@ -1,10 +1,5 @@
-import { PlaceholderSectionPage } from "../components/PlaceholderSectionPage";
+import { Outlet } from "@remix-run/react";
 
-export default function AdminDataPage() {
-  return (
-    <PlaceholderSectionPage
-      title="Data"
-      description="Administrative data tools will appear here. (Prototype placeholder)"
-    />
-  );
+export default function AdminDataLayoutRoute() {
+  return <Outlet />;
 }
