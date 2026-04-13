@@ -3,6 +3,7 @@ const session = require("express-session");
 const Logger = require("@20-20-Foresight/base/log");
 const { buildAuthorizationUrl, handleCallback } = require("./auth/microsoft");
 const { getSessionStore } = require("./session/store");
+const DEFAULT_FAVICON_PATH = "/assets/2020-ets-horiz-logo-rgb-color-lg.png";
 
 /**
  * Returns whether the proxied request method can include a body.
@@ -51,6 +52,21 @@ function buildBackendProxyRequestInit(req) {
 }
 
 /**
+ * Returns the public favicon target for the frontend shell.
+ * Prefer an explicit env override and otherwise fall back to the shared 2020 logo asset.
+ *
+ * @returns {string}
+ */
+function resolveFaviconTarget() {
+  const explicitValue = process.env.FAVICON_URL;
+  if (typeof explicitValue === "string" && explicitValue.trim()) {
+    return explicitValue.trim();
+  }
+
+  return DEFAULT_FAVICON_PATH;
+}
+
+/**
  * @typedef {import("./config").AppConfig} AppConfig
  */
 
@@ -62,6 +78,7 @@ function buildBackendProxyRequestInit(req) {
 function createApp(config, remixHandler) {
   const app = express();
   const log = new Logger("frontend", "app");
+  const faviconTarget = resolveFaviconTarget();
 
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
@@ -116,6 +133,10 @@ function createApp(config, remixHandler) {
 
   app.get("/health", (_req, res) => {
     res.json({ ok: true });
+  });
+
+  app.get("/favicon.ico", (_req, res) => {
+    res.redirect(302, faviconTarget);
   });
 
   app.get("/auth/login", async (req, res, next) => {
@@ -290,5 +311,6 @@ function createApp(config, remixHandler) {
 
 module.exports = {
   buildBackendProxyRequestInit,
-  createApp
+  createApp,
+  resolveFaviconTarget
 };

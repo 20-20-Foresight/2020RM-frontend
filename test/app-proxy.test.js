@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { PassThrough } = require("node:stream");
 
-const { buildBackendProxyRequestInit } = require("../src/app");
+const { buildBackendProxyRequestInit, resolveFaviconTarget } = require("../src/app");
 
 test("frontend proxy request builder forwards POST bodies and content headers", async () => {
   const requestStream = new PassThrough();
@@ -50,4 +50,34 @@ test("frontend proxy request builder forwards POST bodies and content headers", 
       }
     ]
   });
+});
+
+test("resolveFaviconTarget falls back to the shared 2020 logo asset", () => {
+  const originalValue = process.env.FAVICON_URL;
+  delete process.env.FAVICON_URL;
+
+  try {
+    assert.equal(resolveFaviconTarget(), "/assets/2020-ets-horiz-logo-rgb-color-lg.png");
+  } finally {
+    if (originalValue == null) {
+      delete process.env.FAVICON_URL;
+    } else {
+      process.env.FAVICON_URL = originalValue;
+    }
+  }
+});
+
+test("resolveFaviconTarget prefers an explicit env override", () => {
+  const originalValue = process.env.FAVICON_URL;
+  process.env.FAVICON_URL = "https://2020foresight.com/favicon.ico";
+
+  try {
+    assert.equal(resolveFaviconTarget(), "https://2020foresight.com/favicon.ico");
+  } finally {
+    if (originalValue == null) {
+      delete process.env.FAVICON_URL;
+    } else {
+      process.env.FAVICON_URL = originalValue;
+    }
+  }
 });
