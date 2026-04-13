@@ -35,9 +35,10 @@ import {
   VStack
 } from "@chakra-ui/react";
 import { EditIcon, SearchIcon } from "@chakra-ui/icons";
-import { Form } from "@remix-run/react";
+import { Form, useSubmit } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { MdDescription } from "react-icons/md";
+import { buildSegmentationDefaultSubmitFormData } from "../models/segmentation-default-submit";
 
 /**
  * Returns whether a value is a plain object.
@@ -471,6 +472,7 @@ function SearchableHeader({
  * @returns {JSX.Element}
  */
 export function SegmentationDefaultEditorPage({ data, actionData, isSaving = false }) {
+  const submit = useSubmit();
   const categoryDepth = data.segmentationDefault.categoryColumns.length;
   const defaultBranchFieldNames = Array.isArray(data.segmentationDefault.categoryFieldNames)
     ? data.segmentationDefault.categoryFieldNames
@@ -524,6 +526,24 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
 
   const taxonomyOptions = buildTaxonomyOptions(data.categoryCatalog, rows);
   const filteredRows = rows.filter((row) => rowMatchesFilters(row, filters));
+
+  /**
+   * Persists the full document with the supplied overrides.
+   * @param {{description?: string, metadata?: Record<string, unknown>, editorConfig?: Record<string, unknown>, rows?: unknown[]}} [overrides]
+   */
+  function submitDocument(overrides = {}) {
+    const formData = buildSegmentationDefaultSubmitFormData({
+      data,
+      description: overrides.description ?? description,
+      metadata: overrides.metadata ?? metadata,
+      editorConfig: overrides.editorConfig ?? editorConfig,
+      rows: overrides.rows ?? rows
+    });
+
+    submit(formData, {
+      method: "post"
+    });
+  }
   /**
    * Opens the row modal for the requested row index.
    * @param {number|null} rowIndex
@@ -557,15 +577,16 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
     normalizedDraftRow.industry = primaryIndustry || normalizedDraftRow.industry;
     normalizedDraftRow.focus = primaryFocus || normalizedDraftRow.focus;
 
-    if (editingRowIndex == null) {
-      setRows((currentRows) => [...currentRows, normalizedDraftRow]);
-    } else {
-      setRows((currentRows) =>
-        currentRows.map((row, index) => (index === editingRowIndex ? normalizedDraftRow : row))
-      );
-    }
+    const nextRows =
+      editingRowIndex == null
+        ? [...rows, normalizedDraftRow]
+        : rows.map((row, index) => (index === editingRowIndex ? normalizedDraftRow : row));
 
+    setRows(nextRows);
     closeRowEditor();
+    submitDocument({
+      rows: nextRows
+    });
   }
 
   /**
@@ -577,8 +598,12 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
       return;
     }
 
-    setRows((currentRows) => currentRows.filter((_, index) => index !== editingRowIndex));
+    const nextRows = rows.filter((_, index) => index !== editingRowIndex);
+    setRows(nextRows);
     closeRowEditor();
+    submitDocument({
+      rows: nextRows
+    });
   }
 
   /**
@@ -738,6 +763,14 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
       ...(isPlainObject(currentMetadata) ? currentMetadata : {}),
       [key]: value
     }));
+  }
+
+  /**
+   * Persists metadata edits and closes the metadata modal.
+   */
+  function saveMetadataChanges() {
+    submitDocument();
+    closeMetadataModal();
   }
 
   const displayDescription = readTrimmedString(description);
@@ -1079,8 +1112,8 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
               <Button type="button" variant="ghost" onClick={closeRowEditor}>
                 Cancel
               </Button>
-              <Button type="button" colorScheme="blue" onClick={saveDraftRow}>
-                Apply
+              <Button type="button" colorScheme="blue" onClick={saveDraftRow} isLoading={isSaving} loadingText="Saving">
+                Save Row
               </Button>
             </HStack>
           </ModalFooter>
@@ -1121,7 +1154,14 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
             </VStack>
           </ModalBody>
           <ModalFooter>
-            <Button type="button" onClick={closeMetadataModal}>Done</Button>
+            <HStack spacing={3}>
+              <Button type="button" variant="ghost" onClick={closeMetadataModal}>
+                Cancel
+              </Button>
+              <Button type="button" colorScheme="blue" onClick={saveMetadataChanges} isLoading={isSaving} loadingText="Saving">
+                Save
+              </Button>
+            </HStack>
           </ModalFooter>
         </ModalContent>
       </Modal>
