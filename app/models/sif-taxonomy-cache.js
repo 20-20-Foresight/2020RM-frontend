@@ -127,11 +127,12 @@ async function syncSifTaxonomyToCache(options = {}) {
   });
 }
 
-module.exports = {
-  SIF_TAXONOMY_CACHE_KEY,
-  buildCachedSifTaxonomyRecord,
-  readCachedSifTaxonomy,
-  syncSifTaxonomyToCache,
-  writeCachedSifTaxonomy
-};
-
+if (typeof module !== "undefined") {
+  module.exports = {
+    SIF_TAXONOMY_CACHE_KEY,
+    buildCachedSifTaxonomyRecord,
+    readCachedSifTaxonomy,
+    syncSifTaxonomyToCache,
+    writeCachedSifTaxonomy
+  };
+}

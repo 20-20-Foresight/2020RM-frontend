@@ -1,11 +1,11 @@
-const { isSameOrganizationDetailNavigation } = require("./organization-detail-tabs");
+import { isSameOrganizationDetailNavigation } from "./organization-detail-tabs.mjs";
 
 /**
  * Returns whether one pathname belongs to the admin data area.
  * @param {string|null|undefined} pathname
  * @returns {boolean}
  */
-function isAdminDataPath(pathname) {
+export function isAdminDataPath(pathname) {
   return typeof pathname === "string" && pathname.startsWith("/admin/data");
 }
 
@@ -14,7 +14,7 @@ function isAdminDataPath(pathname) {
  * @param {string|null|undefined} pathname
  * @returns {boolean}
  */
-function isSegmentationPath(pathname) {
+export function isSegmentationPath(pathname) {
   return typeof pathname === "string" && pathname.startsWith("/admin/segmentation");
 }
 
@@ -23,7 +23,7 @@ function isSegmentationPath(pathname) {
  * @param {string|null|undefined} pathname
  * @returns {boolean}
  */
-function isEntitySearchPath(pathname) {
+export function isEntitySearchPath(pathname) {
   return pathname === "/organizations" || pathname === "/people";
 }
 
@@ -32,7 +32,7 @@ function isEntitySearchPath(pathname) {
  * @param {string|null|undefined} pathname
  * @returns {"organization"|"person"|null}
  */
-function getEntityDetailTypeFromPath(pathname) {
+export function getEntityDetailTypeFromPath(pathname) {
   if (typeof pathname !== "string") {
     return null;
   }
@@ -58,7 +58,7 @@ function getEntityDetailTypeFromPath(pathname) {
  * }} options
  * @returns {{isLoading: boolean, isSubmitting: boolean, label: string|null}}
  */
-function getAppLoadingOverlayState(options) {
+export function getAppLoadingOverlayState(options) {
   const fetcherStates = Array.isArray(options.fetcherStates) ? options.fetcherStates : [];
   const hasActiveFetchers = fetcherStates.some((state) => state !== "idle");
   const isLoading = options.navigationState !== "idle" || hasActiveFetchers;
@@ -78,7 +78,6 @@ function getAppLoadingOverlayState(options) {
       ? options.navigationPathname
       : options.currentPathname;
 
-  // Same-route directory searches render their own page-scoped loading dialog.
   if (isEntitySearchPath(pendingPathname) && pendingPathname === options.currentPathname) {
     return {
       isLoading: false,
@@ -153,15 +152,5 @@ function getAppLoadingOverlayState(options) {
     isLoading: true,
     isSubmitting,
     label: "Loading..."
-  };
-}
-
-if (typeof module !== "undefined") {
-  module.exports = {
-    getAppLoadingOverlayState,
-    getEntityDetailTypeFromPath,
-    isAdminDataPath,
-    isSegmentationPath,
-    isEntitySearchPath
   };
 }

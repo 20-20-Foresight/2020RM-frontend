@@ -21,13 +21,24 @@ function buildRouteError(error) {
 }
 
 export async function loader({ request }) {
+  const url = new URL(request.url);
+  const selectedType = url.searchParams.get("type") || "";
+  const searchQuery = url.searchParams.get("q") || "";
+
   try {
     const items = await loadAdminDataList({
-      request
+      request,
+      filter: selectedType
+        ? {
+            type: selectedType
+          }
+        : null
     });
 
     return json({
       items,
+      selectedType,
+      searchQuery,
       error: null
     });
   } catch (error) {
@@ -36,6 +47,8 @@ export async function loader({ request }) {
     return json(
       {
         items: [],
+        selectedType,
+        searchQuery,
         error: buildRouteError(error)
       },
       {
@@ -48,5 +61,12 @@ export async function loader({ request }) {
 export default function AdminDataIndexRoute() {
   const data = useLoaderData();
 
-  return <AdminDataListPage items={data.items} error={data.error} />;
+  return (
+    <AdminDataListPage
+      items={data.items}
+      selectedType={data.selectedType}
+      searchQuery={data.searchQuery}
+      error={data.error}
+    />
+  );
 }

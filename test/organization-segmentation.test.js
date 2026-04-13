@@ -65,6 +65,61 @@ test("buildOrganizationSegmentationViewModel chooses the most common sector and 
   assert.match(result.explanations[0].reasonHtml, /<mark>/);
 });
 
+test("buildOrganizationSegmentationViewModel uses nested projection reasons when available", () => {
+  const result = buildOrganizationSegmentationViewModel({
+    entityDimensionProjection: {
+      industry: [
+        {
+          name: "PE RE",
+          score: 8,
+          sourceDocumentName: "Description Rules",
+          reasons: [
+            {
+              reason: {
+                source: "description",
+                match: "reit",
+                phrase: "Public REIT platform with private real estate investments"
+              },
+              crosswalkDocumentName: "Description Rules",
+              rule: "row-reit-1"
+            }
+          ]
+        }
+      ],
+      focus: [
+        {
+          name: "REIT",
+          score: 5,
+          reasons: [
+            {
+              reason: {
+                source: "description",
+                description: "Derived from existing data, awaiting fresh segmentation"
+              },
+              crosswalkDocumentName: "Description Rules",
+              rule: "row-reit-1"
+            }
+          ]
+        }
+      ]
+    }
+  });
+
+  assert.deepEqual(result.industries, ["PE RE"]);
+  assert.deepEqual(result.focuses, ["REIT"]);
+  assert.equal(result.explanations.length, 2);
+  assert.deepEqual(result.explanations[0], {
+    source: "description",
+    dimension: "Industry",
+    value: "PE RE",
+    score: 8,
+    crosswalkDocumentName: "Description Rules",
+    rule: "row-reit-1",
+    reasonHtml:
+      "&ldquo;Public <mark>REIT</mark> platform with private real estate investments...&rdquo;"
+  });
+});
+
 test("buildOrganizationSegmentationViewModel falls back to top-level segmentation data", () => {
   const result = buildOrganizationSegmentationViewModel({
     segmentation: {

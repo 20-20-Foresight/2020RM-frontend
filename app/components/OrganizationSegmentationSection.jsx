@@ -124,9 +124,11 @@ export function OrganizationSegmentationSection({ record }) {
                   <Thead>
                     <Tr>
                       <Th>Source</Th>
-                      <Th>Sector</Th>
-                      <Th>Industry</Th>
-                      <Th>Focus</Th>
+                      <Th>Dimension</Th>
+                      <Th>Value</Th>
+                      <Th>Score</Th>
+                      <Th>Crosswalk</Th>
+                      <Th>Rule</Th>
                       <Th>How Derived</Th>
                     </Tr>
                   </Thead>
@@ -134,9 +136,11 @@ export function OrganizationSegmentationSection({ record }) {
                     {segmentation.explanations.map((row, index) => (
                       <Tr key={`${row.source || "source"}-${index}`}>
                         <Td>{formatExplanationCell(row.source)}</Td>
-                        <Td>{formatExplanationCell(row.sector)}</Td>
-                        <Td>{formatExplanationCell(row.industry)}</Td>
-                        <Td>{formatExplanationCell(row.focus)}</Td>
+                        <Td>{formatExplanationCell(row.dimension)}</Td>
+                        <Td>{formatExplanationCell(row.value)}</Td>
+                        <Td>{row.score == null ? "Not set" : String(row.score)}</Td>
+                        <Td>{formatExplanationCell(row.crosswalkDocumentName)}</Td>
+                        <Td>{formatExplanationCell(row.rule)}</Td>
                         <Td>
                           <Box
                             fontSize="sm"

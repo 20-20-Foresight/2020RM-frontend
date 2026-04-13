@@ -62,6 +62,80 @@ function readTrimmedString(value) {
 }
 
 /**
+ * Clones one scored target list into mutable state.
+ * @param {unknown} value
+ * @returns {Array<{name: string, score: string}>}
+ */
+function cloneTargetRows(value) {
+  const entries = Array.isArray(value) ? value : [];
+  return entries
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+
+      const name = readTrimmedString(entry.name);
+      const score = entry.score == null ? "" : String(entry.score).trim();
+      if (!name && !score) {
+        return null;
+      }
+
+      return {
+        name,
+        score
+      };
+    })
+    .filter(Boolean);
+}
+
+/**
+ * Builds one empty scored target row.
+ * @returns {{name: string, score: string}}
+ */
+function buildEmptyTargetRow() {
+  return {
+    name: "",
+    score: "3"
+  };
+}
+
+/**
+ * Builds a compact display string for one target list.
+ * @param {Array<{name?: string, score?: string|number}>|null|undefined} targets
+ * @param {string} fallback
+ * @returns {string}
+ */
+function summarizeTargets(targets, fallback = "") {
+  const entries = Array.isArray(targets) ? targets : [];
+  if (!entries.length) {
+    return fallback;
+  }
+
+  return entries
+    .map((entry) => {
+      const name = readTrimmedString(entry?.name);
+      const score = entry?.score == null ? "" : String(entry.score).trim();
+      if (!name) {
+        return "";
+      }
+      return score ? `${name} (${score})` : name;
+    })
+    .filter(Boolean)
+    .join(", ");
+}
+
+/**
+ * Returns whether one row is missing both Industry and Focus outputs.
+ * @param {{industryTargets?: Array<{name?: string}>, focusTargets?: Array<{name?: string}>}} row
+ * @returns {boolean}
+ */
+function isIncompleteRow(row) {
+  const hasIndustry = cloneTargetRows(row?.industryTargets).some((target) => readTrimmedString(target.name));
+  const hasFocus = cloneTargetRows(row?.focusTargets).some((target) => readTrimmedString(target.name));
+  return !hasIndustry && !hasFocus;
+}
+
+/**
  * Formats a timestamp for the editor header.
  * @param {string|null|undefined} value
  * @returns {string}
@@ -90,6 +164,9 @@ function formatTimestamp(value) {
  *   sector?: string,
  *   industry?: string,
  *   focus?: string,
+ *   industryTargets?: Array<{name?: string, score?: string|number}>,
+ *   focusTargets?: Array<{name?: string, score?: string|number}>,
+ *   rowId?: string,
  *   notes?: string,
  *   __branchFieldNames?: string[],
  *   __extraLeafFields?: Record<string, unknown>
@@ -101,6 +178,9 @@ function formatTimestamp(value) {
  *   sector: string,
  *   industry: string,
  *   focus: string,
+ *   industryTargets: Array<{name: string, score: string}>,
+ *   focusTargets: Array<{name: string, score: string}>,
+ *   rowId: string,
  *   notes: string,
  *   __branchFieldNames: string[],
  *   __extraLeafFields: Record<string, unknown>
@@ -114,6 +194,9 @@ function cloneSegmentationRows(rows, categoryDepth) {
         sector: readTrimmedString(row.sector),
         industry: readTrimmedString(row.industry),
         focus: readTrimmedString(row.focus),
+        industryTargets: cloneTargetRows(row.industryTargets),
+        focusTargets: cloneTargetRows(row.focusTargets),
+        rowId: readTrimmedString(row.rowId),
         notes: readTrimmedString(row.notes),
         __branchFieldNames: Array.isArray(row.__branchFieldNames) ? row.__branchFieldNames.map((value) => readTrimmedString(value)) : [],
         __extraLeafFields: isPlainObject(row.__extraLeafFields) ? { ...row.__extraLeafFields } : {}
@@ -131,6 +214,9 @@ function cloneSegmentationRows(rows, categoryDepth) {
  *   sector: string,
  *   industry: string,
  *   focus: string,
+ *   industryTargets: Array<{name: string, score: string}>,
+ *   focusTargets: Array<{name: string, score: string}>,
+ *   rowId: string,
  *   notes: string,
  *   __branchFieldNames: string[],
  *   __extraLeafFields: Record<string, unknown>
@@ -143,6 +229,9 @@ function buildEmptySegmentationRow(categoryDepth, branchFieldNames = []) {
     sector: "",
     industry: "",
     focus: "",
+    industryTargets: [],
+    focusTargets: [],
+    rowId: "",
     notes: "",
     __branchFieldNames: Array.isArray(branchFieldNames) ? branchFieldNames.slice(0, categoryDepth) : [],
     __extraLeafFields: {}
@@ -159,118 +248,46 @@ function buildCategoryFilterKey(index) {
 }
 
 /**
- * Builds all searchable taxonomy options from the SIF taxonomy plus current rows.
- * @param {Record<string, unknown>|null|undefined} taxonomyDocument
- * @param {Array<{sector: string, industry: string, focus: string}>} rows
+ * Builds category options for segmentation rules from the current category docs plus current rows.
+ * @param {{industryOptions?: string[], focusOptions?: string[]}|null|undefined} categoryCatalog
+ * @param {Array<{sector: string, industry: string, focus: string, industryTargets?: Array<{name?: string, score?: string|number}>, focusTargets?: Array<{name?: string, score?: string|number}>}>} rows
  * @returns {{
- *   sectorOptions: string[],
  *   industryOptions: string[],
- *   focusOptions: string[],
- *   industriesBySector: Record<string, string[]>,
- *   focusesBySectorIndustry: Record<string, string[]>
+ *   focusOptions: string[]
  * }}
  */
-function buildTaxonomyOptions(taxonomyDocument, rows) {
-  /** @type {Set<string>} */
-  const sectorSet = new Set();
-  /** @type {Set<string>} */
-  const industrySet = new Set();
-  /** @type {Set<string>} */
-  const focusSet = new Set();
-  /** @type {Record<string, Set<string>>} */
-  const industriesBySector = {};
-  /** @type {Record<string, Set<string>>} */
-  const focusesBySectorIndustry = {};
-
-  function addIndustry(sector, industry) {
-    const normalizedSector = readTrimmedString(sector);
-    const normalizedIndustry = readTrimmedString(industry);
-    if (!normalizedSector || !normalizedIndustry) {
-      return;
-    }
-
-    if (!industriesBySector[normalizedSector]) {
-      industriesBySector[normalizedSector] = new Set();
-    }
-
-    industriesBySector[normalizedSector].add(normalizedIndustry);
-  }
-
-  function addFocus(sector, industry, focus) {
-    const normalizedSector = readTrimmedString(sector);
-    const normalizedIndustry = readTrimmedString(industry);
-    const normalizedFocus = readTrimmedString(focus);
-    if (!normalizedSector || !normalizedIndustry || !normalizedFocus) {
-      return;
-    }
-
-    const key = `${normalizedSector}::${normalizedIndustry}`;
-    if (!focusesBySectorIndustry[key]) {
-      focusesBySectorIndustry[key] = new Set();
-    }
-
-    focusesBySectorIndustry[key].add(normalizedFocus);
-  }
-
-  for (const sector of Array.isArray(taxonomyDocument?.sectors) ? taxonomyDocument.sectors : []) {
-    const sectorLabel = readTrimmedString(sector?.label);
-    if (!sectorLabel) {
-      continue;
-    }
-
-    sectorSet.add(sectorLabel);
-
-    for (const industry of Array.isArray(sector?.industries) ? sector.industries : []) {
-      const industryLabel = readTrimmedString(industry?.label);
-      if (!industryLabel) {
-        continue;
-      }
-
-      industrySet.add(industryLabel);
-      addIndustry(sectorLabel, industryLabel);
-
-      for (const focus of Array.isArray(industry?.focuses) ? industry.focuses : []) {
-        const focusLabel = readTrimmedString(focus?.label);
-        if (!focusLabel) {
-          continue;
-        }
-
-        focusSet.add(focusLabel);
-        addFocus(sectorLabel, industryLabel, focusLabel);
-      }
-    }
-  }
+function buildTaxonomyOptions(categoryCatalog, rows) {
+  const industrySet = new Set(Array.isArray(categoryCatalog?.industryOptions) ? categoryCatalog.industryOptions : []);
+  const focusSet = new Set(Array.isArray(categoryCatalog?.focusOptions) ? categoryCatalog.focusOptions : []);
 
   for (const row of Array.isArray(rows) ? rows : []) {
-    const sector = readTrimmedString(row.sector);
     const industry = readTrimmedString(row.industry);
     const focus = readTrimmedString(row.focus);
-
-    if (sector) {
-      sectorSet.add(sector);
-    }
+    const industryTargets = cloneTargetRows(row.industryTargets);
+    const focusTargets = cloneTargetRows(row.focusTargets);
 
     if (industry) {
       industrySet.add(industry);
-      addIndustry(sector, industry);
     }
+    industryTargets.forEach((target) => {
+      if (target.name) {
+        industrySet.add(target.name);
+      }
+    });
 
     if (focus) {
       focusSet.add(focus);
-      addFocus(sector, industry, focus);
     }
+    focusTargets.forEach((target) => {
+      if (target.name) {
+        focusSet.add(target.name);
+      }
+    });
   }
 
   return {
-    sectorOptions: Array.from(sectorSet).sort((left, right) => left.localeCompare(right)),
     industryOptions: Array.from(industrySet).sort((left, right) => left.localeCompare(right)),
-    focusOptions: Array.from(focusSet).sort((left, right) => left.localeCompare(right)),
-    industriesBySector: Object.fromEntries(
-      Object.entries(industriesBySector).map(([key, values]) => [key, Array.from(values).sort((left, right) => left.localeCompare(right))])
-    ),
-    focusesBySectorIndustry: Object.fromEntries(
-      Object.entries(focusesBySectorIndustry).map(([key, values]) => [key, Array.from(values).sort((left, right) => left.localeCompare(right))])
-    )
+    focusOptions: Array.from(focusSet).sort((left, right) => left.localeCompare(right))
   };
 }
 
@@ -281,7 +298,9 @@ function buildTaxonomyOptions(taxonomyDocument, rows) {
  *   description?: string,
  *   sector: string,
  *   industry: string,
- *   focus: string
+ *   focus: string,
+ *   industryTargets?: Array<{name?: string, score?: string|number}>,
+ *   focusTargets?: Array<{name?: string, score?: string|number}>
  * }} row
  * @param {Record<string, string>} filters
  * @returns {boolean}
@@ -310,7 +329,12 @@ function rowMatchesFilters(row, filters) {
       continue;
     }
 
-    const rowValue = readTrimmedString(row[key]).toLowerCase();
+    const rowValue =
+      key === "industry"
+        ? summarizeTargets(row.industryTargets, readTrimmedString(row[key])).toLowerCase()
+        : key === "focus"
+          ? summarizeTargets(row.focusTargets, readTrimmedString(row[key])).toLowerCase()
+          : readTrimmedString(row[key]).toLowerCase();
     if (rowValue !== normalizedFilter.toLowerCase()) {
       return false;
     }
@@ -439,7 +463,7 @@ function SearchableHeader({
  *         __extraLeafFields: Record<string, unknown>
  *       }>
  *     },
- *     taxonomyDocument: Record<string, unknown>|null
+ *     categoryCatalog?: {industryOptions?: string[], focusOptions?: string[]}|null
  *   },
  *   actionData?: {ok?: boolean, error?: {message?: string}|null, saved?: {version?: number|null}|null}|undefined,
  *   isSaving?: boolean
@@ -496,18 +520,10 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
     setFilters({});
     setDraftFilters({});
     setOpenFilterKeys({});
-  }, [categoryDepth, data.description, data.editor, data.editorType, data.id, data.metadata, data.segmentationDefault.rows, data.version]);
+  }, [categoryDepth, data.description, data.editorType, data.id, data.version]);
 
-  const taxonomyOptions = buildTaxonomyOptions(data.taxonomyDocument, rows);
+  const taxonomyOptions = buildTaxonomyOptions(data.categoryCatalog, rows);
   const filteredRows = rows.filter((row) => rowMatchesFilters(row, filters));
-  const selectedSector = readTrimmedString(draftRow.sector);
-  const selectedIndustry = readTrimmedString(draftRow.industry);
-  const industryOptionsForSector = selectedSector ? taxonomyOptions.industriesBySector[selectedSector] || [] : [];
-  const focusOptionsForSelection =
-    selectedSector && selectedIndustry
-      ? taxonomyOptions.focusesBySectorIndustry[`${selectedSector}::${selectedIndustry}`] || []
-      : [];
-
   /**
    * Opens the row modal for the requested row index.
    * @param {number|null} rowIndex
@@ -535,11 +551,17 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
    * Saves the current draft row back into table state.
    */
   function saveDraftRow() {
+    const normalizedDraftRow = cloneSegmentationRows([draftRow], categoryDepth)[0];
+    const primaryIndustry = readTrimmedString(normalizedDraftRow.industryTargets?.[0]?.name);
+    const primaryFocus = readTrimmedString(normalizedDraftRow.focusTargets?.[0]?.name);
+    normalizedDraftRow.industry = primaryIndustry || normalizedDraftRow.industry;
+    normalizedDraftRow.focus = primaryFocus || normalizedDraftRow.focus;
+
     if (editingRowIndex == null) {
-      setRows((currentRows) => [...currentRows, cloneSegmentationRows([draftRow], categoryDepth)[0]]);
+      setRows((currentRows) => [...currentRows, normalizedDraftRow]);
     } else {
       setRows((currentRows) =>
-        currentRows.map((row, index) => (index === editingRowIndex ? cloneSegmentationRows([draftRow], categoryDepth)[0] : row))
+        currentRows.map((row, index) => (index === editingRowIndex ? normalizedDraftRow : row))
       );
     }
 
@@ -572,44 +594,59 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
   }
 
   /**
-   * Updates one SIF field on the draft row.
+   * Updates one segmentation field on the draft row.
    * @param {"description"|"sector"|"industry"|"focus"|"notes"} field
    * @param {string} value
    */
   function updateDraftField(field, value) {
-    setDraftRow((currentRow) => {
-      if (field === "sector") {
-        const nextIndustryOptions = value ? taxonomyOptions.industriesBySector[value] || [] : [];
-        const nextIndustry = nextIndustryOptions.includes(currentRow.industry) ? currentRow.industry : "";
-        const nextFocusOptions =
-          value && nextIndustry ? taxonomyOptions.focusesBySectorIndustry[`${value}::${nextIndustry}`] || [] : [];
-        const nextFocus = nextFocusOptions.includes(currentRow.focus) ? currentRow.focus : "";
+    setDraftRow((currentRow) => ({
+      ...currentRow,
+      [field]: value
+    }));
+  }
 
-        return {
-          ...currentRow,
-          sector: value,
-          industry: nextIndustry,
-          focus: nextFocus
-        };
-      }
+  /**
+   * Updates one scored target row on the current draft.
+   * @param {"industryTargets"|"focusTargets"} field
+   * @param {number} index
+   * @param {"name"|"score"} key
+   * @param {string} value
+   */
+  function updateDraftTarget(field, index, key, value) {
+    setDraftRow((currentRow) => ({
+      ...currentRow,
+      [field]: (Array.isArray(currentRow[field]) ? currentRow[field] : []).map((target, targetIndex) =>
+        targetIndex === index
+          ? {
+              ...target,
+              [key]: value
+            }
+          : target
+      )
+    }));
+  }
 
-      if (field === "industry") {
-        const nextFocusOptions =
-          currentRow.sector && value ? taxonomyOptions.focusesBySectorIndustry[`${currentRow.sector}::${value}`] || [] : [];
-        const nextFocus = nextFocusOptions.includes(currentRow.focus) ? currentRow.focus : "";
+  /**
+   * Appends one scored target row to the draft.
+   * @param {"industryTargets"|"focusTargets"} field
+   */
+  function addDraftTarget(field) {
+    setDraftRow((currentRow) => ({
+      ...currentRow,
+      [field]: [...(Array.isArray(currentRow[field]) ? currentRow[field] : []), buildEmptyTargetRow()]
+    }));
+  }
 
-        return {
-          ...currentRow,
-          industry: value,
-          focus: nextFocus
-        };
-      }
-
-      return {
-        ...currentRow,
-        [field]: value
-      };
-    });
+  /**
+   * Removes one scored target row from the draft.
+   * @param {"industryTargets"|"focusTargets"} field
+   * @param {number} index
+   */
+  function removeDraftTarget(field, index) {
+    setDraftRow((currentRow) => ({
+      ...currentRow,
+      [field]: (Array.isArray(currentRow[field]) ? currentRow[field] : []).filter((_, targetIndex) => targetIndex !== index)
+    }));
   }
 
   /**
@@ -720,7 +757,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
             ) : null}
           </Box>
           <HStack spacing={3} align="center" flexWrap="wrap">
-            <Button variant="link" size="sm" colorScheme="blue" onClick={openMetadataModal}>
+            <Button type="button" variant="link" size="sm" colorScheme="blue" onClick={openMetadataModal}>
               edit metadata
             </Button>
           </HStack>
@@ -824,20 +861,6 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                       ))}
                       <Th position="sticky" top={0} bg="gray.50" zIndex={1} sx={{ borderLeft: "4px double", borderLeftColor: "#CBD5E0" }}>
                         <SearchableHeader
-                          columnKey="sector"
-                          label="Sector"
-                          isOpen={Boolean(openFilterKeys.sector)}
-                          activeValue={filters.sector || ""}
-                          draftValue={draftFilters.sector || ""}
-                          onToggle={() => toggleFilter("sector")}
-                          onDraftChange={(value) => updateDraftFilter("sector", value)}
-                          onApply={(value) => applyFilter("sector", value)}
-                          onClear={() => clearFilter("sector")}
-                          selectOptions={taxonomyOptions.sectorOptions}
-                        />
-                      </Th>
-                      <Th position="sticky" top={0} bg="gray.50" zIndex={1}>
-                        <SearchableHeader
                           columnKey="industry"
                           label="Industry"
                           isOpen={Boolean(openFilterKeys.industry)}
@@ -875,16 +898,20 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                   <Tbody>
                     {filteredRows.length ? (
                       filteredRows.map((row, rowIndex) => (
-                        <Tr key={`${data.id || "segmentation"}-${rowIndex}`}>
+                        <Tr
+                          key={row.rowId || `${data.id || "segmentation"}-${rowIndex}`}
+                          bg={isIncompleteRow(row) ? "red.50" : undefined}
+                        >
                           {data.segmentationDefault.categoryColumns.map((_, categoryIndex) => (
                             <Td key={`${rowIndex}-category-${categoryIndex}`}>{row.categories[categoryIndex] || ""}</Td>
                           ))}
                           {valueColumns.map((column) => (
                             <Td key={`${rowIndex}-${column.key}`}>{readTrimmedString(row[column.key])}</Td>
                           ))}
-                          <Td sx={{ borderLeft: "4px double", borderLeftColor: "#CBD5E0" }}>{row.sector || ""}</Td>
-                          <Td>{row.industry || ""}</Td>
-                          <Td>{row.focus || ""}</Td>
+                          <Td sx={{ borderLeft: "4px double", borderLeftColor: "#CBD5E0" }}>
+                            {summarizeTargets(row.industryTargets, row.industry || "")}
+                          </Td>
+                          <Td>{summarizeTargets(row.focusTargets, row.focus || "")}</Td>
                           <Td>
                             <Tooltip label={row.notes || "No notes"} hasArrow openDelay={200}>
                               <IconButton
@@ -893,9 +920,14 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                                 size="sm"
                                 type="button"
                                 variant="ghost"
-                                colorScheme={row.notes ? "blue" : "gray"}
+                                colorScheme={row.notes ? "blue" : isIncompleteRow(row) ? "red" : "gray"}
                               />
                             </Tooltip>
+                            {isIncompleteRow(row) ? (
+                              <Text mt={1} fontSize="xs" color="red.600">
+                                Incomplete
+                              </Text>
+                            ) : null}
                           </Td>
                           <Td textAlign="right" whiteSpace="nowrap">
                             <IconButton
@@ -932,6 +964,12 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
           <ModalCloseButton />
           <ModalBody pb={6}>
             <VStack align="stretch" spacing={4}>
+              {isIncompleteRow(draftRow) ? (
+                <Alert status="warning" borderRadius="md">
+                  <AlertIcon />
+                  <AlertDescription>This row is incomplete and will be skipped by segmentation until it has Industry or Focus output.</AlertDescription>
+                </Alert>
+              ) : null}
               {data.segmentationDefault.categoryColumns.map((columnLabel, index) => (
                 <FormControl key={`draft-category-${index}`}>
                   <FormLabel>{columnLabel}</FormLabel>
@@ -955,43 +993,73 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
               ))}
 
               <FormControl>
-                <FormLabel>Sector</FormLabel>
-                <Select value={draftRow.sector} onChange={(event) => updateDraftField("sector", event.target.value)} bg="white">
-                  <option value="">Select sector</option>
-                  {taxonomyOptions.sectorOptions.map((option) => (
-                    <option key={`sector-${option}`} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <FormControl>
                 <FormLabel>Industry</FormLabel>
-                <Select
-                  value={draftRow.industry}
-                  onChange={(event) => updateDraftField("industry", event.target.value)}
-                  bg="white"
-                >
-                  <option value="">Select industry</option>
-                  {industryOptionsForSector.map((option) => (
-                    <option key={`industry-${option}`} value={option}>
-                      {option}
-                    </option>
+                <VStack align="stretch" spacing={3}>
+                  {(Array.isArray(draftRow.industryTargets) ? draftRow.industryTargets : []).map((target, index) => (
+                    <HStack key={`industry-target-${index}`} align="start">
+                      <Select
+                        value={target.name}
+                        onChange={(event) => updateDraftTarget("industryTargets", index, "name", event.target.value)}
+                        bg="white"
+                      >
+                        <option value="">Select industry</option>
+                        {taxonomyOptions.industryOptions.map((option) => (
+                          <option key={`industry-${index}-${option}`} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </Select>
+                      <Input
+                        value={target.score}
+                        onChange={(event) => updateDraftTarget("industryTargets", index, "score", event.target.value)}
+                        bg="white"
+                        maxW="100px"
+                        placeholder="Score"
+                      />
+                      <Button type="button" variant="ghost" colorScheme="red" onClick={() => removeDraftTarget("industryTargets", index)}>
+                        Remove
+                      </Button>
+                    </HStack>
                   ))}
-                </Select>
+                  <Button type="button" variant="outline" alignSelf="flex-start" onClick={() => addDraftTarget("industryTargets")}>
+                    Add Industry
+                  </Button>
+                </VStack>
               </FormControl>
 
               <FormControl>
                 <FormLabel>Focus</FormLabel>
-                <Select value={draftRow.focus} onChange={(event) => updateDraftField("focus", event.target.value)} bg="white">
-                  <option value="">Select focus</option>
-                  {focusOptionsForSelection.map((option) => (
-                    <option key={`focus-${option}`} value={option}>
-                      {option}
-                    </option>
+                <VStack align="stretch" spacing={3}>
+                  {(Array.isArray(draftRow.focusTargets) ? draftRow.focusTargets : []).map((target, index) => (
+                    <HStack key={`focus-target-${index}`} align="start">
+                      <Select
+                        value={target.name}
+                        onChange={(event) => updateDraftTarget("focusTargets", index, "name", event.target.value)}
+                        bg="white"
+                      >
+                        <option value="">Select focus</option>
+                        {taxonomyOptions.focusOptions.map((option) => (
+                          <option key={`focus-${index}-${option}`} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </Select>
+                      <Input
+                        value={target.score}
+                        onChange={(event) => updateDraftTarget("focusTargets", index, "score", event.target.value)}
+                        bg="white"
+                        maxW="100px"
+                        placeholder="Score"
+                      />
+                      <Button type="button" variant="ghost" colorScheme="red" onClick={() => removeDraftTarget("focusTargets", index)}>
+                        Remove
+                      </Button>
+                    </HStack>
                   ))}
-                </Select>
+                  <Button type="button" variant="outline" alignSelf="flex-start" onClick={() => addDraftTarget("focusTargets")}>
+                    Add Focus
+                  </Button>
+                </VStack>
               </FormControl>
 
               <FormControl>
@@ -1004,14 +1072,14 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
           <ModalFooter>
             <HStack spacing={3}>
               {editingRowIndex == null ? null : (
-                <Button variant="ghost" colorScheme="red" onClick={deleteDraftRow}>
+                <Button type="button" variant="ghost" colorScheme="red" onClick={deleteDraftRow}>
                   Delete Row
                 </Button>
               )}
-              <Button variant="ghost" onClick={closeRowEditor}>
+              <Button type="button" variant="ghost" onClick={closeRowEditor}>
                 Cancel
               </Button>
-              <Button colorScheme="blue" onClick={saveDraftRow}>
+              <Button type="button" colorScheme="blue" onClick={saveDraftRow}>
                 Apply
               </Button>
             </HStack>
@@ -1053,7 +1121,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
             </VStack>
           </ModalBody>
           <ModalFooter>
-            <Button onClick={closeMetadataModal}>Done</Button>
+            <Button type="button" onClick={closeMetadataModal}>Done</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

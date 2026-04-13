@@ -12,7 +12,11 @@ import {
   Spacer,
   Divider,
   Collapse,
-  Avatar
+  Avatar,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem
 } from "@chakra-ui/react";
 import { Link, NavLink, useFetchers, useLocation, useNavigation } from "@remix-run/react";
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, HamburgerIcon } from "@chakra-ui/icons";
@@ -36,9 +40,8 @@ import {
 import {
   getAppLoadingOverlayState,
   isAdminDataPath
-} from "../models/app-loading-state";
+} from "../models/app-loading-state.mjs";
 import { BlockingLoadingOverlay } from "./BlockingLoadingOverlay";
-import { syncSifTaxonomyToCache } from "../models/sif-taxonomy-cache";
 
 const iconByName = {
   dashboard: MdDashboard,
@@ -59,119 +62,23 @@ const LOGO_PATH = "/assets/2020-ets-horiz-logo-rgb-color-lg.png";
 const HEADER_BG = "#000000";
 const SIDEBAR_EXPANDED_WIDTH = "250px";
 const SIDEBAR_COLLAPSED_WIDTH = "88px";
-const APP_LAYOUT_CSS = `
-  .app-shell-toggle {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .app-shell-sidebar {
-    width: ${SIDEBAR_EXPANDED_WIDTH};
-    transition: width 0.2s ease;
-  }
-
-  .app-shell-account {
-    position: relative;
-  }
-
-  .app-shell-account > summary {
-    list-style: none;
-  }
-
-  .app-shell-account > summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .app-shell-account-menu {
-    display: none;
-    position: absolute;
-    right: 0;
-    top: calc(100% + 0.5rem);
-    width: 260px;
-    background: white;
-    color: #1A202C;
-    border: 1px solid #E2E8F0;
-    border-radius: 0.375rem;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    overflow: hidden;
-    z-index: 1000;
-  }
-
-  .app-shell-account[open] .app-shell-account-menu {
-    display: block;
-  }
-
-  .app-shell-account-row {
-    padding: 0.75rem;
-  }
-
-  .app-shell-account-label {
-    font-size: 0.75rem;
-    color: #718096;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  }
-
-  .app-shell-account-divider {
-    border-top: 1px solid #E2E8F0;
-  }
-
-  .app-shell-account-link {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem;
-    color: inherit;
-    text-decoration: none;
-  }
-
-  .app-shell-account-link:hover {
-    background: #F7FAFC;
-  }
-
-  #app-shell-sidebar-toggle:checked ~ .app-shell-body .app-shell-sidebar {
-    width: ${SIDEBAR_COLLAPSED_WIDTH};
-  }
-
-  #app-shell-sidebar-toggle:checked ~ .app-shell-body .app-shell-sidebar .sidebar-label,
-  #app-shell-sidebar-toggle:checked ~ .app-shell-body .app-shell-sidebar .sidebar-section-toggle,
-  #app-shell-sidebar-toggle:checked ~ .app-shell-body .app-shell-sidebar .sidebar-subnav,
-  #app-shell-sidebar-toggle:checked ~ .app-shell-body .app-shell-sidebar .sidebar-collapse-text,
-  #app-shell-sidebar-toggle:checked ~ .app-shell-body .app-shell-sidebar .sidebar-collapse-left {
-    display: none !important;
-  }
-
-  #app-shell-sidebar-toggle:checked ~ .app-shell-body .app-shell-sidebar .sidebar-nav-link {
-    justify-content: center;
-  }
-
-  #app-shell-sidebar-toggle:checked ~ .app-shell-body .app-shell-sidebar .sidebar-nav-link,
-  #app-shell-sidebar-toggle:checked ~ .app-shell-body .app-shell-sidebar .sidebar-collapse-control {
-    padding-left: 0.75rem;
-    padding-right: 0.75rem;
-  }
-
-  #app-shell-sidebar-toggle:checked ~ .app-shell-body .app-shell-sidebar .sidebar-collapse-control {
-    justify-content: center;
-  }
-
-  #app-shell-sidebar-toggle:not(:checked) ~ .app-shell-body .app-shell-sidebar .sidebar-collapse-right {
-    display: none !important;
-  }
-`;
 
 /**
  * Render one child navigation link.
  * @param {{
  *   item: {label: string, to: string},
  *   pathname: string,
- *   onNavigate?: () => void
+ *   onNavigate?: () => void,
+ *   isCollapsed?: boolean
  * }} props
  * @returns {JSX.Element}
  */
-function SubNavItem({ item, pathname, onNavigate }) {
+function SubNavItem({ item, pathname, onNavigate, isCollapsed = false }) {
   const isActive = isPathWithinItem(item, pathname);
+
+  if (isCollapsed) {
+    return null;
+  }
 
   return (
     <Link
@@ -210,11 +117,12 @@ function SubNavItem({ item, pathname, onNavigate }) {
  *   pathname: string,
  *   expandedItems: Record<string, boolean>,
  *   onToggle: (key: string) => void,
- *   onNavigate?: () => void
+ *   onNavigate?: () => void,
+ *   isCollapsed?: boolean
  * }} props
  * @returns {JSX.Element}
  */
-function NavItem({ item, pathname, expandedItems, onToggle, onNavigate }) {
+function NavItem({ item, pathname, expandedItems, onToggle, onNavigate, isCollapsed = false }) {
   const Icon = iconByName[item.icon];
   const hasChildren = Array.isArray(item.children) && item.children.length > 0;
   const isActive = isNavItemActive(item, pathname);
@@ -223,7 +131,7 @@ function NavItem({ item, pathname, expandedItems, onToggle, onNavigate }) {
     <Flex
       className="sidebar-nav-link"
       align="center"
-      justify="flex-start"
+      justify={isCollapsed ? "center" : "flex-start"}
       px={3}
       py={2}
       gap={3}
@@ -234,9 +142,11 @@ function NavItem({ item, pathname, expandedItems, onToggle, onNavigate }) {
       transition="background 0.2s ease"
     >
       <Icon />
-      <Text className="sidebar-label" fontWeight="medium">
-        {item.label}
-      </Text>
+      {isCollapsed ? null : (
+        <Text className="sidebar-label" fontWeight="medium">
+          {item.label}
+        </Text>
+      )}
     </Flex>
   );
 
@@ -262,6 +172,7 @@ function NavItem({ item, pathname, expandedItems, onToggle, onNavigate }) {
             variant="ghost"
             size="sm"
             alignSelf="center"
+            display={isCollapsed ? "none" : "inline-flex"}
             onClick={() => onToggle(item.key)}
           />
         ) : null}
@@ -270,7 +181,13 @@ function NavItem({ item, pathname, expandedItems, onToggle, onNavigate }) {
         <Collapse in={isExpanded} animateOpacity className="sidebar-subnav">
           <Box pt={1}>
             {item.children.map((child) => (
-              <SubNavItem key={child.key} item={child} pathname={pathname} onNavigate={onNavigate} />
+              <SubNavItem
+                key={child.key}
+                item={child}
+                pathname={pathname}
+                onNavigate={onNavigate}
+                isCollapsed={isCollapsed}
+              />
             ))}
           </Box>
         </Collapse>
@@ -283,11 +200,13 @@ function NavItem({ item, pathname, expandedItems, onToggle, onNavigate }) {
  * Render the collapsible application sidebar.
  * @param {{
  *   meta: object,
- *   onNavigate?: () => void
+ *   onNavigate?: () => void,
+ *   isCollapsed?: boolean,
+ *   onToggleCollapse?: () => void
  * }} props
  * @returns {JSX.Element}
  */
-function SidebarContent({ meta, onNavigate }) {
+function SidebarContent({ meta, onNavigate, isCollapsed = false, onToggleCollapse }) {
   const location = useLocation();
   const navItems = getNavigationItems(meta);
   const [expandedItems, setExpandedItems] = useState(() =>
@@ -338,6 +257,7 @@ function SidebarContent({ meta, onNavigate }) {
               expandedItems={expandedItems}
               onToggle={handleToggle}
               onNavigate={onNavigate}
+              isCollapsed={isCollapsed}
             />
           </Box>
         ))}
@@ -345,24 +265,24 @@ function SidebarContent({ meta, onNavigate }) {
       <Spacer />
       <Divider borderColor={SIDEBAR_BORDER} />
       <HStack
-        as="label"
-        htmlFor="app-shell-sidebar-toggle"
-        className="sidebar-collapse-control"
         px={3}
         py={2}
         borderRadius="md"
-        cursor="pointer"
-        justifyContent="flex-start"
+        justifyContent={isCollapsed ? "center" : "flex-start"}
         spacing={2}
         color={SIDEBAR_TEXT}
         _hover={{ bg: "rgba(255, 255, 255, 0.06)" }}
         transition="background 0.2s ease"
+        as="button"
+        type="button"
+        onClick={onToggleCollapse}
       >
-        <ChevronLeftIcon className="sidebar-collapse-left" />
-        <Text className="sidebar-collapse-text" fontWeight="medium">
-          Collapse sidebar
-        </Text>
-        <ChevronRightIcon className="sidebar-collapse-right" />
+        {isCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+        {isCollapsed ? null : (
+          <Text fontWeight="medium">
+            Collapse sidebar
+          </Text>
+        )}
       </HStack>
     </Flex>
   );
@@ -370,6 +290,7 @@ function SidebarContent({ meta, onNavigate }) {
 
 export function AppLayout({ user, meta, children }) {
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const location = useLocation();
   const navigation = useNavigation();
   const fetchers = useFetchers();
@@ -383,39 +304,8 @@ export function AppLayout({ user, meta, children }) {
   const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() || user?.email || "User";
   const accountMenuLabel = `Open account menu for ${displayName}`;
 
-  useEffect(() => {
-    /**
-     * Keep the SIF taxonomy cached in IndexedDB for reuse across the app.
-     * Failures stay silent because the live routes still load through the BFF.
-     */
-    async function syncNow() {
-      try {
-        await syncSifTaxonomyToCache();
-      } catch (_error) {}
-    }
-
-    void syncNow();
-
-    const intervalId = window.setInterval(() => {
-      void syncNow();
-    }, 15 * 60 * 1000);
-
-    const handleWindowFocus = () => {
-      void syncNow();
-    };
-
-    window.addEventListener("focus", handleWindowFocus);
-
-    return () => {
-      window.clearInterval(intervalId);
-      window.removeEventListener("focus", handleWindowFocus);
-    };
-  }, []);
-
   return (
     <Flex minH="100vh" bg="gray.50" color="gray.900" position="relative" direction="column">
-      <style>{APP_LAYOUT_CSS}</style>
-      <input id="app-shell-sidebar-toggle" className="app-shell-toggle" type="checkbox" />
       <Flex
         as="header"
         align="center"
@@ -446,67 +336,51 @@ export function AppLayout({ user, meta, children }) {
           />
         </Link>
         <Spacer />
-        <Box
-          as="details"
-          className="app-shell-account"
-          sx={{
-            "&[open] summary": {
-              bg: "rgba(255, 255, 255, 0.06)"
-            }
-          }}
-        >
-          <HStack
-            as="summary"
+        <Menu>
+          <MenuButton
+            as={IconButton}
             aria-label={accountMenuLabel}
-            listStyleType="none"
-            px={2}
-            h="40px"
-            minW="40px"
-            borderRadius="full"
+            variant="ghost"
             color={SIDEBAR_TEXT}
-            spacing={2}
-            cursor="pointer"
             _hover={{ bg: "rgba(255, 255, 255, 0.06)" }}
-          >
-            <Avatar size="sm" name={displayName} bg={BRAND_RED} color="white" />
-            <ChevronDownIcon />
-          </HStack>
-          <Box className="app-shell-account-menu">
-            <Box className="app-shell-account-row">
+            icon={<Avatar size="sm" name={displayName} bg={BRAND_RED} color="white" />}
+          />
+          <MenuList>
+            <Box px={3} py={3}>
               <Text fontWeight="semibold">{displayName}</Text>
               {user?.email ? (
                 <Text fontSize="sm" color="gray.600">
                   {user.email}
                 </Text>
               ) : null}
-            </Box>
-            {meta?.personas?.current ? (
-              <Box className="app-shell-account-row">
-                <Text className="app-shell-account-label">
-                  Persona
+              {meta?.personas?.current ? (
+                <Text fontSize="sm" color="gray.600" mt={1}>
+                  Persona: {meta.personas.current}
                 </Text>
-                <Text fontSize="sm">{meta.personas.current}</Text>
-              </Box>
-            ) : null}
-            <Box className="app-shell-account-divider" />
-            <NavLink to="/auth/logout" className="app-shell-account-link">
-              <FiLogOut />
-              <Text fontWeight="medium">Logout</Text>
-            </NavLink>
-          </Box>
-        </Box>
+              ) : null}
+            </Box>
+            <MenuItem as={NavLink} to="/auth/logout" icon={<FiLogOut />}>
+              Logout
+            </MenuItem>
+          </MenuList>
+        </Menu>
       </Flex>
 
       <Flex flex="1" minH="0" className="app-shell-body">
         <Box
-          className="app-shell-sidebar"
           display={{ base: "none", md: "block" }}
           bg={SIDEBAR_BG}
           color={SIDEBAR_TEXT}
           borderRightWidth="1px"
           borderRightColor={SIDEBAR_BORDER}
+          width={isSidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH}
+          transition="width 0.2s ease"
         >
-          <SidebarContent meta={meta} />
+          <SidebarContent
+            meta={meta}
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapse={() => setIsSidebarCollapsed((value) => !value)}
+          />
         </Box>
 
         <Drawer isOpen={isOpen} placement="left" onClose={onClose} size="xs">

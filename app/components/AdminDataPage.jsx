@@ -11,6 +11,9 @@ import {
   Heading,
   HStack,
   Input,
+  InputGroup,
+  InputLeftElement,
+  Select,
   Table,
   Tbody,
   Td,
@@ -21,8 +24,14 @@ import {
   Tr,
   VStack
 } from "@chakra-ui/react";
+import { SearchIcon } from "@chakra-ui/icons";
 import { Form, Link } from "@remix-run/react";
 import { useEffect, useState } from "react";
+import {
+  filterAdminDataItems,
+  listAdminDataTypes,
+  sortAdminDataItems
+} from "../models/admin-data-list.mjs";
 
 /**
  * Builds the route pathname for one admin data record.
@@ -106,21 +115,36 @@ function AdminDataPageHeader({ title, description, children }) {
  * @param {{
  *   items: Array<{
  *     id: string|null,
+ *     type: string|null,
  *     name: string,
  *     description: string,
  *     lastmodifieddate: string|null,
  *     lastmodifiedby: string|null
  *   }>,
+ *   selectedType?: string,
+ *   searchQuery?: string,
  *   error?: {message?: string}|null
  * }} props
  * @returns {JSX.Element}
  */
-export function AdminDataListPage({ items, error }) {
+export function AdminDataListPage({
+  items,
+  selectedType = "",
+  searchQuery = "",
+  error
+}) {
+  const sortedItems = sortAdminDataItems(items);
+  const filteredItems = filterAdminDataItems(sortedItems, {
+    type: selectedType,
+    query: searchQuery
+  });
+  const knownTypes = listAdminDataTypes(items);
+
   return (
     <Box bg="white" h="100%" minH="0" display="flex" flexDirection="column">
       <AdminDataPageHeader
         title="Data"
-        description="Browse shared admin data sets and open one in the full-page editor."
+        description="Browse shared admin data sets, filter by type, and open one in the full-page editor."
       />
 
       <Box px={{ base: 4, md: 6 }} py={{ base: 4, md: 5 }} flex="1" minH="0" display="flex" flexDirection="column">
@@ -131,12 +155,49 @@ export function AdminDataListPage({ items, error }) {
           </Alert>
         ) : null}
 
-        {items.length ? (
+        <Box as={Form} method="get" mb={4}>
+          <HStack align="end" spacing={3} flexWrap="wrap">
+            <FormControl maxW={{ base: "100%", md: "360px" }}>
+              <FormLabel mb={2}>Filter</FormLabel>
+              <InputGroup>
+                <InputLeftElement pointerEvents="none">
+                  <SearchIcon color="gray.400" />
+                </InputLeftElement>
+                <Input
+                  name="q"
+                  placeholder="Filter by name, description, key, or type"
+                  defaultValue={searchQuery}
+                />
+              </InputGroup>
+            </FormControl>
+
+            <FormControl maxW={{ base: "100%", md: "260px" }}>
+              <FormLabel mb={2}>Type</FormLabel>
+              <Select name="type" defaultValue={selectedType || ""}>
+                <option value="">All Types</option>
+                {knownTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </Select>
+            </FormControl>
+
+            <Button type="submit" colorScheme="blue">
+              Apply
+            </Button>
+          </HStack>
+        </Box>
+
+        {filteredItems.length ? (
           <Box borderWidth="1px" borderColor="gray.200" borderRadius="md" overflow="hidden" flex="1" minH="0">
             <Box h="100%" overflow="auto">
               <Table size="sm" variant="simple">
                 <Thead bg="gray.50">
                   <Tr>
+                    <Th position="sticky" top={0} bg="gray.50" zIndex={1}>
+                      Type
+                    </Th>
                     <Th position="sticky" top={0} bg="gray.50" zIndex={1}>
                       Name
                     </Th>
@@ -146,14 +207,22 @@ export function AdminDataListPage({ items, error }) {
                     <Th position="sticky" top={0} bg="gray.50" zIndex={1}>
                       Modified
                     </Th>
+                    <Th position="sticky" top={0} bg="gray.50" zIndex={1}>
+                      Edit
+                    </Th>
                   </Tr>
                 </Thead>
                 <Tbody>
-                  {items.map((item) => {
+                  {filteredItems.map((item) => {
                     const itemPath = buildAdminDataPath(item.id);
 
                     return (
                       <Tr key={item.id || item.name} _hover={{ bg: item.id ? "gray.50" : "transparent" }}>
+                        <Td verticalAlign="top">
+                          <Text color={item.type ? "gray.800" : "gray.400"} fontSize="sm">
+                            {item.type || "Unknown"}
+                          </Text>
+                        </Td>
                         <Td verticalAlign="top">
                           {item.id ? (
                             <Link
@@ -184,6 +253,15 @@ export function AdminDataListPage({ items, error }) {
                             {item.lastmodifiedby || "Unknown"}
                           </Text>
                         </Td>
+                        <Td verticalAlign="top">
+                          {item.id ? (
+                            <Button as={Link} to={itemPath} size="sm" colorScheme="blue" variant="outline">
+                              Edit
+                            </Button>
+                          ) : (
+                            <Text color="gray.400">Unavailable</Text>
+                          )}
+                        </Td>
                       </Tr>
                     );
                   })}
@@ -192,7 +270,9 @@ export function AdminDataListPage({ items, error }) {
             </Box>
           </Box>
         ) : (
-          <Text color="gray.600">No admin data sets were returned.</Text>
+          <Text color="gray.600">
+            {items.length ? "No admin data sets matched the current filter." : "No admin data sets were returned."}
+          </Text>
         )}
       </Box>
     </Box>
