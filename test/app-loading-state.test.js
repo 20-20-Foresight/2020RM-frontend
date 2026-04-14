@@ -146,6 +146,27 @@ test("loading overlay preserves saving copy for admin data submissions", () => {
   );
 });
 
+test("loading overlay ignores inline fetcher saves on the current admin data page", () => {
+  assert.deepEqual(
+    getAppLoadingOverlayState({
+      currentPathname: "/admin/data/crm.data%3Abiscred",
+      navigationState: "idle",
+      fetchers: [
+        {
+          state: "submitting",
+          formMethod: "post",
+          formAction: "/admin/data/crm.data%3Abiscred"
+        }
+      ]
+    }),
+    {
+      isLoading: false,
+      isSubmitting: false,
+      label: null
+    }
+  );
+});
+
 test("loading overlay uses segmentation-specific copy for segmentation navigations and saves", () => {
   assert.deepEqual(
     getAppLoadingOverlayState({

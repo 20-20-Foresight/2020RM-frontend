@@ -49,17 +49,46 @@ export function getEntityDetailTypeFromPath(pathname) {
 }
 
 /**
+ * Returns whether one fetcher is an inline background save for the current route.
+ * @param {{state?: string, formMethod?: string, formAction?: string|null}} fetcher
+ * @param {string} currentPathname
+ * @returns {boolean}
+ */
+function isInlineCurrentRouteSaveFetcher(fetcher, currentPathname) {
+  const formMethod = typeof fetcher?.formMethod === "string" ? fetcher.formMethod.toLowerCase() : "";
+  const formAction = typeof fetcher?.formAction === "string" ? fetcher.formAction : "";
+  const formActionPathname = formAction ? new URL(formAction, "http://localhost").pathname : "";
+
+  if (fetcher?.state === "idle" || formMethod !== "post") {
+    return false;
+  }
+
+  if (formActionPathname !== currentPathname) {
+    return false;
+  }
+
+  return isAdminDataPath(currentPathname) || isSegmentationPath(currentPathname);
+}
+
+/**
  * Returns the best loading label for the current navigation state.
  * @param {{
  *   currentPathname: string,
  *   navigationState: string,
  *   navigationPathname?: string|null,
+ *   fetchers?: Array<{state?: string, formMethod?: string, formAction?: string|null}>,
  *   fetcherStates?: string[]
  * }} options
  * @returns {{isLoading: boolean, isSubmitting: boolean, label: string|null}}
  */
 export function getAppLoadingOverlayState(options) {
-  const fetcherStates = Array.isArray(options.fetcherStates) ? options.fetcherStates : [];
+  const rawFetchers = Array.isArray(options.fetchers)
+    ? options.fetchers
+    : Array.isArray(options.fetcherStates)
+      ? options.fetcherStates.map((state) => ({ state }))
+      : [];
+  const fetchers = rawFetchers.filter((fetcher) => !isInlineCurrentRouteSaveFetcher(fetcher, options.currentPathname));
+  const fetcherStates = fetchers.map((fetcher) => fetcher.state);
   const hasActiveFetchers = fetcherStates.some((state) => state !== "idle");
   const isLoading = options.navigationState !== "idle" || hasActiveFetchers;
 

@@ -299,7 +299,11 @@ export function AppLayout({ user, meta, children }) {
     currentPathname: location.pathname,
     navigationState: navigation.state,
     navigationPathname: navigation.location?.pathname || null,
-    fetcherStates: fetchers.map((fetcher) => fetcher.state)
+    fetchers: fetchers.map((fetcher) => ({
+      state: fetcher.state,
+      formMethod: fetcher.formMethod || "",
+      formAction: fetcher.formAction || null
+    }))
   });
   const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() || user?.email || "User";
   const accountMenuLabel = `Open account menu for ${displayName}`;

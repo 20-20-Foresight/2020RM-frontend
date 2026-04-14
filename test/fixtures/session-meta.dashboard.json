@@ -1,0 +1,34 @@
+{
+  "user": {
+    "firstName": "Dan",
+    "lastName": "Morgan",
+    "email": "dan@example.com"
+  },
+  "blocked": false,
+  "blockers": [],
+  "personas": {
+    "allowed": ["Admin"],
+    "current": "Admin",
+    "default": "Admin"
+  },
+  "permissions": {
+    "entity_access": {
+      "organization": ["read"],
+      "person": ["read"],
+      "job": ["read"]
+    },
+    "options_access": {},
+    "admin_access": {
+      "system": ["access_control", "object_editing"]
+    }
+  },
+  "links": {
+    "localPersonId": "person-1",
+    "rpcPersonId": null
+  },
+  "ghost": {
+    "active": false,
+    "actorUserId": null,
+    "effectiveUserId": null
+  }
+}

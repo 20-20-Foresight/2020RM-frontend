@@ -32,8 +32,11 @@ import {
   VStack
 } from "@chakra-ui/react";
 import { ArrowDownIcon, ArrowUpIcon, EditIcon } from "@chakra-ui/icons";
-import { Form } from "@remix-run/react";
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "@remix-run/react";
+import { InlineSaveStatus } from "./InlineSaveStatus";
+import { useQueuedDocumentSave } from "../hooks/useQueuedDocumentSave";
+import { useRowSaveHighlight } from "../hooks/useRowSaveHighlight";
 
 function readTrimmedString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -67,27 +70,12 @@ function buildEmptyRow(defaultDimensionId = "") {
   };
 }
 
-function formatTimestamp(value) {
-  if (!value) {
-    return "Unknown";
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short"
-  }).format(date);
-}
-
 function isRetiredRow(row) {
   return Boolean(readTrimmedString(row?.deletedOn));
 }
 
 export function CategoryEditorPage({ data, actionData, isSaving = false }) {
+  const location = useLocation();
   const supportsPreference = data.categoryEditor.supportsPreference === true;
   const defaultDimensionId = data.dimensionCatalog[0]?.id || "";
   const [metadata, setMetadata] = useState(() => (data.metadata && typeof data.metadata === "object" ? { ...data.metadata } : {}));
@@ -97,6 +85,56 @@ export function CategoryEditorPage({ data, actionData, isSaving = false }) {
   const [editingRowIndex, setEditingRowIndex] = useState(null);
   const [draftRow, setDraftRow] = useState(() => buildEmptyRow(defaultDimensionId));
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const {
+    saveSummary,
+    isSaving: isQueuedSaving,
+    savedVisible,
+    saveError,
+    requestSave
+  } = useQueuedDocumentSave({
+    pathname: location.pathname,
+    initialSummary: data,
+    buildFormData(summary) {
+      const formData = new FormData();
+      formData.set("customDocumentType", "categories");
+      formData.set("description", description);
+      formData.set("metadata", JSON.stringify(metadata));
+      formData.set("expectedVersion", summary.version == null ? "" : String(summary.version));
+      formData.set("document", JSON.stringify(data.document ?? null));
+      formData.set("categoryRows", JSON.stringify(rows));
+      formData.set("supportsPreference", supportsPreference ? "true" : "");
+      formData.set("editor", JSON.stringify(data.editor ?? null));
+      return formData;
+    }
+  });
+  const { rowHighlightStateByKey, markRowsChanged } = useRowSaveHighlight({
+    isSaving: isQueuedSaving,
+    savedVisible,
+    saveErrorMessage: saveError?.message || actionData?.error?.message || null
+  });
+
+  /**
+   * Builds one background save payload for the current editor state.
+   * @param {{
+   *   summary: {version: number|null},
+   *   nextRows?: unknown[],
+   *   nextDescription?: string,
+   *   nextMetadata?: Record<string, unknown>
+   * }} options
+   * @returns {FormData}
+   */
+  function buildSaveFormData({ summary, nextRows = rows, nextDescription = description, nextMetadata = metadata }) {
+    const formData = new FormData();
+    formData.set("customDocumentType", "categories");
+    formData.set("description", nextDescription);
+    formData.set("metadata", JSON.stringify(nextMetadata));
+    formData.set("expectedVersion", summary.version == null ? "" : String(summary.version));
+    formData.set("document", JSON.stringify(data.document ?? null));
+    formData.set("categoryRows", JSON.stringify(nextRows));
+    formData.set("supportsPreference", supportsPreference ? "true" : "");
+    formData.set("editor", JSON.stringify(data.editor ?? null));
+    return formData;
+  }
 
   useEffect(() => {
     setMetadata(data.metadata && typeof data.metadata === "object" ? { ...data.metadata } : {});
@@ -124,50 +162,75 @@ export function CategoryEditorPage({ data, actionData, isSaving = false }) {
 
   function saveDraftRow() {
     const nextRow = cloneRows([draftRow])[0];
-    if (editingRowIndex == null) {
-      setRows((currentRows) => [...currentRows, nextRow]);
-    } else {
-      setRows((currentRows) => currentRows.map((row, index) => (index === editingRowIndex ? nextRow : row)));
-    }
+    const nextRows =
+      editingRowIndex == null
+        ? [...rows, nextRow]
+        : rows.map((row, index) => (index === editingRowIndex ? nextRow : row));
+
+    setRows(nextRows);
+    markRowsChanged([editingRowIndex == null ? nextRows.length - 1 : editingRowIndex]);
+    requestSave((summary) =>
+      buildSaveFormData({
+        summary,
+        nextRows
+      })
+    );
     closeEditor();
   }
 
   function moveRow(rowIndex, direction) {
-    setRows((currentRows) => {
-      const nextRows = currentRows.slice();
-      const targetIndex = direction === "up" ? rowIndex - 1 : rowIndex + 1;
-      if (targetIndex < 0 || targetIndex >= nextRows.length) {
-        return currentRows;
-      }
-      const [movedRow] = nextRows.splice(rowIndex, 1);
-      nextRows.splice(targetIndex, 0, movedRow);
-      return nextRows;
-    });
+    const nextRows = rows.slice();
+    const targetIndex = direction === "up" ? rowIndex - 1 : rowIndex + 1;
+    if (targetIndex < 0 || targetIndex >= nextRows.length) {
+      return;
+    }
+    const [movedRow] = nextRows.splice(rowIndex, 1);
+    nextRows.splice(targetIndex, 0, movedRow);
+    setRows(nextRows);
+    markRowsChanged([targetIndex]);
+    requestSave((summary) =>
+      buildSaveFormData({
+        summary,
+        nextRows
+      })
+    );
   }
 
   function retireRow(rowIndex) {
-    setRows((currentRows) =>
-      currentRows.map((row, index) =>
-        index === rowIndex
-          ? {
-              ...row,
-              deletedOn: row.deletedOn || new Date().toISOString()
-            }
-          : row
-      )
+    const nextRows = rows.map((row, index) =>
+      index === rowIndex
+        ? {
+            ...row,
+            deletedOn: row.deletedOn || new Date().toISOString()
+          }
+        : row
+    );
+    setRows(nextRows);
+    markRowsChanged([rowIndex]);
+    requestSave((summary) =>
+      buildSaveFormData({
+        summary,
+        nextRows
+      })
     );
   }
 
   function restoreRow(rowIndex) {
-    setRows((currentRows) =>
-      currentRows.map((row, index) =>
-        index === rowIndex
-          ? {
-              ...row,
-              deletedOn: ""
-            }
-          : row
-      )
+    const nextRows = rows.map((row, index) =>
+      index === rowIndex
+        ? {
+            ...row,
+            deletedOn: ""
+          }
+        : row
+    );
+    setRows(nextRows);
+    markRowsChanged([rowIndex]);
+    requestSave((summary) =>
+      buildSaveFormData({
+        summary,
+        nextRows
+      })
     );
   }
 
@@ -193,34 +256,25 @@ export function CategoryEditorPage({ data, actionData, isSaving = false }) {
         <Flex justify="space-between" align={{ base: "start", md: "center" }} gap={4} wrap="wrap">
           <Box>
             <Heading size="md">{displayName}</Heading>
-            {data.lastmodifiedby ? (
-              <Text color="gray.600" mt={2}>
-                {`Last modified ${formatTimestamp(data.lastmodifieddate)} by ${data.lastmodifiedby}`}
-              </Text>
-            ) : null}
+            <InlineSaveStatus
+              isSaving={isQueuedSaving}
+              savedVisible={savedVisible}
+              lastmodifieddate={saveSummary.lastmodifieddate || data.lastmodifieddate}
+              lastmodifiedby={saveSummary.lastmodifiedby || data.lastmodifiedby}
+            />
           </Box>
         </Flex>
       </Box>
 
       <Box px={{ base: 4, md: 6 }} py={{ base: 4, md: 5 }} flex="1" minH="0" display="flex" flexDirection="column">
-        {actionData?.error?.message ? (
+        {saveError?.message || actionData?.error?.message ? (
           <Alert status="error" borderRadius="md" mb={4}>
             <AlertIcon />
-            <AlertDescription>{actionData.error.message}</AlertDescription>
+            <AlertDescription>{saveError?.message || actionData.error.message}</AlertDescription>
           </Alert>
         ) : null}
 
-        {actionData?.ok ? (
-          <Alert status="success" borderRadius="md" mb={4}>
-            <AlertIcon />
-            <AlertDescription>
-              Saved version {actionData.saved?.version != null ? actionData.saved.version : "updated"} successfully.
-            </AlertDescription>
-          </Alert>
-        ) : null}
-
-        <Form
-          method="post"
+        <Box
           style={{
             display: "flex",
             flexDirection: "column",
@@ -228,15 +282,6 @@ export function CategoryEditorPage({ data, actionData, isSaving = false }) {
             minHeight: 0
           }}
         >
-          <input type="hidden" name="customDocumentType" value="categories" />
-          <input type="hidden" name="description" value={description} />
-          <input type="hidden" name="metadata" value={JSON.stringify(metadata)} />
-          <input type="hidden" name="expectedVersion" value={data.version == null ? "" : String(data.version)} />
-          <input type="hidden" name="document" value={JSON.stringify(data.document ?? null)} />
-          <input type="hidden" name="categoryRows" value={JSON.stringify(rows)} />
-          <input type="hidden" name="supportsPreference" value={supportsPreference ? "true" : ""} />
-          <input type="hidden" name="editor" value={JSON.stringify(data.editor ?? null)} />
-
           <VStack align="stretch" spacing={4} h="100%" minH="0">
             {description ? (
               <Box borderWidth="1px" borderColor="gray.200" borderRadius="md" bg="gray.50" px={4} py={3}>
@@ -253,9 +298,6 @@ export function CategoryEditorPage({ data, actionData, isSaving = false }) {
               <HStack spacing={3}>
                 <Button type="button" variant="outline" onClick={() => openEditor(null)}>
                   Add Value
-                </Button>
-                <Button type="submit" colorScheme="blue" isLoading={isSaving} loadingText="Saving">
-                  Save Changes
                 </Button>
               </HStack>
             </Flex>
@@ -282,7 +324,19 @@ export function CategoryEditorPage({ data, actionData, isSaving = false }) {
                         const dimensionLabel = data.dimensionCatalog.find((item) => item.id === row.dimensionId)?.label || row.dimensionId;
 
                         return (
-                          <Tr key={row.id || `category-row-${rowIndex}`} bg={retired ? "gray.50" : undefined}>
+                          <Tr
+                            key={row.id || `category-row-${rowIndex}`}
+                            bg={
+                              rowHighlightStateByKey[String(rowIndex)] === "saving"
+                                ? "blue.50"
+                                : rowHighlightStateByKey[String(rowIndex)] === "saved"
+                                  ? "green.50"
+                                  : retired
+                                    ? "gray.50"
+                                    : undefined
+                            }
+                            transition="background-color 0.35s ease"
+                          >
                             <Td>{row.label}</Td>
                             <Td>{dimensionLabel || ""}</Td>
                             {supportsPreference ? <Td>{retired ? "" : row.preference || ""}</Td> : null}
@@ -344,7 +398,7 @@ export function CategoryEditorPage({ data, actionData, isSaving = false }) {
               </Box>
             </Box>
           </VStack>
-        </Form>
+        </Box>
       </Box>
 
       <Modal isOpen={isOpen} onClose={closeEditor} size="3xl" scrollBehavior="inside">
@@ -385,7 +439,7 @@ export function CategoryEditorPage({ data, actionData, isSaving = false }) {
                 Cancel
               </Button>
               <Button colorScheme="blue" onClick={saveDraftRow}>
-                Apply
+                Save
               </Button>
             </HStack>
           </ModalFooter>

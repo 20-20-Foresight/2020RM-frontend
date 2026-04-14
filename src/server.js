@@ -28,6 +28,7 @@ const app = createApp(config, (req, res, next) => {
   })(req, res, next);
 });
 
+app.use(express.static(config.publicDir, { maxAge: "1h" }));
 app.use("/build", express.static(path.resolve(__dirname, "../public/build"), { immutable: true, maxAge: "1y" }));
 
 app.listen(config.port, () => {

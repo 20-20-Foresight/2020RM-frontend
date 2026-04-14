@@ -1,0 +1,32 @@
+{
+  "crm.data:nicknames": {
+    "data": {
+      "id": "crm.data:nicknames",
+      "namespace": "crm.data",
+      "key": "nicknames",
+      "type": "crosswalk",
+      "name": "Nicknames",
+      "description": "Nickname crosswalk for person matching",
+      "shape": "crosswalk",
+      "version": 4,
+      "lastmodifieddate": "2026-03-23T12:30:00.000Z",
+      "lastmodifiedby": "admin@example.com",
+      "document": {
+        "crosswalk": {
+          "bob": {
+            "values": ["robert"]
+          }
+        }
+      },
+      "editor": {
+        "columns": ["source", "target"],
+        "rows": [
+          {
+            "source": "bob",
+            "target": "robert"
+          }
+        ]
+      }
+    }
+  }
+}

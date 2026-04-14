@@ -6,13 +6,6 @@ import { CategoryEditorPage } from "../components/CategoryEditorPage";
 import { DimensionDefinitionEditorPage } from "../components/DimensionDefinitionEditorPage";
 import { SegmentationDefaultEditorPage } from "../components/SegmentationDefaultEditorPage";
 import {
-  AdminDataApiError,
-  loadRawAdminDataDocument,
-  loadAdminDataDocument,
-  saveAdminDataDocument,
-  saveRawAdminDataDocument
-} from "../models/admin-data.server";
-import {
   buildDimensionDefinitionDocument,
   buildDimensionDefinitionViewModel
 } from "../models/dimension-definition-document.mjs";
@@ -20,8 +13,6 @@ import {
   buildCategoryDocument,
   buildCategoryViewModel
 } from "../models/segmentation-category-document.mjs";
-import { loadSegmentationCategoryCatalog } from "../models/segmentation-category-catalog.server";
-import { loadSegmentationDimensionCatalog } from "../models/segmentation-dimension-catalog.server";
 import {
   buildSegmentationDefaultDocument,
   buildSegmentationDefaultViewModel,
@@ -94,8 +85,36 @@ function parseJsonField(formData, name, fallback) {
   }
 }
 
+/**
+ * Loads the admin-data server module without pulling it into the browser route chunk.
+ * @returns {Promise<import("../models/admin-data.server.js")>}
+ */
+async function loadAdminDataServerModule() {
+  const module = await import("../models/admin-data.server.js");
+  return module.default || module;
+}
+
+/**
+ * Loads the segmentation category catalog server module on the server only.
+ * @returns {Promise<import("../models/segmentation-category-catalog.server.js")>}
+ */
+async function loadSegmentationCategoryCatalogModule() {
+  const module = await import("../models/segmentation-category-catalog.server.js");
+  return module.default || module;
+}
+
+/**
+ * Loads the segmentation dimension catalog server module on the server only.
+ * @returns {Promise<import("../models/segmentation-dimension-catalog.server.js")>}
+ */
+async function loadSegmentationDimensionCatalogModule() {
+  const module = await import("../models/segmentation-dimension-catalog.server.js");
+  return module.default || module;
+}
+
 export async function loader({ request, params }) {
   const id = typeof params.dataId === "string" ? params.dataId : "";
+  const { loadRawAdminDataDocument, loadAdminDataDocument } = await loadAdminDataServerModule();
 
   try {
     const rawData = await loadRawAdminDataDocument({
@@ -119,6 +138,7 @@ export async function loader({ request, params }) {
 
     if (documentType === "categories") {
       const supportsPreference = String(rawData.name || "").trim().toLowerCase() === "industry";
+      const { loadSegmentationDimensionCatalog } = await loadSegmentationDimensionCatalogModule();
       const dimensionCatalog = await loadSegmentationDimensionCatalog({
         request
       });
@@ -140,6 +160,7 @@ export async function loader({ request, params }) {
     }
 
     if (CUSTOM_SEGMENTATION_EDITOR_TYPES.has(editorType)) {
+      const { loadSegmentationCategoryCatalog } = await loadSegmentationCategoryCatalogModule();
       const categoryCatalog = await loadSegmentationCategoryCatalog({
         request
       });
@@ -168,7 +189,7 @@ export async function loader({ request, params }) {
       error: null
     });
   } catch (error) {
-    const status = error instanceof AdminDataApiError ? error.statusCode : 500;
+    const status = error?.name === "AdminDataApiError" ? error.statusCode : 500;
 
     return json(
       {
@@ -184,6 +205,7 @@ export async function loader({ request, params }) {
 
 export async function action({ request, params }) {
   const id = typeof params.dataId === "string" ? params.dataId : "";
+  const { saveAdminDataDocument, saveRawAdminDataDocument } = await loadAdminDataServerModule();
   const formData = await request.formData();
   const description = readFormString(formData, "description");
   const editorType = readFormString(formData, "editorType").trim();
@@ -284,7 +306,7 @@ export async function action({ request, params }) {
       error: null
     });
   } catch (error) {
-    const status = error instanceof AdminDataApiError ? error.statusCode : 500;
+    const status = error?.name === "AdminDataApiError" ? error.statusCode : 500;
 
     return json(
       {

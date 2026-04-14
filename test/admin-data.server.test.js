@@ -1,13 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-
 const {
-  loadAdminDataList,
+  buildDocumentFromEditor,
   loadAdminDataDocument,
   loadRawAdminDataDocument,
-  saveAdminDataDocument,
-  saveRawAdminDataDocument,
-  buildDocumentFromEditor
+  loadAdminDataList
 } = require("../app/models/admin-data.server");
 
 test("admin data list loader calls the normalized admin data REST route", async () => {
@@ -512,6 +509,7 @@ test("buildDocumentFromEditor preserves one-property wrappers for list and keyva
 });
 
 test("admin data save calls the normalized admin data save route with the rebuilt document and editor payload", async () => {
+  const { saveAdminDataDocument } = require("../app/models/admin-data.server");
   const calls = [];
   const saved = await saveAdminDataDocument({
     request: new Request("http://localhost:3000/admin/data/crm.data%3Anicknames", {
@@ -613,6 +611,7 @@ test("admin data save calls the normalized admin data save route with the rebuil
 });
 
 test("admin data save surfaces handled upstream errors with status information", async () => {
+  const { saveAdminDataDocument } = require("../app/models/admin-data.server");
   await assert.rejects(
     () =>
       saveAdminDataDocument({
@@ -649,6 +648,7 @@ test("admin data save surfaces handled upstream errors with status information",
 });
 
 test("raw admin data save forwards editor metadata without rebuilding the document", async () => {
+  const { saveRawAdminDataDocument } = require("../app/models/admin-data.server");
   const calls = [];
 
   await saveRawAdminDataDocument({

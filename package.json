@@ -11,7 +11,10 @@
     "dev:server": "NODE_ENV=development node src/server.js",
     "build": "remix build",
     "start": "NODE_ENV=production node src/server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:update": "playwright test --update-snapshots"
   },
   "dependencies": {
     "@20-20-Foresight/base": "^0.1.10",
@@ -34,6 +37,7 @@
     "react-icons": "^5.2.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@remix-run/dev": "^2.7.2"
   }
 }

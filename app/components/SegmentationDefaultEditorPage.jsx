@@ -35,10 +35,13 @@ import {
   VStack
 } from "@chakra-ui/react";
 import { EditIcon, SearchIcon } from "@chakra-ui/icons";
-import { Form, useSubmit } from "@remix-run/react";
+import { useLocation } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { MdDescription } from "react-icons/md";
-import { buildSegmentationDefaultSubmitFormData } from "../models/segmentation-default-submit";
+import { buildSegmentationDefaultSubmitFormData } from "../models/segmentation-default-submit.mjs";
+import { InlineSaveStatus } from "./InlineSaveStatus";
+import { useQueuedDocumentSave } from "../hooks/useQueuedDocumentSave";
+import { useRowSaveHighlight } from "../hooks/useRowSaveHighlight";
 
 /**
  * Returns whether a value is a plain object.
@@ -134,27 +137,6 @@ function isIncompleteRow(row) {
   const hasIndustry = cloneTargetRows(row?.industryTargets).some((target) => readTrimmedString(target.name));
   const hasFocus = cloneTargetRows(row?.focusTargets).some((target) => readTrimmedString(target.name));
   return !hasIndustry && !hasFocus;
-}
-
-/**
- * Formats a timestamp for the editor header.
- * @param {string|null|undefined} value
- * @returns {string}
- */
-function formatTimestamp(value) {
-  if (!value) {
-    return "Unknown";
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short"
-  }).format(date);
 }
 
 /**
@@ -472,7 +454,7 @@ function SearchableHeader({
  * @returns {JSX.Element}
  */
 export function SegmentationDefaultEditorPage({ data, actionData, isSaving = false }) {
-  const submit = useSubmit();
+  const location = useLocation();
   const categoryDepth = data.segmentationDefault.categoryColumns.length;
   const defaultBranchFieldNames = Array.isArray(data.segmentationDefault.categoryFieldNames)
     ? data.segmentationDefault.categoryFieldNames
@@ -505,6 +487,38 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
     onOpen: openMetadataModal,
     onClose: closeMetadataModal
   } = useDisclosure();
+  const {
+    saveSummary,
+    isSaving: isQueuedSaving,
+    savedVisible,
+    saveError,
+    requestSave
+  } = useQueuedDocumentSave({
+    pathname: location.pathname,
+    initialSummary: data,
+    buildFormData(summary) {
+      return buildSegmentationDefaultSubmitFormData({
+        data: {
+          ...data,
+          version: summary.version,
+          document: data.document ?? null,
+          segmentationDefault: {
+            ...data.segmentationDefault,
+            rows
+          }
+        },
+        description,
+        metadata,
+        editorConfig,
+        rows
+      });
+    }
+  });
+  const { rowHighlightStateByKey, markRowsChanged } = useRowSaveHighlight({
+    isSaving: isQueuedSaving,
+    savedVisible,
+    saveErrorMessage: saveError?.message || actionData?.error?.message || null
+  });
 
   useEffect(() => {
     setMetadata(isPlainObject(data.metadata) ? { ...data.metadata } : {});
@@ -528,20 +542,37 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
   const filteredRows = rows.filter((row) => rowMatchesFilters(row, filters));
 
   /**
-   * Persists the full document with the supplied overrides.
-   * @param {{description?: string, metadata?: Record<string, unknown>, editorConfig?: Record<string, unknown>, rows?: unknown[]}} [overrides]
+   * Builds one queued-save payload for the current editor state.
+   * @param {{
+   *   summary: {version: number|null},
+   *   nextDescription?: string,
+   *   nextMetadata?: Record<string, unknown>,
+   *   nextEditorConfig?: Record<string, unknown>,
+   *   nextRows?: unknown[]
+   * }} [overrides]
+   * @returns {FormData}
    */
-  function submitDocument(overrides = {}) {
-    const formData = buildSegmentationDefaultSubmitFormData({
-      data,
-      description: overrides.description ?? description,
-      metadata: overrides.metadata ?? metadata,
-      editorConfig: overrides.editorConfig ?? editorConfig,
-      rows: overrides.rows ?? rows
-    });
-
-    submit(formData, {
-      method: "post"
+  function buildSaveFormData({
+    summary,
+    nextDescription = description,
+    nextMetadata = metadata,
+    nextEditorConfig = editorConfig,
+    nextRows = rows
+  }) {
+    return buildSegmentationDefaultSubmitFormData({
+      data: {
+        ...data,
+        version: summary.version,
+        document: data.document ?? null,
+        segmentationDefault: {
+          ...data.segmentationDefault,
+          rows: nextRows
+        }
+      },
+      description: nextDescription,
+      metadata: nextMetadata,
+      editorConfig: nextEditorConfig,
+      rows: nextRows
     });
   }
   /**
@@ -583,10 +614,14 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
         : rows.map((row, index) => (index === editingRowIndex ? normalizedDraftRow : row));
 
     setRows(nextRows);
+    markRowsChanged([editingRowIndex == null ? nextRows.length - 1 : editingRowIndex]);
     closeRowEditor();
-    submitDocument({
-      rows: nextRows
-    });
+    requestSave((summary) =>
+      buildSaveFormData({
+        summary,
+        nextRows
+      })
+    );
   }
 
   /**
@@ -601,9 +636,12 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
     const nextRows = rows.filter((_, index) => index !== editingRowIndex);
     setRows(nextRows);
     closeRowEditor();
-    submitDocument({
-      rows: nextRows
-    });
+    requestSave((summary) =>
+      buildSaveFormData({
+        summary,
+        nextRows
+      })
+    );
   }
 
   /**
@@ -769,7 +807,11 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
    * Persists metadata edits and closes the metadata modal.
    */
   function saveMetadataChanges() {
-    submitDocument();
+    requestSave((summary) =>
+      buildSaveFormData({
+        summary
+      })
+    );
     closeMetadataModal();
   }
 
@@ -783,11 +825,12 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
         <Flex justify="space-between" align={{ base: "start", md: "center" }} gap={4} wrap="wrap">
           <Box>
             <Heading size="md">{displayName}</Heading>
-            {data.lastmodifiedby ? (
-              <Text color="gray.600" mt={2}>
-                {`Last modified ${formatTimestamp(data.lastmodifieddate)} by ${data.lastmodifiedby}`}
-              </Text>
-            ) : null}
+            <InlineSaveStatus
+              isSaving={isQueuedSaving}
+              savedVisible={savedVisible}
+              lastmodifieddate={saveSummary.lastmodifieddate || data.lastmodifieddate}
+              lastmodifiedby={saveSummary.lastmodifiedby || data.lastmodifiedby}
+            />
           </Box>
           <HStack spacing={3} align="center" flexWrap="wrap">
             <Button type="button" variant="link" size="sm" colorScheme="blue" onClick={openMetadataModal}>
@@ -798,24 +841,14 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
       </Box>
 
       <Box px={{ base: 4, md: 6 }} py={{ base: 4, md: 5 }} flex="1" minH="0" display="flex" flexDirection="column">
-        {actionData?.error?.message ? (
+        {saveError?.message || actionData?.error?.message ? (
           <Alert status="error" borderRadius="md" mb={4}>
             <AlertIcon />
-            <AlertDescription>{actionData.error.message}</AlertDescription>
+            <AlertDescription>{saveError?.message || actionData.error.message}</AlertDescription>
           </Alert>
         ) : null}
 
-        {actionData?.ok ? (
-          <Alert status="success" borderRadius="md" mb={4}>
-            <AlertIcon />
-            <AlertDescription>
-              Saved version {actionData.saved?.version != null ? actionData.saved.version : "updated"} successfully.
-            </AlertDescription>
-          </Alert>
-        ) : null}
-
-        <Form
-          method="post"
+        <Box
           style={{
             display: "flex",
             flexDirection: "column",
@@ -823,15 +856,6 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
             minHeight: 0
           }}
         >
-          <input type="hidden" name="description" value={description} />
-          <input type="hidden" name="metadata" value={JSON.stringify(metadata)} />
-          <input type="hidden" name="editor" value={JSON.stringify(editorConfig)} />
-          <input type="hidden" name="editorType" value={data.editorType} />
-          <input type="hidden" name="expectedVersion" value={data.version == null ? "" : String(data.version)} />
-          <input type="hidden" name="document" value={JSON.stringify(data.document ?? null)} />
-          <input type="hidden" name="segmentationStructure" value={data.segmentationDefault.structure} />
-          <input type="hidden" name="segmentationRows" value={JSON.stringify(rows)} />
-
           <VStack align="stretch" spacing={4} h="100%" minH="0">
             {displayDescription ? (
               <Box borderWidth="1px" borderColor="gray.200" borderRadius="md" bg="gray.50" px={4} py={3}>
@@ -846,9 +870,6 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
               <HStack spacing={3} align="center" flexWrap="wrap">
                 <Button type="button" variant="outline" onClick={() => openRowEditor(null)}>
                   Add Row
-                </Button>
-                <Button type="submit" colorScheme="blue" isLoading={isSaving} loadingText="Saving">
-                  Save Changes
                 </Button>
               </HStack>
             </Flex>
@@ -933,7 +954,16 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                       filteredRows.map((row, rowIndex) => (
                         <Tr
                           key={row.rowId || `${data.id || "segmentation"}-${rowIndex}`}
-                          bg={isIncompleteRow(row) ? "red.50" : undefined}
+                          bg={
+                            rowHighlightStateByKey[String(rows.indexOf(row))] === "saving"
+                              ? "blue.50"
+                              : rowHighlightStateByKey[String(rows.indexOf(row))] === "saved"
+                                ? "green.50"
+                                : isIncompleteRow(row)
+                                  ? "red.50"
+                                  : undefined
+                          }
+                          transition="background-color 0.35s ease"
                         >
                           {data.segmentationDefault.categoryColumns.map((_, categoryIndex) => (
                             <Td key={`${rowIndex}-category-${categoryIndex}`}>{row.categories[categoryIndex] || ""}</Td>
@@ -987,7 +1017,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
               </Box>
             </Box>
           </VStack>
-        </Form>
+        </Box>
       </Box>
 
       <Modal isOpen={isRowModalOpen} onClose={closeRowEditor} size="4xl" scrollBehavior="inside">

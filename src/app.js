@@ -1,5 +1,6 @@
 const express = require("express");
 const session = require("express-session");
+const fs = require("node:fs");
 const Logger = require("@20-20-Foresight/base/log");
 const { buildAuthorizationUrl, handleCallback } = require("./auth/microsoft");
 const { getSessionStore } = require("./session/store");
@@ -67,6 +68,20 @@ function resolveFaviconTarget() {
 }
 
 /**
+ * Reads one JSON fixture payload from disk when configured for local tests.
+ * @param {string} envName
+ * @returns {object|null}
+ */
+function readJsonFixture(envName) {
+  const fixturePath = process.env[envName];
+  if (typeof fixturePath !== "string" || !fixturePath.trim()) {
+    return null;
+  }
+
+  return JSON.parse(fs.readFileSync(fixturePath.trim(), "utf8"));
+}
+
+/**
  * @typedef {import("./config").AppConfig} AppConfig
  */
 
@@ -79,6 +94,8 @@ function createApp(config, remixHandler) {
   const app = express();
   const log = new Logger("frontend", "app");
   const faviconTarget = resolveFaviconTarget();
+  const adminDataListFixture = readJsonFixture("ADMIN_DATA_LIST_FIXTURE_PATH");
+  const adminDataDetailFixture = readJsonFixture("ADMIN_DATA_DETAIL_FIXTURE_PATH");
 
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
@@ -138,6 +155,38 @@ function createApp(config, remixHandler) {
   app.get("/favicon.ico", (_req, res) => {
     res.redirect(302, faviconTarget);
   });
+
+  if (adminDataListFixture || adminDataDetailFixture) {
+    app.get("/api/rest/admin/data", (req, res, next) => {
+      if (!adminDataListFixture) {
+        return next();
+      }
+
+      return res.json(adminDataListFixture);
+    });
+
+    app.get("/api/rest/admin/data/:dataId", (req, res, next) => {
+      if (!adminDataDetailFixture) {
+        return next();
+      }
+
+      const requestedId = decodeURIComponent(req.params.dataId || "");
+      const detailMap = adminDataDetailFixture && typeof adminDataDetailFixture === "object"
+        ? adminDataDetailFixture
+        : {};
+      const payload = detailMap[requestedId];
+
+      if (!payload) {
+        return res.status(404).json({
+          error: {
+            message: `Fixture data not found for ${requestedId}`
+          }
+        });
+      }
+
+      return res.json(payload);
+    });
+  }
 
   app.get("/auth/login", async (req, res, next) => {
     try {
