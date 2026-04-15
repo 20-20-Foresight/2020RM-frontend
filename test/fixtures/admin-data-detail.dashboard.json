@@ -1,4 +1,92 @@
 {
+  "crm.data:dimension-definitions": {
+    "data": {
+      "id": "crm.data:dimension-definitions",
+      "namespace": "crm.data",
+      "key": "dimension-definitions",
+      "type": "dimension-definition",
+      "name": "Dimension Definitions",
+      "description": "Dimension catalog used by category editors",
+      "version": 7,
+      "lastmodifieddate": "2026-04-14T14:05:00.000Z",
+      "lastmodifiedby": "admin@example.com",
+      "metadata": {
+        "type": "dimension-definition",
+        "name": "Dimension Definitions"
+      },
+      "document": {
+        "values": [
+          {
+            "id": "dimension-focus",
+            "key": "focus",
+            "label": "Focus",
+            "description": "Segment by focus area",
+            "examples": [
+              "Property Management",
+              "Healthcare Technology"
+            ]
+          },
+          {
+            "id": "dimension-industry",
+            "key": "industry",
+            "label": "Industry",
+            "description": "Segment by industry",
+            "examples": [
+              "Multifamily",
+              "PropTech"
+            ]
+          }
+        ]
+      },
+      "editor": {
+        "type": "dimension-definition"
+      }
+    }
+  },
+  "crm.data:focus": {
+    "data": {
+      "id": "crm.data:focus",
+      "namespace": "crm.data",
+      "key": "focus",
+      "type": "categories",
+      "name": "Focus",
+      "description": "Focus categories used by segmentation and CRM tagging",
+      "version": 12,
+      "lastmodifieddate": "2026-04-14T14:30:00.000Z",
+      "lastmodifiedby": "admin@example.com",
+      "metadata": {
+        "type": "categories",
+        "name": "Focus"
+      },
+      "document": {
+        "values": [
+          {
+            "id": "focus-3pp",
+            "label": "3rd Party Property Management",
+            "dimensionId": "dimension-focus",
+            "description": "<p>This is a focus area for <strong>cookies</strong>.</p>",
+            "examples": [
+              "CookieOps",
+              "Property workflows"
+            ]
+          },
+          {
+            "id": "focus-health-tech",
+            "label": "Healthcare Technology",
+            "dimensionId": "dimension-focus",
+            "description": "<p>Leadership teams building workflow and care-delivery products.</p>",
+            "examples": [
+              "Clinical operations",
+              "Revenue cycle"
+            ]
+          }
+        ]
+      },
+      "editor": {
+        "type": "categories"
+      }
+    }
+  },
   "crm.data:nicknames": {
     "data": {
       "id": "crm.data:nicknames",

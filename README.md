@@ -31,3 +31,10 @@ Notes:
 - `.env` is auto-loaded via `dotenv`.
 - `npm run dev` pins the internal Remix dev server to port `8002` so it does not collide with the backend default port `3001`.
 - The Express BFF still serves the app on `http://localhost:3000`.
+
+## UI Verification
+
+- `npm run test:e2e` runs the Playwright browser harness against a deterministic local shell with auth disabled and fixture-backed admin-data responses.
+- `e2e/dashboard-shell.spec.js` covers the authenticated shell and admin-data list navigation.
+- `e2e/admin-data-category-editor.spec.js` covers the Focus category editor route, including the inline card layout and the Toast rich text editor in WYSIWYG mode.
+- `npm run test:e2e:update` refreshes visual baselines when an intentional UI change lands.

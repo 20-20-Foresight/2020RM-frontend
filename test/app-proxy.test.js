@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { PassThrough } = require("node:stream");
 
-const { buildBackendProxyRequestInit, resolveFaviconTarget } = require("../src/app");
+const { buildBackendProxyRequestInit, filterAdminDataFixtureList, resolveFaviconTarget } = require("../src/app");
 
 test("frontend proxy request builder forwards POST bodies and content headers", async () => {
   const requestStream = new PassThrough();
@@ -80,4 +80,43 @@ test("resolveFaviconTarget prefers an explicit env override", () => {
       process.env.FAVICON_URL = originalValue;
     }
   }
+});
+
+test("filterAdminDataFixtureList narrows the admin data fixture by type and search text", () => {
+  const fixture = {
+    items: [
+      {
+        id: "crm.data:focus",
+        type: "categories",
+        key: "focus",
+        name: "Focus",
+        description: "Focus categories"
+      },
+      {
+        id: "crm.data:dimension-definitions",
+        type: "dimension-definition",
+        key: "dimension-definitions",
+        name: "Dimension Definitions",
+        description: "Dimension catalog"
+      }
+    ]
+  };
+
+  assert.deepEqual(
+    filterAdminDataFixtureList(fixture, {
+      type: "dimension-definition",
+      q: "dimension"
+    }),
+    {
+      items: [
+        {
+          id: "crm.data:dimension-definitions",
+          type: "dimension-definition",
+          key: "dimension-definitions",
+          name: "Dimension Definitions",
+          description: "Dimension catalog"
+        }
+      ]
+    }
+  );
 });
