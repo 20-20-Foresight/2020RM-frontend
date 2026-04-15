@@ -4,59 +4,89 @@ import {
   AlertIcon,
   Box,
   Button,
-  Checkbox,
   Flex,
   FormControl,
   FormLabel,
   Heading,
   HStack,
-  IconButton,
   Input,
-  Modal,
-  ModalBody,
-  ModalCloseButton,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
   Select,
-  Table,
-  Tbody,
-  Td,
+  Switch,
   Text,
   Textarea,
-  Th,
-  Thead,
-  Tr,
-  useDisclosure,
   VStack
 } from "@chakra-ui/react";
-import { ArrowDownIcon, ArrowUpIcon, EditIcon } from "@chakra-ui/icons";
-import { useEffect, useMemo, useState } from "react";
+import { EditIcon } from "@chakra-ui/icons";
 import { useLocation } from "@remix-run/react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { InlineSaveStatus } from "./InlineSaveStatus";
 import { useQueuedDocumentSave } from "../hooks/useQueuedDocumentSave";
 import { useRowSaveHighlight } from "../hooks/useRowSaveHighlight";
+import { CategoryEditorCard } from "./ui/organisms/CategoryEditorCard";
 
+/**
+ * Reads a trimmed string.
+ * @param {unknown} value
+ * @returns {string}
+ */
 function readTrimmedString(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+/**
+ * Builds one stable transient key for client-only row state.
+ * @returns {string}
+ */
+function buildClientKey() {
+  return `category-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * Clones category rows into local editor state.
+ * @param {unknown[]} rows
+ * @returns {Array<{
+ *   id: string,
+ *   label: string,
+ *   description: string,
+ *   examplesText: string,
+ *   dimensionId: string,
+ *   preference: number|null,
+ *   deletedOn: string,
+ *   __extraFields: Record<string, unknown>,
+ *   __clientKey: string
+ * }>}
+ */
 function cloneRows(rows) {
   return Array.isArray(rows)
     ? rows.map((row) => ({
-        id: readTrimmedString(row.id),
-        label: readTrimmedString(row.label),
-        description: readTrimmedString(row.description),
-        examplesText: readTrimmedString(row.examplesText),
-        dimensionId: readTrimmedString(row.dimensionId),
-        preference: row.preference == null ? null : Number(row.preference),
-        deletedOn: readTrimmedString(row.deletedOn),
-        __extraFields: row && typeof row.__extraFields === "object" && !Array.isArray(row.__extraFields) ? { ...row.__extraFields } : {}
+        id: readTrimmedString(row?.id),
+        label: readTrimmedString(row?.label),
+        description: readTrimmedString(row?.description),
+        examplesText: readTrimmedString(row?.examplesText),
+        dimensionId: readTrimmedString(row?.dimensionId),
+        preference: Number.isFinite(Number(row?.preference)) ? Number(row.preference) : null,
+        deletedOn: readTrimmedString(row?.deletedOn),
+        __extraFields: row && typeof row.__extraFields === "object" && !Array.isArray(row.__extraFields) ? { ...row.__extraFields } : {},
+        __clientKey: readTrimmedString(row?.__clientKey) || buildClientKey()
       }))
     : [];
 }
 
+/**
+ * Builds one empty category draft row.
+ * @param {string} [defaultDimensionId]
+ * @returns {{
+ *   id: string,
+ *   label: string,
+ *   description: string,
+ *   examplesText: string,
+ *   dimensionId: string,
+ *   preference: number|null,
+ *   deletedOn: string,
+ *   __extraFields: Record<string, unknown>,
+ *   __clientKey: string
+ * }}
+ */
 function buildEmptyRow(defaultDimensionId = "") {
   return {
     id: "",
@@ -66,25 +96,63 @@ function buildEmptyRow(defaultDimensionId = "") {
     dimensionId: defaultDimensionId,
     preference: null,
     deletedOn: "",
-    __extraFields: {}
+    __extraFields: {},
+    __clientKey: buildClientKey()
   };
 }
 
+/**
+ * Removes transient client-only properties before save.
+ * @param {Array<Record<string, unknown>>} rows
+ * @returns {Array<Record<string, unknown>>}
+ */
+function stripTransientFields(rows) {
+  return (Array.isArray(rows) ? rows : []).map((row) => {
+    const nextRow = { ...row };
+    delete nextRow.__clientKey;
+    return nextRow;
+  });
+}
+
+/**
+ * Returns whether one category row is retired.
+ * @param {{deletedOn?: string}} row
+ * @returns {boolean}
+ */
 function isRetiredRow(row) {
   return Boolean(readTrimmedString(row?.deletedOn));
 }
 
-export function CategoryEditorPage({ data, actionData, isSaving = false }) {
+/**
+ * Renders the category document editor with inline card editing.
+ * @param {{
+ *   data: {
+ *     id: string,
+ *     name: string,
+ *     description?: string,
+ *     metadata?: Record<string, unknown>,
+ *     version?: number|null,
+ *     document?: unknown,
+ *     editor?: unknown,
+ *     lastmodifieddate?: string|null,
+ *     lastmodifiedby?: string|null,
+ *     categoryEditor: {rows: unknown[], supportsPreference?: boolean},
+ *     dimensionCatalog?: Array<{id: string, label: string}>
+ *   },
+ *   actionData?: {error?: {message?: string}}|null
+ * }} props
+ * @returns {JSX.Element}
+ */
+export function CategoryEditorPage({ data, actionData }) {
   const location = useLocation();
-  const supportsPreference = data.categoryEditor.supportsPreference === true;
-  const defaultDimensionId = data.dimensionCatalog[0]?.id || "";
   const [metadata, setMetadata] = useState(() => (data.metadata && typeof data.metadata === "object" ? { ...data.metadata } : {}));
   const [description, setDescription] = useState(data.description || "");
-  const [rows, setRows] = useState(() => cloneRows(data.categoryEditor.rows));
+  const [rows, setRows] = useState(() => cloneRows(data.categoryEditor?.rows));
   const [showRetired, setShowRetired] = useState(false);
-  const [editingRowIndex, setEditingRowIndex] = useState(null);
-  const [draftRow, setDraftRow] = useState(() => buildEmptyRow(defaultDimensionId));
-  const { isOpen, onOpen, onClose } = useDisclosure();
+  const [editingRowKey, setEditingRowKey] = useState("");
+  const [draftRow, setDraftRow] = useState(null);
+  const [isDraftNew, setIsDraftNew] = useState(false);
+  const defaultDimensionIdRef = useRef(readTrimmedString(data.dimensionCatalog?.[0]?.id));
   const {
     saveSummary,
     isSaving: isQueuedSaving,
@@ -101,9 +169,9 @@ export function CategoryEditorPage({ data, actionData, isSaving = false }) {
       formData.set("metadata", JSON.stringify(metadata));
       formData.set("expectedVersion", summary.version == null ? "" : String(summary.version));
       formData.set("document", JSON.stringify(data.document ?? null));
-      formData.set("categoryRows", JSON.stringify(rows));
-      formData.set("supportsPreference", supportsPreference ? "true" : "");
       formData.set("editor", JSON.stringify(data.editor ?? null));
+      formData.set("supportsPreference", data.categoryEditor?.supportsPreference ? "true" : "false");
+      formData.set("categoryRows", JSON.stringify(stripTransientFields(rows)));
       return formData;
     }
   });
@@ -113,14 +181,39 @@ export function CategoryEditorPage({ data, actionData, isSaving = false }) {
     saveErrorMessage: saveError?.message || actionData?.error?.message || null
   });
 
+  useEffect(() => {
+    setMetadata(data.metadata && typeof data.metadata === "object" ? { ...data.metadata } : {});
+    setDescription(data.description || "");
+    setRows(cloneRows(data.categoryEditor?.rows));
+    setEditingRowKey("");
+    setDraftRow(null);
+    setIsDraftNew(false);
+  }, [data.categoryEditor?.rows, data.description, data.id, data.metadata, data.version]);
+
+  const dimensionOptions = useMemo(
+    () =>
+      Array.isArray(data.dimensionCatalog)
+        ? data.dimensionCatalog
+            .map((row) => ({
+              id: readTrimmedString(row?.id),
+              label: readTrimmedString(row?.label)
+            }))
+            .filter((row) => row.id && row.label)
+        : [],
+    [data.dimensionCatalog]
+  );
+
+  const dimensionNameById = useMemo(
+    () => new Map(dimensionOptions.map((row) => [row.id, row.label])),
+    [dimensionOptions]
+  );
+
+  const visibleRows = showRetired ? rows : rows.filter((row) => !isRetiredRow(row));
+  const displayName = readTrimmedString(metadata?.name) || data.name;
+
   /**
-   * Builds one background save payload for the current editor state.
-   * @param {{
-   *   summary: {version: number|null},
-   *   nextRows?: unknown[],
-   *   nextDescription?: string,
-   *   nextMetadata?: Record<string, unknown>
-   * }} options
+   * Builds one background save payload from a future row state.
+   * @param {{summary: {version: number|null}, nextRows?: unknown[], nextDescription?: string, nextMetadata?: Record<string, unknown>}} options
    * @returns {FormData}
    */
   function buildSaveFormData({ summary, nextRows = rows, nextDescription = description, nextMetadata = metadata }) {
@@ -130,125 +223,115 @@ export function CategoryEditorPage({ data, actionData, isSaving = false }) {
     formData.set("metadata", JSON.stringify(nextMetadata));
     formData.set("expectedVersion", summary.version == null ? "" : String(summary.version));
     formData.set("document", JSON.stringify(data.document ?? null));
-    formData.set("categoryRows", JSON.stringify(nextRows));
-    formData.set("supportsPreference", supportsPreference ? "true" : "");
     formData.set("editor", JSON.stringify(data.editor ?? null));
+    formData.set("supportsPreference", data.categoryEditor?.supportsPreference ? "true" : "false");
+    formData.set("categoryRows", JSON.stringify(stripTransientFields(nextRows)));
     return formData;
   }
 
-  useEffect(() => {
-    setMetadata(data.metadata && typeof data.metadata === "object" ? { ...data.metadata } : {});
-    setDescription(data.description || "");
-    setRows(cloneRows(data.categoryEditor.rows));
-    setShowRetired(false);
-  }, [data.categoryEditor.rows, data.description, data.id, data.metadata, data.version]);
-
-  const visibleRows = useMemo(
-    () => rows.filter((row) => showRetired || !isRetiredRow(row)),
-    [rows, showRetired]
-  );
-
-  function openEditor(rowIndex) {
-    setEditingRowIndex(rowIndex);
-    setDraftRow(rowIndex == null ? buildEmptyRow(defaultDimensionId) : cloneRows([rows[rowIndex]])[0] || buildEmptyRow(defaultDimensionId));
-    onOpen();
-  }
-
-  function closeEditor() {
-    setEditingRowIndex(null);
-    setDraftRow(buildEmptyRow(defaultDimensionId));
-    onClose();
-  }
-
-  function saveDraftRow() {
-    const nextRow = cloneRows([draftRow])[0];
-    const nextRows =
-      editingRowIndex == null
-        ? [...rows, nextRow]
-        : rows.map((row, index) => (index === editingRowIndex ? nextRow : row));
-
-    setRows(nextRows);
-    markRowsChanged([editingRowIndex == null ? nextRows.length - 1 : editingRowIndex]);
-    requestSave((summary) =>
-      buildSaveFormData({
-        summary,
-        nextRows
-      })
-    );
-    closeEditor();
-  }
-
-  function moveRow(rowIndex, direction) {
-    const nextRows = rows.slice();
-    const targetIndex = direction === "up" ? rowIndex - 1 : rowIndex + 1;
-    if (targetIndex < 0 || targetIndex >= nextRows.length) {
+  /**
+   * Opens one existing row for inline editing.
+   * @param {string} rowKey
+   */
+  function startEditingRow(rowKey) {
+    const matchedRow = rows.find((row) => row.__clientKey === rowKey);
+    if (!matchedRow) {
       return;
     }
-    const [movedRow] = nextRows.splice(rowIndex, 1);
-    nextRows.splice(targetIndex, 0, movedRow);
-    setRows(nextRows);
-    markRowsChanged([targetIndex]);
-    requestSave((summary) =>
-      buildSaveFormData({
-        summary,
-        nextRows
-      })
-    );
+
+    setEditingRowKey(rowKey);
+    setDraftRow(cloneRows([matchedRow])[0] || buildEmptyRow(defaultDimensionIdRef.current));
+    setIsDraftNew(false);
   }
 
-  function retireRow(rowIndex) {
-    const nextRows = rows.map((row, index) =>
-      index === rowIndex
-        ? {
-            ...row,
-            deletedOn: row.deletedOn || new Date().toISOString()
-          }
-        : row
-    );
-    setRows(nextRows);
-    markRowsChanged([rowIndex]);
-    requestSave((summary) =>
-      buildSaveFormData({
-        summary,
-        nextRows
-      })
-    );
+  /**
+   * Opens one unsaved row at the top of the list.
+   */
+  function startAddingRow() {
+    const nextDraft = buildEmptyRow(defaultDimensionIdRef.current);
+    setEditingRowKey(nextDraft.__clientKey);
+    setDraftRow(nextDraft);
+    setIsDraftNew(true);
   }
 
-  function restoreRow(rowIndex) {
-    const nextRows = rows.map((row, index) =>
-      index === rowIndex
-        ? {
-            ...row,
-            deletedOn: ""
-          }
-        : row
-    );
-    setRows(nextRows);
-    markRowsChanged([rowIndex]);
-    requestSave((summary) =>
-      buildSaveFormData({
-        summary,
-        nextRows
-      })
-    );
+  /**
+   * Closes the active inline editor.
+   */
+  function cancelEditing() {
+    setEditingRowKey("");
+    setDraftRow(null);
+    setIsDraftNew(false);
   }
 
+  /**
+   * Updates one draft field.
+   * @param {string} field
+   * @param {string|number|null} value
+   */
   function updateDraftField(field, value) {
-    setDraftRow((currentRow) => ({
-      ...currentRow,
-      [field]: value
-    }));
+    setDraftRow((currentValue) => (currentValue ? { ...currentValue, [field]: value } : currentValue));
   }
 
-  function updateMetadata(key, value) {
-    setMetadata((currentMetadata) => ({
-      ...(currentMetadata && typeof currentMetadata === "object" ? currentMetadata : {}),
-      [key]: value
-    }));
+  /**
+   * Saves the current inline draft.
+   */
+  function saveDraftRow() {
+    if (!draftRow) {
+      return;
+    }
+
+    const nextRow = cloneRows([draftRow])[0];
+    const nextRows = isDraftNew
+      ? [nextRow, ...rows]
+      : rows.map((row) => (row.__clientKey === editingRowKey ? nextRow : row));
+
+    setRows(nextRows);
+    markRowsChanged([nextRow.__clientKey]);
+    requestSave((summary) =>
+      buildSaveFormData({
+        summary,
+        nextRows
+      })
+    );
+    cancelEditing();
   }
 
-  const displayName = readTrimmedString(metadata?.name) || data.name;
+  /**
+   * Toggles the active state of one row and persists the change immediately.
+   * @param {string} rowKey
+   */
+  function toggleRowRetired(rowKey) {
+    const nextRows = rows.map((row) => {
+      if (row.__clientKey !== rowKey) {
+        return row;
+      }
+
+      return {
+        ...row,
+        deletedOn: isRetiredRow(row) ? "" : new Date().toISOString()
+      };
+    });
+
+    setRows(nextRows);
+    markRowsChanged([rowKey]);
+    requestSave((summary) =>
+      buildSaveFormData({
+        summary,
+        nextRows
+      })
+    );
+
+    if (editingRowKey === rowKey && draftRow) {
+      setDraftRow((currentValue) =>
+        currentValue
+          ? {
+              ...currentValue,
+              deletedOn: isRetiredRow(currentValue) ? "" : new Date().toISOString()
+            }
+          : currentValue
+      );
+    }
+  }
 
   return (
     <Box bg="white" h="100%" minH="0" display="flex" flexDirection="column">
@@ -274,177 +357,64 @@ export function CategoryEditorPage({ data, actionData, isSaving = false }) {
           </Alert>
         ) : null}
 
-        <Box
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            flex: 1,
-            minHeight: 0
-          }}
-        >
-          <VStack align="stretch" spacing={4} h="100%" minH="0">
-            {description ? (
-              <Box borderWidth="1px" borderColor="gray.200" borderRadius="md" bg="gray.50" px={4} py={3}>
-                <Text color="gray.700" whiteSpace="pre-wrap">
-                  {description}
-                </Text>
-              </Box>
+        <VStack align="stretch" spacing={4} flex="1" minH="0">
+          <Flex justify="space-between" align={{ base: "stretch", md: "center" }} gap={4} wrap="wrap">
+            <HStack spacing={3}>
+              <Switch isChecked={showRetired} onChange={(event) => setShowRetired(event.target.checked)} />
+              <Text color="gray.600">Show retired</Text>
+            </HStack>
+
+            <Button colorScheme="blue" onClick={startAddingRow} isDisabled={Boolean(editingRowKey)}>
+              Add Category
+            </Button>
+          </Flex>
+
+          <VStack align="stretch" spacing={4} overflow="auto" pb={1}>
+            {isDraftNew && draftRow ? (
+              <CategoryEditorCard
+                title={draftRow.label}
+                draftRow={draftRow}
+                isEditing
+                supportsPreference={Boolean(data.categoryEditor?.supportsPreference)}
+                dimensionOptions={dimensionOptions}
+                onDraftChange={updateDraftField}
+                onSave={saveDraftRow}
+                onCancel={cancelEditing}
+              />
             ) : null}
 
-            <Flex justify="space-between" align={{ base: "stretch", xl: "end" }} gap={4} wrap="wrap">
-              <Checkbox isChecked={showRetired} onChange={(event) => setShowRetired(event.target.checked)}>
-                Show retired
-              </Checkbox>
-              <HStack spacing={3}>
-                <Button type="button" variant="outline" onClick={() => openEditor(null)}>
-                  Add Value
-                </Button>
-              </HStack>
-            </Flex>
-
-            <Box borderWidth="1px" borderColor="gray.200" borderRadius="md" overflow="hidden" flex="1" minH="0">
-              <Box h="100%" overflow="auto">
-                <Table size="sm" variant="simple">
-                  <Thead bg="gray.50">
-                    <Tr>
-                      <Th>Label</Th>
-                      <Th>Dimension</Th>
-                      {supportsPreference ? <Th>Preference</Th> : null}
-                      <Th>Description</Th>
-                      <Th>Examples</Th>
-                      <Th>Status</Th>
-                      <Th textAlign="right">Actions</Th>
-                    </Tr>
-                  </Thead>
-                  <Tbody>
-                    {visibleRows.length ? (
-                      visibleRows.map((row) => {
-                        const rowIndex = rows.indexOf(row);
-                        const retired = isRetiredRow(row);
-                        const dimensionLabel = data.dimensionCatalog.find((item) => item.id === row.dimensionId)?.label || row.dimensionId;
-
-                        return (
-                          <Tr
-                            key={row.id || `category-row-${rowIndex}`}
-                            bg={
-                              rowHighlightStateByKey[String(rowIndex)] === "saving"
-                                ? "blue.50"
-                                : rowHighlightStateByKey[String(rowIndex)] === "saved"
-                                  ? "green.50"
-                                  : retired
-                                    ? "gray.50"
-                                    : undefined
-                            }
-                            transition="background-color 0.35s ease"
-                          >
-                            <Td>{row.label}</Td>
-                            <Td>{dimensionLabel || ""}</Td>
-                            {supportsPreference ? <Td>{retired ? "" : row.preference || ""}</Td> : null}
-                            <Td>{row.description || ""}</Td>
-                            <Td whiteSpace="pre-wrap">{row.examplesText || ""}</Td>
-                            <Td>{retired ? <Text color="gray.600">Retired</Text> : <Text color="green.600">Active</Text>}</Td>
-                            <Td textAlign="right" whiteSpace="nowrap">
-                              {supportsPreference && !retired ? (
-                                <>
-                                  <IconButton
-                                    aria-label={`Move ${row.label} up`}
-                                    icon={<ArrowUpIcon />}
-                                    size="sm"
-                                    type="button"
-                                    variant="ghost"
-                                    onClick={() => moveRow(rowIndex, "up")}
-                                  />
-                                  <IconButton
-                                    aria-label={`Move ${row.label} down`}
-                                    icon={<ArrowDownIcon />}
-                                    size="sm"
-                                    type="button"
-                                    variant="ghost"
-                                    onClick={() => moveRow(rowIndex, "down")}
-                                  />
-                                </>
-                              ) : null}
-                              <IconButton
-                                aria-label={`Edit ${row.label || rowIndex + 1}`}
-                                icon={<EditIcon />}
-                                size="sm"
-                                type="button"
-                                variant="ghost"
-                                colorScheme="blue"
-                                onClick={() => openEditor(rowIndex)}
-                              />
-                              {retired ? (
-                                <Button size="sm" variant="ghost" colorScheme="green" onClick={() => restoreRow(rowIndex)}>
-                                  Restore
-                                </Button>
-                              ) : (
-                                <Button size="sm" variant="ghost" colorScheme="red" onClick={() => retireRow(rowIndex)}>
-                                  Retire
-                                </Button>
-                              )}
-                            </Td>
-                          </Tr>
-                        );
-                      })
-                    ) : (
-                      <Tr>
-                        <Td colSpan={supportsPreference ? 7 : 6}>
-                          <Text color="gray.500">No values are available for this category document.</Text>
-                        </Td>
-                      </Tr>
-                    )}
-                  </Tbody>
-                </Table>
+            {visibleRows.length ? (
+              visibleRows.map((row) => {
+                const isEditing = !isDraftNew && editingRowKey === row.__clientKey && draftRow;
+                return (
+                  <CategoryEditorCard
+                    key={row.__clientKey}
+                    title={row.label}
+                    draftRow={isEditing ? draftRow : null}
+                    retired={isRetiredRow(row)}
+                    dimensionName={dimensionNameById.get(row.dimensionId) || ""}
+                    descriptionHtml={row.description}
+                    examplesText={row.examplesText}
+                    dimensionOptions={dimensionOptions}
+                    highlightState={rowHighlightStateByKey[row.__clientKey]}
+                    isEditing={Boolean(isEditing)}
+                    supportsPreference={Boolean(data.categoryEditor?.supportsPreference)}
+                    onEdit={() => startEditingRow(row.__clientKey)}
+                    onDraftChange={updateDraftField}
+                    onSave={saveDraftRow}
+                    onCancel={cancelEditing}
+                    onToggleRetired={() => toggleRowRetired(isEditing ? draftRow.__clientKey : row.__clientKey)}
+                  />
+                );
+              })
+            ) : (
+              <Box borderWidth="1px" borderColor="gray.200" borderRadius="xl" px={5} py={6} bg="white">
+                <Text color="gray.500">No categories are defined yet.</Text>
               </Box>
-            </Box>
+            )}
           </VStack>
-        </Box>
+        </VStack>
       </Box>
-
-      <Modal isOpen={isOpen} onClose={closeEditor} size="3xl" scrollBehavior="inside">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>{editingRowIndex == null ? "Add Value" : "Edit Value"}</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
-            <VStack align="stretch" spacing={4}>
-              <FormControl>
-                <FormLabel>Label</FormLabel>
-                <Input value={draftRow.label} onChange={(event) => updateDraftField("label", event.target.value)} bg="white" />
-              </FormControl>
-              <FormControl>
-                <FormLabel>Dimension</FormLabel>
-                <Select value={draftRow.dimensionId} onChange={(event) => updateDraftField("dimensionId", event.target.value)} bg="white">
-                  <option value="">Select dimension</option>
-                  {data.dimensionCatalog.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl>
-                <FormLabel>Description</FormLabel>
-                <Textarea value={draftRow.description} onChange={(event) => updateDraftField("description", event.target.value)} minH="112px" bg="white" />
-              </FormControl>
-              <FormControl>
-                <FormLabel>Examples</FormLabel>
-                <Textarea value={draftRow.examplesText} onChange={(event) => updateDraftField("examplesText", event.target.value)} minH="112px" bg="white" />
-              </FormControl>
-            </VStack>
-          </ModalBody>
-          <ModalFooter>
-            <HStack spacing={3}>
-              <Button variant="ghost" onClick={closeEditor}>
-                Cancel
-              </Button>
-              <Button colorScheme="blue" onClick={saveDraftRow}>
-                Save
-              </Button>
-            </HStack>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
     </Box>
   );
 }

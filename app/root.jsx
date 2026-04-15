@@ -1,13 +1,10 @@
-import { ColorModeScript, ChakraProvider, extendTheme } from "@chakra-ui/react";
+import { ColorModeScript, ChakraProvider } from "@chakra-ui/react";
 import { withEmotionCache } from "@emotion/react";
 import { useState, useMemo } from "react";
 import { Links, LiveReload, Meta, Outlet, Scripts, ScrollRestoration } from "@remix-run/react";
 import { createEmotionCache } from "./emotion-cache";
-
-const theme = extendTheme({
-  initialColorMode: "system",
-  useSystemColorMode: true
-});
+import { theme } from "./theme";
+import "@toast-ui/editor/dist/toastui-editor.css";
 
 const Document = withEmotionCache(({ children }, emotionCache) => {
   const serverSsrStyles = useMemo(() => {
@@ -51,4 +48,3 @@ export default function App() {
     </Document>
   );
 }
-

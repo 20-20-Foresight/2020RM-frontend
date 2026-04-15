@@ -82,6 +82,48 @@ function readJsonFixture(envName) {
 }
 
 /**
+ * Applies the admin-data fixture route's basic query filters.
+ * This keeps the local visual harness closer to the real backend behavior.
+ * @param {{items?: unknown[]}|null} fixture
+ * @param {{type?: string, q?: string}} query
+ * @returns {{items: unknown[]}}
+ */
+function filterAdminDataFixtureList(fixture, query = {}) {
+  const items = Array.isArray(fixture?.items) ? fixture.items : [];
+  const normalizedType = typeof query.type === "string" ? query.type.trim().toLowerCase() : "";
+  const normalizedQuery = typeof query.q === "string" ? query.q.trim().toLowerCase() : "";
+
+  return {
+    items: items.filter((item) => {
+      if (normalizedType) {
+        const itemType = typeof item?.type === "string" ? item.type.trim().toLowerCase() : "";
+        if (itemType !== normalizedType) {
+          return false;
+        }
+      }
+
+      if (!normalizedQuery) {
+        return true;
+      }
+
+      const haystack = [
+        item?.name,
+        item?.description,
+        item?.key,
+        item?.type,
+        item?.namespace,
+        item?.id
+      ]
+        .filter((value) => typeof value === "string" && value.trim())
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(normalizedQuery);
+    })
+  };
+}
+
+/**
  * @typedef {import("./config").AppConfig} AppConfig
  */
 
@@ -162,7 +204,12 @@ function createApp(config, remixHandler) {
         return next();
       }
 
-      return res.json(adminDataListFixture);
+      return res.json(
+        filterAdminDataFixtureList(adminDataListFixture, {
+          type: typeof req.query?.type === "string" ? req.query.type : "",
+          q: typeof req.query?.q === "string" ? req.query.q : ""
+        })
+      );
     });
 
     app.get("/api/rest/admin/data/:dataId", (req, res, next) => {
@@ -361,5 +408,6 @@ function createApp(config, remixHandler) {
 module.exports = {
   buildBackendProxyRequestInit,
   createApp,
+  filterAdminDataFixtureList,
   resolveFaviconTarget
 };

@@ -148,3 +148,4 @@ public/build/
 
 # Project specific
 .store/
+storybook-static/
