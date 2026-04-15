@@ -27,7 +27,7 @@ const CUSTOM_SEGMENTATION_EDITOR_TYPES = new Set(["segmentation.default", "segme
  * @returns {{message: string}}
  */
 function buildRouteError(error) {
-  if (error instanceof AdminDataApiError) {
+  if (error instanceof Error && error.name === "AdminDataApiError") {
     return {
       message: error.message
     };
