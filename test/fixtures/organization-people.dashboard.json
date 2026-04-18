@@ -1,0 +1,77 @@
+{
+  "org-stellar": {
+    "organizationUUID": "org-stellar",
+    "entityType": "person",
+    "status": "completed",
+    "statusExplained": "Related people loaded successfully.",
+    "results": [
+      {
+        "uuid": "person-1",
+        "name": "Julianne Vance",
+        "relatedLocation": {
+          "city": "San Francisco",
+          "regionCode": "CA"
+        },
+        "metadata": {
+          "title": "Chief Operations Officer",
+          "level": "C-Suite",
+          "primaryemail": "julianne.v@stellar-dynamics.com",
+          "email": {
+            "personal": "julianne.v@gmail.com"
+          },
+          "socials": {
+            "linkedin": "https://www.linkedin.com/in/julianne-vance"
+          }
+        }
+      },
+      {
+        "uuid": "person-2",
+        "name": "Marcus Thorne",
+        "relatedLocation": {
+          "city": "Austin",
+          "regionCode": "TX"
+        },
+        "metadata": {
+          "title": "VP of Strategic Growth",
+          "level": "Executive",
+          "primaryemail": "marcus.thorne@outlook.com",
+          "workemail": "mthorne@global-growth.com",
+          "socials": {
+            "linkedin": "https://www.linkedin.com/in/marcus-thorne"
+          }
+        }
+      },
+      {
+        "uuid": "person-3",
+        "name": "Elena Rodriguez",
+        "relatedLocation": {
+          "city": "London",
+          "countryCode": "GB"
+        },
+        "metadata": {
+          "title": "Director of Engineering",
+          "level": "Director",
+          "primaryemail": "elena.rodriguez@stellar-dynamics.com"
+        }
+      }
+    ],
+    "meta": {
+      "count": 3
+    },
+    "schema": {
+      "namespace": "crm.schema",
+      "key": "person",
+      "version": 1,
+      "document": {
+        "fieldPaths": [
+          { "path": "metadata.title" },
+          { "path": "metadata.level" },
+          { "path": "metadata.primaryemail" },
+          { "path": "metadata.workemail" },
+          { "path": "metadata.email.personal" },
+          { "path": "metadata.socials.linkedin" }
+        ]
+      }
+    }
+  }
+}

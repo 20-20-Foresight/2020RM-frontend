@@ -1,6 +1,6 @@
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
-import { DirectoryResultsContent } from "../components/DirectoryResultsContent";
+import { OrganizationContactsPanel } from "../components/OrganizationDetailPanels";
 import { loadOrganizationPeoplePage } from "../models/organization-people.server";
 
 export async function loader({ request, params }) {
@@ -15,22 +15,5 @@ export async function loader({ request, params }) {
 export default function OrganizationPeopleRoute() {
   const data = useLoaderData();
 
-  return (
-    <DirectoryResultsContent
-      emptyLabel="Unnamed person"
-      secondaryFieldLabel="Email"
-      secondaryFieldPaths={[
-        "metadata.primaryemail",
-        "metadata.workemail",
-        "metadata.email.work",
-        "metadata.email.personal",
-        "metadata.email"
-      ]}
-      linkedInFieldPaths={[
-        "metadata.socials.linkedin"
-      ]}
-      emptyStateMessage="No people associated with this organization."
-      data={data}
-    />
-  );
+  return <OrganizationContactsPanel data={data} />;
 }

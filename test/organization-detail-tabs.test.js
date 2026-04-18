@@ -11,16 +11,24 @@ const {
 test("parseOrganizationDetailPath resolves organization info and people tab paths", () => {
   assert.deepEqual(parseOrganizationDetailPath("/organization/org-1"), {
     organizationUUID: "org-1",
-    tabKey: "info"
+    tabKey: "overview"
   });
   assert.deepEqual(parseOrganizationDetailPath("/organization/org-1/people"), {
     organizationUUID: "org-1",
-    tabKey: "people"
+    tabKey: "contacts"
+  });
+  assert.deepEqual(parseOrganizationDetailPath("/organization/org-1/jobs"), {
+    organizationUUID: "org-1",
+    tabKey: "jobs"
+  });
+  assert.deepEqual(parseOrganizationDetailPath("/organization/org-1/similar-organizations"), {
+    organizationUUID: "org-1",
+    tabKey: "similarOrganizations"
   });
   assert.equal(parseOrganizationDetailPath("/people"), null);
 });
 
-test("getOrganizationDetailTabUiState switches to the pending people tab and shows inline loading", () => {
+test("getOrganizationDetailTabUiState switches to the pending contacts tab and shows inline loading", () => {
   assert.deepEqual(
     getOrganizationDetailTabUiState({
       organizationUUID: "org-1",
@@ -29,23 +37,23 @@ test("getOrganizationDetailTabUiState switches to the pending people tab and sho
       navigationPathname: "/organization/org-1/people"
     }),
     {
-      activeTabKey: "people",
+      activeTabKey: "contacts",
       isLoading: true,
-      label: "Loading people..."
+      label: "Loading contacts..."
     }
   );
 });
 
-test("getOrganizationDetailTabUiState stays idle on the loaded people tab", () => {
+test("getOrganizationDetailTabUiState stays idle on the loaded jobs tab", () => {
   assert.deepEqual(
     getOrganizationDetailTabUiState({
       organizationUUID: "org-1",
-      currentPathname: "/organization/org-1/people",
+      currentPathname: "/organization/org-1/jobs",
       navigationState: "idle",
       navigationPathname: null
     }),
     {
-      activeTabKey: "people",
+      activeTabKey: "jobs",
       isLoading: false,
       label: null
     }
@@ -73,7 +81,7 @@ test("shouldRevalidateOrganizationDetailRoute skips same-organization tab reload
   assert.equal(
     shouldRevalidateOrganizationDetailRoute({
       currentUrl: new URL("http://localhost:3000/organization/org-1"),
-      nextUrl: new URL("http://localhost:3000/organization/org-1/people"),
+      nextUrl: new URL("http://localhost:3000/organization/org-1/jobs"),
       formMethod: "GET",
       defaultShouldRevalidate: true
     }),

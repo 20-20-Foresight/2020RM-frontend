@@ -138,6 +138,8 @@ function createApp(config, remixHandler) {
   const faviconTarget = resolveFaviconTarget();
   const adminDataListFixture = readJsonFixture("ADMIN_DATA_LIST_FIXTURE_PATH");
   const adminDataDetailFixture = readJsonFixture("ADMIN_DATA_DETAIL_FIXTURE_PATH");
+  const organizationDetailFixture = readJsonFixture("ORGANIZATION_DETAIL_FIXTURE_PATH");
+  const organizationPeopleFixture = readJsonFixture("ORGANIZATION_PEOPLE_FIXTURE_PATH");
 
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
@@ -228,6 +230,46 @@ function createApp(config, remixHandler) {
           error: {
             message: `Fixture data not found for ${requestedId}`
           }
+        });
+      }
+
+      return res.json(payload);
+    });
+  }
+
+  if (organizationPeopleFixture || organizationDetailFixture) {
+    app.get("/api/rest/organization/:organizationId/people", (req, res, next) => {
+      if (!organizationPeopleFixture) {
+        return next();
+      }
+
+      const requestedId = decodeURIComponent(req.params.organizationId || "");
+      const payload = organizationPeopleFixture && typeof organizationPeopleFixture === "object"
+        ? organizationPeopleFixture[requestedId]
+        : null;
+
+      if (!payload) {
+        return res.status(404).json({
+          message: `Fixture people data not found for ${requestedId}`
+        });
+      }
+
+      return res.json(payload);
+    });
+
+    app.get("/api/rest/organization/:organizationId", (req, res, next) => {
+      if (!organizationDetailFixture) {
+        return next();
+      }
+
+      const requestedId = decodeURIComponent(req.params.organizationId || "");
+      const payload = organizationDetailFixture && typeof organizationDetailFixture === "object"
+        ? organizationDetailFixture[requestedId]
+        : null;
+
+      if (!payload) {
+        return res.status(404).json({
+          message: `Fixture organization data not found for ${requestedId}`
         });
       }
 

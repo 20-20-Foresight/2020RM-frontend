@@ -1,0 +1,104 @@
+{
+  "org-stellar": {
+    "entityType": "organization",
+    "uuid": "org-stellar",
+    "status": "completed",
+    "statusExplained": "Organization detail loaded successfully.",
+    "record": {
+      "uuid": "org-stellar",
+      "name": "Stellar Dynamics Corp",
+      "metadata": {
+        "description": "Stellar Dynamics Corp is a global leader in orbital logistics and satellite deployment frameworks. Since its inception, the firm has pioneered high-density data synchronization across low-earth orbit constellations, providing enterprise-grade infrastructure for telecommunications giants and government research initiatives. Their proprietary Aether-Link protocol ensures resilient mission data exchange across complex infrastructure programs.",
+        "website": "stellardynamics.example",
+        "phone": "+1 (555) 012-3456",
+        "company_size": "500-1000",
+        "annual_revenue": "$50M+",
+        "customer_since": "2018-03-12",
+        "socials": {
+          "linkedin": "https://www.linkedin.com/company/stellar-dynamics"
+        }
+      },
+      "entityDimensionProjection": {
+        "industry": [
+          {
+            "name": "Aerospace",
+            "score": 8,
+            "reasons": []
+          },
+          {
+            "name": "Infrastructure",
+            "score": 6,
+            "reasons": []
+          }
+        ],
+        "focus": [
+          {
+            "name": "Orbital Logistics",
+            "score": 7,
+            "reasons": []
+          },
+          {
+            "name": "Enterprise Software",
+            "score": 5,
+            "reasons": []
+          }
+        ]
+      }
+    },
+    "locations": [
+      {
+        "uuid": "loc-sf",
+        "city": "San Francisco",
+        "regionCode": "CA",
+        "countryCode": "US",
+        "address": "123 Innovation Drive, San Francisco, CA 94105",
+        "relationship": {
+          "relation": "headquarters",
+          "metadata": {
+            "isHQ": true
+          }
+        }
+      },
+      {
+        "uuid": "loc-austin",
+        "city": "Austin",
+        "regionCode": "TX",
+        "countryCode": "US",
+        "address": "456 Tech Boulevard, Austin, TX 78701",
+        "relationship": {
+          "relation": "regional_office",
+          "metadata": {}
+        }
+      },
+      {
+        "uuid": "loc-london",
+        "city": "London",
+        "countryCode": "GB",
+        "address": "789 Thames Way, London EC1A 1BB",
+        "relationship": {
+          "relation": "regional_office",
+          "metadata": {}
+        }
+      }
+    ],
+    "meta": {
+      "count": 1
+    },
+    "schema": {
+      "namespace": "crm.schema",
+      "key": "organization",
+      "version": 1,
+      "document": {
+        "fieldPaths": [
+          { "path": "metadata.description" },
+          { "path": "metadata.website" },
+          { "path": "metadata.phone" },
+          { "path": "metadata.company_size" },
+          { "path": "metadata.annual_revenue" },
+          { "path": "metadata.customer_since" },
+          { "path": "metadata.socials.linkedin" }
+        ]
+      }
+    }
+  }
+}

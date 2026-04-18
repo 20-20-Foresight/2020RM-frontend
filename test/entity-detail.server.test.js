@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const { loadEntityDetailPage } = require("../app/models/entity-detail.server");
 const {
   buildEntityDetailPath,
+  buildOrganizationDetailTabPath,
   buildEntityListPath,
   buildOrganizationPeoplePath
 } = require("../app/models/entity-route");
@@ -18,6 +19,19 @@ test("buildEntityDetailPath returns the singular person route", () => {
 
 test("buildOrganizationPeoplePath returns the organization people route", () => {
   assert.equal(buildOrganizationPeoplePath("org-1"), "/organization/org-1/people");
+});
+
+test("buildOrganizationDetailTabPath returns the expected organization tab routes", () => {
+  assert.equal(buildOrganizationDetailTabPath("org-1", "overview"), "/organization/org-1");
+  assert.equal(buildOrganizationDetailTabPath("org-1", "contacts"), "/organization/org-1/people");
+  assert.equal(buildOrganizationDetailTabPath("org-1", "jobs"), "/organization/org-1/jobs");
+  assert.equal(buildOrganizationDetailTabPath("org-1", "outreach"), "/organization/org-1/outreach");
+  assert.equal(
+    buildOrganizationDetailTabPath("org-1", "similarOrganizations"),
+    "/organization/org-1/similar-organizations"
+  );
+  assert.equal(buildOrganizationDetailTabPath("org-1", "locations"), "/organization/org-1/locations");
+  assert.equal(buildOrganizationDetailTabPath("org-1", "notes"), "/organization/org-1/notes");
 });
 
 test("buildEntityListPath returns the matching list route", () => {

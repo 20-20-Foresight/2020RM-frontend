@@ -26,6 +26,8 @@ module.exports = {
         `SESSION_META_FIXTURE_PATH=${path.resolve(__dirname, "test/fixtures/session-meta.dashboard.json")}`,
         `ADMIN_DATA_LIST_FIXTURE_PATH=${path.resolve(__dirname, "test/fixtures/admin-data-list.dashboard.json")}`,
         `ADMIN_DATA_DETAIL_FIXTURE_PATH=${path.resolve(__dirname, "test/fixtures/admin-data-detail.dashboard.json")}`,
+        `ORGANIZATION_DETAIL_FIXTURE_PATH=${path.resolve(__dirname, "test/fixtures/organization-detail.dashboard.json")}`,
+        `ORGANIZATION_PEOPLE_FIXTURE_PATH=${path.resolve(__dirname, "test/fixtures/organization-people.dashboard.json")}`,
         "npm start"
       ].join(" ")
     ].join(" && "),

@@ -1,7 +1,12 @@
+const {
+  getOrganizationDetailTabConfig,
+  getOrganizationDetailTabKeyFromSegment
+} = require("./organization-detail-config");
+
 /**
  * Parses one organization detail pathname into organization and tab segments.
  * @param {string|null|undefined} pathname
- * @returns {{organizationUUID: string, tabKey: "info"|"people"}|null}
+ * @returns {{organizationUUID: string, tabKey: "overview"|"contacts"|"jobs"|"outreach"|"similarOrganizations"|"locations"|"notes"}|null}
  */
 function parseOrganizationDetailPath(pathname) {
   if (typeof pathname !== "string") {
@@ -13,9 +18,14 @@ function parseOrganizationDetailPath(pathname) {
     return null;
   }
 
+  const tabKey = getOrganizationDetailTabKeyFromSegment(match[2] || null);
+  if (!tabKey) {
+    return null;
+  }
+
   return {
     organizationUUID: match[1],
-    tabKey: match[2] === "people" ? "people" : "info"
+    tabKey
   };
 }
 
@@ -42,7 +52,7 @@ function isSameOrganizationDetailNavigation(options) {
  *   navigationState: string,
  *   navigationPathname?: string|null|undefined
  * }} options
- * @returns {{activeTabKey: "info"|"people", isLoading: boolean, label: string|null}}
+ * @returns {{activeTabKey: "overview"|"contacts"|"jobs"|"outreach"|"similarOrganizations"|"locations"|"notes", isLoading: boolean, label: string|null}}
  */
 function getOrganizationDetailTabUiState(options) {
   const current = parseOrganizationDetailPath(options.currentPathname);
@@ -54,7 +64,7 @@ function getOrganizationDetailTabUiState(options) {
     Boolean(pending) &&
     pending.organizationUUID === normalizedOrganizationUUID;
 
-  const activeTabKey = relevantPending ? pending.tabKey : current?.tabKey || "info";
+  const activeTabKey = relevantPending ? pending.tabKey : current?.tabKey || "overview";
   const isLoading = relevantPending && pending.tabKey !== current?.tabKey;
 
   if (!isLoading) {
@@ -68,7 +78,7 @@ function getOrganizationDetailTabUiState(options) {
   return {
     activeTabKey,
     isLoading: true,
-    label: activeTabKey === "people" ? "Loading people..." : "Loading organization..."
+    label: getOrganizationDetailTabConfig(activeTabKey)?.loadingLabel || "Loading organization..."
   };
 }
 

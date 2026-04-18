@@ -2,16 +2,18 @@ import { json } from "@remix-run/node";
 import { Box } from "@chakra-ui/react";
 import { Outlet, useLoaderData, useLocation, useNavigation } from "@remix-run/react";
 import { BlockingLoadingOverlay } from "../components/BlockingLoadingOverlay";
-import { EntityDetailPage } from "../components/EntityDetailPage";
+import { OrganizationDetailLayout } from "../components/OrganizationDetailLayout";
 import { loadEntityDetailPage } from "../models/entity-detail.server";
 import {
-  buildEntityDetailPath,
-  buildOrganizationPeoplePath
+  buildOrganizationDetailTabPath
 } from "../models/entity-route";
 import {
   getOrganizationDetailTabUiState,
   shouldRevalidateOrganizationDetailRoute
 } from "../models/organization-detail-tabs.mjs";
+import {
+  ORGANIZATION_DETAIL_TABS
+} from "../models/organization-detail-config";
 
 export async function loader({ request, params }) {
   return json(
@@ -31,41 +33,31 @@ export default function OrganizationDetailRoute() {
   const data = useLoaderData();
   const location = useLocation();
   const navigation = useNavigation();
-  const tabs = [
-    {
-      key: "info",
-      label: "Info",
-      to: buildEntityDetailPath("organization", data.uuid)
-    },
-    {
-      key: "people",
-      label: "People",
-      to: buildOrganizationPeoplePath(data.uuid)
-    }
-  ].filter((tab) => tab.to);
+  const tabs = ORGANIZATION_DETAIL_TABS.map((tab) => ({
+    key: tab.key,
+    label: tab.label,
+    to: buildOrganizationDetailTabPath(data.uuid, tab.key)
+  })).filter((tab) => tab.to);
   const tabState = getOrganizationDetailTabUiState({
     organizationUUID: data.uuid,
     currentPathname: location.pathname,
     navigationState: navigation.state,
     navigationPathname: navigation.location?.pathname || null
   });
-  const shouldRenderTabBody = tabState.activeTabKey === "people" || tabState.isLoading;
 
   return (
-    <EntityDetailPage entityType="organization" tabs={tabs} activeTabKey={tabState.activeTabKey} data={data}>
-      {shouldRenderTabBody ? (
-        <Box position="relative" minH="240px">
-          {tabState.activeTabKey === "people" ? <Outlet /> : null}
-          {tabState.isLoading ? (
-            <BlockingLoadingOverlay
-              label={tabState.label || "Loading..."}
-              zIndex={2}
-              position="absolute"
-              borderRadius="16px"
-            />
-          ) : null}
-        </Box>
-      ) : null}
-    </EntityDetailPage>
+    <OrganizationDetailLayout tabs={tabs} activeTabKey={tabState.activeTabKey} data={data}>
+      <Box position="relative" minH="240px">
+        <Outlet context={{ organizationDetail: data }} />
+        {tabState.isLoading ? (
+          <BlockingLoadingOverlay
+            label={tabState.label || "Loading..."}
+            zIndex={2}
+            position="absolute"
+            borderRadius="20px"
+          />
+        ) : null}
+      </Box>
+    </OrganizationDetailLayout>
   );
 }
