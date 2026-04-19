@@ -268,7 +268,7 @@ function inferShape(document, explicitShape) {
   }
 
   const { wrapperKey, value } = unwrapDocumentValue(document);
-  if (wrapperKey === "crosswalk" || isCrosswalkValue(value)) {
+  if (isCrosswalkValue(value)) {
     return "crosswalk";
   }
 
@@ -512,6 +512,65 @@ function normalizeEditor(editor, options = {}) {
 }
 
 /**
+ * Renames one editor column while preserving row values.
+ * @param {{columns: string[], rows: Record<string, string>[]}} editor
+ * @param {string} sourceColumn
+ * @param {string} targetColumn
+ * @returns {{columns: string[], rows: Record<string, string>[]}}
+ */
+function renameEditorColumn(editor, sourceColumn, targetColumn) {
+  if (
+    !editor ||
+    !Array.isArray(editor.columns) ||
+    !Array.isArray(editor.rows) ||
+    !sourceColumn ||
+    !targetColumn ||
+    sourceColumn === targetColumn ||
+    !editor.columns.includes(sourceColumn)
+  ) {
+    return editor;
+  }
+
+  return {
+    columns: editor.columns.map((column) => (column === sourceColumn ? targetColumn : column)),
+    rows: editor.rows.map((row) => {
+      if (!isPlainObject(row) || !(sourceColumn in row)) {
+        return row;
+      }
+
+      /** @type {Record<string, string>} */
+      const renamedRow = {};
+      for (const [key, value] of Object.entries(row)) {
+        renamedRow[key === sourceColumn ? targetColumn : key] = value;
+      }
+      return renamedRow;
+    })
+  };
+}
+
+/**
+ * Applies document-specific display labels without changing the saved shape.
+ * @param {{columns: string[], rows: Record<string, string>[]}} editor
+ * @param {{name?: unknown, key?: unknown, document?: unknown, shape?: unknown}} context
+ * @returns {{columns: string[], rows: Record<string, string>[]}}
+ */
+function applyDocumentEditorLabels(editor, context = {}) {
+  const shape = readTrimmedString(context.shape);
+  const normalizedName = readTrimmedString(context.name)?.toLowerCase() || "";
+  const normalizedKey = readTrimmedString(context.key)?.toLowerCase() || "";
+
+  if (
+    shape === "object" &&
+    isPlainObject(context.document?.crosswalk) &&
+    (normalizedName === "contact titles" || normalizedKey === "contact titles")
+  ) {
+    return renameEditorColumn(editor, "key", "contact title");
+  }
+
+  return editor;
+}
+
+/**
  * Reads a non-empty cell value.
  * @param {unknown} value
  * @returns {string|null}
@@ -556,6 +615,13 @@ function applyDocumentWrapper(document, nextValue, options = {}) {
     return {
       ...document,
       [options.preferredKey]: nextValue
+    };
+  }
+
+  if (!options.preferredKey && isPlainObject(document.crosswalk) && isPlainObject(nextValue)) {
+    return {
+      ...document,
+      crosswalk: nextValue
     };
   }
 
@@ -792,15 +858,24 @@ async function loadAdminDataDocument(options) {
   });
   const result = payload?.data;
   const shape = inferShape(result?.document, result?.shape ?? result?.editor?.shape);
+  const editor = applyDocumentEditorLabels(
+    normalizeEditor(result?.editor, {
+      shape,
+      document: result?.document
+    }),
+    {
+      name: result?.name,
+      key: result?.key,
+      document: result?.document,
+      shape
+    }
+  );
 
   return {
     ...normalizeSummary(result),
     shape,
     document: result?.document ?? null,
-    editor: normalizeEditor(result?.editor, {
-      shape,
-      document: result?.document
-    })
+    editor
   };
 }
 
