@@ -94,11 +94,6 @@ export const navItems = [
         key: "admin-user-management",
         label: "User Management",
         to: "/admin/user-management"
-      },
-      {
-        key: "admin-data",
-        label: "Data",
-        to: "/admin/data"
       }
     ]
   },
@@ -107,6 +102,12 @@ export const navItems = [
     label: "Settings",
     to: "/settings",
     icon: "settings"
+  },
+  {
+    key: "data",
+    label: "Data",
+    to: "/admin/data",
+    icon: "table_chart"
   }
 ];
 
@@ -131,11 +132,17 @@ export function isPathWithinItem(item, pathname) {
  * @returns {boolean}
  */
 export function isNavItemActive(item, pathname) {
-  if (isPathWithinItem(item, pathname)) {
+  const hasChildren = Array.isArray(item?.children) && item.children.length > 0;
+
+  if (hasChildren) {
+    if (pathname === item.to) {
+      return true;
+    }
+  } else if (isPathWithinItem(item, pathname)) {
     return true;
   }
 
-  return Array.isArray(item?.children)
+  return hasChildren
     ? item.children.some((child) => isPathWithinItem(child, pathname))
     : false;
 }
@@ -163,6 +170,10 @@ export function getNavigationItems(meta) {
 
   return navItems
     .map((item) => {
+      if (item.key === "data") {
+        return adminActions.includes("object_editing") ? item : null;
+      }
+
       if (item.key !== "admin") {
         return item;
       }
@@ -170,10 +181,6 @@ export function getNavigationItems(meta) {
       const children = (item.children || []).filter((child) => {
         if (child.key === "admin-user-management") {
           return adminActions.includes("access_control");
-        }
-
-        if (child.key === "admin-data") {
-          return adminActions.includes("object_editing");
         }
 
         return false;
@@ -185,6 +192,10 @@ export function getNavigationItems(meta) {
       };
     })
     .filter((item) => {
+      if (!item) {
+        return false;
+      }
+
       if (item.key !== "admin") {
         return true;
       }

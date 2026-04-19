@@ -349,6 +349,10 @@ function resolveSegmentationDefaultEditorType(editorConfig, document, documentTy
   }
 
   const normalizedDocumentType = readTrimmedString(documentType);
+  if (normalizedDocumentType !== "segmentation") {
+    return null;
+  }
+
   if (normalizedDocumentType === "segmentation") {
     const { value } = resolveSegmentationListRoot(document);
     if (Array.isArray(value) && value.some((row) => isPlainObject(row))) {

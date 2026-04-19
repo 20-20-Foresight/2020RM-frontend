@@ -25,9 +25,13 @@ test("navigation model defines the requested subsection labels", async () => {
       },
       {
         label: "Admin",
-        children: ["User Management", "Data"]
+        children: ["User Management"]
       }
     ]
+  );
+  assert.deepEqual(
+    navItems.slice(-2).map((item) => item.label),
+    ["Settings", "Data"]
   );
 });
 
@@ -54,6 +58,16 @@ test("isNavItemActive treats child routes as active for the parent section", asy
   assert.equal(isNavItemActive(peopleItem, "/jobs"), false);
 });
 
+test("isNavItemActive does not keep Admin active for the separate top-level Data section", async () => {
+  const { navItems, isNavItemActive } = await import("../app/models/navigation.mjs");
+  const adminItem = navItems.find((item) => item.key === "admin");
+  const dataItem = navItems.find((item) => item.key === "data");
+
+  assert.equal(isNavItemActive(adminItem, "/admin/data"), false);
+  assert.equal(isNavItemActive(dataItem, "/admin/data"), true);
+  assert.equal(isNavItemActive(dataItem, "/admin/data/crm.data%3Acontact%20titles"), true);
+});
+
 test("getExpandedNavItemKeys expands the matching section for subsection routes", async () => {
   const { getExpandedNavItemKeys } = await import("../app/models/navigation.mjs");
   assert.deepEqual(getExpandedNavItemKeys("/jobs/all-em-jobs"), ["jobs"]);
@@ -73,6 +87,7 @@ test("getNavigationItems hides admin children when the session lacks admin permi
   });
 
   assert.equal(items.some((item) => item.key === "admin"), false);
+  assert.equal(items.some((item) => item.key === "data"), false);
 });
 
 test("getNavigationItems exposes only the allowed admin subsections", async () => {
@@ -89,4 +104,23 @@ test("getNavigationItems exposes only the allowed admin subsections", async () =
   const adminItem = items.find((item) => item.key === "admin");
 
   assert.deepEqual(adminItem.children.map((child) => child.label), ["User Management"]);
+  assert.equal(items.some((item) => item.key === "data"), false);
+});
+
+test("getNavigationItems exposes Data as a top-level item for object-editing users", async () => {
+  const { getNavigationItems } = await import("../app/models/navigation.mjs");
+  const items = getNavigationItems({
+    permissions: {
+      entity_access: {},
+      options_access: {},
+      admin_access: {
+        system: ["object_editing"]
+      }
+    }
+  });
+
+  const dataItem = items.find((item) => item.key === "data");
+  assert.equal(dataItem?.label, "Data");
+  assert.equal(dataItem?.to, "/admin/data");
+  assert.equal(items.some((item) => item.key === "admin"), false);
 });

@@ -28,7 +28,8 @@ import {
   MdCampaign,
   MdSecurity,
   MdSettings,
-  MdDashboard
+  MdDashboard,
+  MdTableChart
 } from "react-icons/md";
 import { FiLogOut } from "react-icons/fi";
 import {
@@ -50,7 +51,8 @@ const iconByName = {
   work: MdWork,
   campaign: MdCampaign,
   security: MdSecurity,
-  settings: MdSettings
+  settings: MdSettings,
+  table_chart: MdTableChart
 };
 
 const SIDEBAR_BG = "#16181d";

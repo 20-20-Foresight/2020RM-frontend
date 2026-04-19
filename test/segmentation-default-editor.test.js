@@ -544,9 +544,25 @@ test("resolveSegmentationDefaultEditorType honors explicit editor config and fal
             "category heading": "Technology, Information and Media"
           }
         }
-      }
+      },
+      "segmentation"
     ),
     "segmentation.default"
+  );
+  assert.equal(
+    resolveSegmentationDefaultEditorType(
+      null,
+      {
+        crosswalk: {
+          Blogs: {
+            sector: "Other",
+            focus: "Electric Power Transmission, Control, and Distribution",
+            "category heading": "Technology, Information and Media"
+          }
+        }
+      }
+    ),
+    null
   );
   assert.equal(resolveSegmentationDefaultEditorType(null, { entries: { us: "United States" } }), null);
 });

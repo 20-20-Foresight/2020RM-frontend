@@ -410,6 +410,63 @@ test("admin data detail infers a crosswalk editor from wrapped crosswalk documen
   });
 });
 
+test("admin data detail infers a keyed object editor from wrapped crosswalk maps with object leaves", async () => {
+  const detail = await loadAdminDataDocument({
+    request: new Request("http://localhost:3000/admin/data/crm.data%3Acontact%20titles", {
+      headers: {
+        cookie: "sid=123"
+      }
+    }),
+    id: "crm.data:contact titles",
+    fetchImpl: async () => ({
+      ok: true,
+      async json() {
+        return {
+          data: {
+            id: "crm.data:contact titles",
+            namespace: "crm.data",
+            key: "contact titles",
+            name: "Contact Titles",
+            document: {
+              "how this crosswalk works": [],
+              crosswalk: {
+                "Vice Chairman": {
+                  "ranking 0-5": 5,
+                  "initial bucket": "President"
+                },
+                Chief: {
+                  "ranking 0-5": 5,
+                  "initial bucket": "VP",
+                  notes: "Needs review"
+                }
+              }
+            }
+          }
+        };
+      }
+    })
+  });
+
+  assert.equal(detail.shape, "object");
+  assert.deepEqual(detail.editor, {
+    columns: ["contact title", "ranking 0-5", "initial bucket", "notes"],
+    rows: [
+      {
+        "contact title": "Vice Chairman",
+        "ranking 0-5": "5",
+        "initial bucket": "President",
+        notes: ""
+      },
+      {
+        "contact title": "Chief",
+        "ranking 0-5": "5",
+        "initial bucket": "VP",
+        notes: "Needs review"
+      }
+    ]
+  });
+});
+
 test("buildDocumentFromEditor rewrites crosswalk rows into the canonical document shape", () => {
   assert.deepEqual(
     buildDocumentFromEditor({
@@ -448,6 +505,47 @@ test("buildDocumentFromEditor rewrites crosswalk rows into the canonical documen
         },
         liz: {
           values: ["elizabeth"]
+        }
+      }
+    }
+  );
+});
+
+test("buildDocumentFromEditor preserves wrapped crosswalk maps for object-table editors", () => {
+  assert.deepEqual(
+    buildDocumentFromEditor({
+      shape: "object",
+      columns: ["contact title", "ranking 0-5", "initial bucket", "notes"],
+      rows: [
+        {
+          "contact title": "Vice Chairman",
+          "ranking 0-5": "5",
+          "initial bucket": "President",
+          notes: ""
+        },
+        {
+          "contact title": "Chief",
+          "ranking 0-5": "5",
+          "initial bucket": "VP",
+          notes: "Needs review"
+        }
+      ],
+      document: {
+        "how this crosswalk works": [],
+        crosswalk: {}
+      }
+    }),
+    {
+      "how this crosswalk works": [],
+      crosswalk: {
+        "Vice Chairman": {
+          "ranking 0-5": "5",
+          "initial bucket": "President"
+        },
+        Chief: {
+          "ranking 0-5": "5",
+          "initial bucket": "VP",
+          notes: "Needs review"
         }
       }
     }
