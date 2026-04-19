@@ -3,6 +3,7 @@
 Remix + Chakra UI frontend with Express BFF for Microsoft OIDC and `/api/*` proxy.
 
 - Auth/OIDC + proxy: `src/app.js`
+- Unauthenticated deep links now preserve the requested in-app path through `/signin`, `/auth/login`, and the Microsoft callback so users return to the page they originally requested after auth when possible
 - Remix app (UI): `app/`
 - Server: `src/server.js`
 - Design: `../2020-Design/phase1/auth-replan.md`

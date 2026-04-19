@@ -3,6 +3,11 @@ const session = require("express-session");
 const fs = require("node:fs");
 const Logger = require("@20-20-Foresight/base/log");
 const { buildAuthorizationUrl, handleCallback } = require("./auth/microsoft");
+const {
+  DEFAULT_RETURN_TO_PATH,
+  buildSigninPath,
+  normalizeReturnToPath
+} = require("./auth/return-to");
 const { getSessionStore } = require("./session/store");
 const DEFAULT_FAVICON_PATH = "/assets/2020-ets-horiz-logo-rgb-color-lg.png";
 
@@ -130,11 +135,21 @@ function filterAdminDataFixtureList(fixture, query = {}) {
 /**
  * @param {AppConfig} config
  * @param {import("@remix-run/express").RequestHandler} [remixHandler]
+ * @param {{
+ *   buildAuthorizationUrl?: typeof buildAuthorizationUrl,
+ *   handleCallback?: typeof handleCallback
+ * }} [deps]
  * @returns {import("express").Express}
  */
-function createApp(config, remixHandler) {
+function createApp(config, remixHandler, deps = {}) {
   const app = express();
   const log = new Logger("frontend", "app");
+  const buildAuthorizationUrlImpl =
+    typeof deps.buildAuthorizationUrl === "function"
+      ? deps.buildAuthorizationUrl
+      : buildAuthorizationUrl;
+  const handleCallbackImpl =
+    typeof deps.handleCallback === "function" ? deps.handleCallback : handleCallback;
   const faviconTarget = resolveFaviconTarget();
   const adminDataListFixture = readJsonFixture("ADMIN_DATA_LIST_FIXTURE_PATH");
   const adminDataDetailFixture = readJsonFixture("ADMIN_DATA_DETAIL_FIXTURE_PATH");
@@ -279,15 +294,19 @@ function createApp(config, remixHandler) {
 
   app.get("/auth/login", async (req, res, next) => {
     try {
+      const returnTo = normalizeReturnToPath(
+        typeof req.query?.returnTo === "string" ? req.query.returnTo : DEFAULT_RETURN_TO_PATH
+      );
+
       if (!config.authEnabled) {
         req.session.user = config.mockUser;
         req.session.tokens = { accessToken: null, refreshToken: null, expiresAt: null, scope: "" };
-        return res.redirect("/dashboard");
+        return res.redirect(returnTo);
       }
 
       log.info("/auth/login start");
       const redirectUri = `${config.baseUrl}${config.redirectPath}`;
-      const { url, sessionState } = await buildAuthorizationUrl({
+      const { url, sessionState } = await buildAuthorizationUrlImpl({
         tenantId: config.msTenantId,
         clientId: config.msClientId,
         clientSecret: config.msClientSecret,
@@ -295,7 +314,10 @@ function createApp(config, remixHandler) {
         apiScope: config.msApiScope
       });
 
-      req.session.msAuth = sessionState;
+      req.session.msAuth = {
+        ...sessionState,
+        returnTo
+      };
       log.info("redirecting to Microsoft auth");
       return res.redirect(url);
     } catch (err) {
@@ -320,7 +342,7 @@ function createApp(config, remixHandler) {
       }
 
       const redirectUri = `${config.baseUrl}${config.redirectPath}`;
-      const { user, tokenSet } = await handleCallback(
+      const { user, tokenSet } = await handleCallbackImpl(
         {
           tenantId: config.msTenantId,
           clientId: config.msClientId,
@@ -331,6 +353,7 @@ function createApp(config, remixHandler) {
         req,
         sessionState
       );
+      const returnTo = normalizeReturnToPath(sessionState.returnTo);
 
       req.session.user = user;
       req.session.tokens = {
@@ -340,8 +363,10 @@ function createApp(config, remixHandler) {
         scope: tokenSet.scope || ""
       };
       delete req.session.msAuth;
-      log.info("auth callback success, redirecting to /dashboard");
-      return res.redirect("/dashboard");
+      log.info("auth callback success", {
+        returnTo
+      });
+      return res.redirect(returnTo);
     } catch (err) {
       log.error("auth callback error", err);
       return next(err);
@@ -423,7 +448,7 @@ function createApp(config, remixHandler) {
     }
     const sessionData = req.session || {};
     if (!sessionData.user || !sessionData.tokens || !sessionData.tokens.accessToken) {
-      return res.redirect("/signin");
+      return res.redirect(buildSigninPath(req.originalUrl || req.url || DEFAULT_RETURN_TO_PATH));
     }
     return next();
   });

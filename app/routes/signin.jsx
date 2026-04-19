@@ -1,5 +1,7 @@
 import { Box, Button, Heading, Image, VStack, VisuallyHidden } from "@chakra-ui/react";
+import { useSearchParams } from "@remix-run/react";
 import { FaWindows } from "react-icons/fa";
+const { buildAuthLoginPath } = require("../../src/auth/return-to");
 
 export const meta = () => [{ title: "2020RM — Sign In" }];
 
@@ -9,6 +11,9 @@ const HERO_VIDEO_URL =
   "https://www.2020foresight.com/wp-content/uploads/2022/02/2020-foresight-ambient-touchpoints-v2.mp4";
 
 export default function SignInPage() {
+  const [searchParams] = useSearchParams();
+  const loginHref = buildAuthLoginPath(searchParams.get("returnTo"));
+
   return (
     <Box minH="100vh" bg="#000000" display="flex" alignItems="center" justifyContent="center">
       <Box
@@ -62,7 +67,7 @@ export default function SignInPage() {
               </Heading>
               <Button
                 as="a"
-                href="/auth/login"
+                href={loginHref}
                 size="lg"
                 w="full"
                 bg="#0078D4"
@@ -73,7 +78,10 @@ export default function SignInPage() {
               >
                 Sign in with Microsoft
               </Button>
-              <VisuallyHidden>After sign-in you will land on the dashboard.</VisuallyHidden>
+              <VisuallyHidden>
+                After sign-in you will return to the requested page when available; otherwise the
+                dashboard.
+              </VisuallyHidden>
             </VStack>
           </Box>
         </VStack>

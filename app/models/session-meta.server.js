@@ -1,4 +1,5 @@
 const fs = require("node:fs/promises");
+const { getReturnToFromRequestUrl } = require("../../src/auth/return-to");
 
 /**
  * Loads one JSON session-meta fixture from disk when configured for local tests.
@@ -34,7 +35,8 @@ async function loadSessionMeta(options) {
 
   if (response.status === 401) {
     return {
-      redirectToSignin: true
+      redirectToSignin: true,
+      returnTo: getReturnToFromRequestUrl(options.request.url)
     };
   }
 

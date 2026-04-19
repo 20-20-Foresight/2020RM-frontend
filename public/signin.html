@@ -138,7 +138,7 @@
         />
         <section class="card" aria-labelledby="signin-heading">
           <h1 id="signin-heading">Sign In</h1>
-          <a class="button" href="/auth/login">
+          <a class="button" href="/auth/login" id="signin-link">
             <svg class="windows-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
               <path
                 fill="currentColor"
@@ -147,10 +147,25 @@
             </svg>
             <span>Sign in with Microsoft</span>
           </a>
-          <p class="sr-only">After sign-in you will land on the dashboard.</p>
+          <p class="sr-only" id="signin-message">
+            After sign-in you will return to the requested page when available; otherwise the
+            dashboard.
+          </p>
         </section>
         <div class="hint">Backend must be running.</div>
       </div>
     </main>
+    <script>
+      (function preserveReturnTo() {
+        const params = new URLSearchParams(window.location.search);
+        const returnTo = params.get("returnTo");
+        if (!returnTo) return;
+
+        const signinLink = document.getElementById("signin-link");
+        if (signinLink) {
+          signinLink.setAttribute("href", `/auth/login?returnTo=${encodeURIComponent(returnTo)}`);
+        }
+      })();
+    </script>
   </body>
 </html>

@@ -70,7 +70,7 @@ test("session meta loader calls /api/meta with the incoming cookie header", asyn
 
 test("session meta loader returns a signin redirect marker on 401", async () => {
   const meta = await loadSessionMeta({
-    request: new Request("http://localhost:3000/dashboard"),
+    request: new Request("http://localhost:3000/organization/org-stellar?tab=people"),
     fetchImpl: async () => ({
       status: 401,
       ok: false,
@@ -81,7 +81,8 @@ test("session meta loader returns a signin redirect marker on 401", async () => 
   });
 
   assert.deepEqual(meta, {
-    redirectToSignin: true
+    redirectToSignin: true,
+    returnTo: "/organization/org-stellar?tab=people"
   });
 });
 
