@@ -79,8 +79,7 @@ function HeaderMetaItem({ icon, label, href = null, isExternal = false }) {
  *     record: object|null,
  *     schema: object|null,
  *     locations: object[],
- *     error: string|null,
- *     statusExplained: string
+ *     error: string|null
  *   },
  *   tabs: Array<{key: string, label: string, to: string|null|undefined}>,
  *   activeTabKey: string,
@@ -158,9 +157,6 @@ export function OrganizationDetailLayout({ data, tabs, activeTabKey, children = 
                 >
                   {header.name}
                 </Heading>
-                <Text mt={2} color="gray.600">
-                  {data?.statusExplained || "Organization detail loaded."}
-                </Text>
 
                 <Flex mt={4} wrap="wrap" gap={3}>
                   <HeaderMetaItem icon={FiMapPin} label={header.hqLabel} />

@@ -1,6 +1,7 @@
 const { buildOrganizationSegmentationViewModel } = require("./organization-segmentation");
 const {
   getSearchResultFieldValue,
+  readObjectPath,
   resolveSchemaFieldPath
 } = require("./search-result");
 
@@ -73,6 +74,129 @@ function resolvePreferredFieldValue(record, schema, preferredPaths) {
 
   for (const path of Array.isArray(preferredPaths) ? preferredPaths : []) {
     const value = getSearchResultFieldValue(record, path);
+    if (value) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Returns one trimmed display-safe string.
+ * @param {unknown} value
+ * @returns {string|null}
+ */
+function normalizeDisplayString(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const asString = typeof value === "number" ? String(value) : value;
+  if (typeof asString !== "string") {
+    return null;
+  }
+  const trimmed = asString.trim();
+  return trimmed ? trimmed : null;
+}
+
+/**
+ * Resolves the first usable phone value from one raw phone payload.
+ * Supports flat strings, `{ phone, ext }`, and grouped objects like
+ * `{ work, mobile, home, other }`.
+ * @param {unknown} value
+ * @returns {{base: string|null, ext: string|null}}
+ */
+function resolvePhoneParts(value) {
+  if (!value) {
+    return {
+      base: null,
+      ext: null
+    };
+  }
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const resolved = resolvePhoneParts(entry);
+      if (resolved.base) {
+        return resolved;
+      }
+    }
+    return {
+      base: null,
+      ext: null
+    };
+  }
+
+  if (typeof value === "object") {
+    const base =
+      normalizeDisplayString(value.phone) ||
+      normalizeDisplayString(value.number) ||
+      normalizeDisplayString(value.value);
+    const ext =
+      normalizeDisplayString(value.ext) ||
+      normalizeDisplayString(value.extension) ||
+      normalizeDisplayString(value.phoneExt) ||
+      normalizeDisplayString(value.phoneExtension);
+
+    if (base) {
+      return {
+        base,
+        ext
+      };
+    }
+
+    for (const key of ["work", "mobile", "home", "other"]) {
+      const resolved = resolvePhoneParts(value[key]);
+      if (resolved.base) {
+        return resolved;
+      }
+    }
+
+    for (const nestedValue of Object.values(value)) {
+      const resolved = resolvePhoneParts(nestedValue);
+      if (resolved.base) {
+        return resolved;
+      }
+    }
+  }
+
+  return {
+    base: normalizeDisplayString(value),
+    ext: null
+  };
+}
+
+/**
+ * Formats one raw phone payload for display.
+ * @param {unknown} value
+ * @returns {string|null}
+ */
+function formatPhoneDisplayValue(value) {
+  const { base, ext } = resolvePhoneParts(value);
+  if (!base) {
+    return null;
+  }
+  return ext ? `${base} x${ext}` : base;
+}
+
+/**
+ * Resolves one preferred phone value using schema first, then dotted-path fallback.
+ * @param {object|null} record
+ * @param {object|null} schema
+ * @param {string[]} preferredPaths
+ * @returns {string|null}
+ */
+function resolvePreferredPhoneValue(record, schema, preferredPaths) {
+  const schemaFieldPath = resolveSchemaFieldPath(schema, preferredPaths);
+  if (schemaFieldPath) {
+    const schemaValue = formatPhoneDisplayValue(readObjectPath(record, schemaFieldPath));
+    if (schemaValue) {
+      return schemaValue;
+    }
+  }
+
+  for (const path of Array.isArray(preferredPaths) ? preferredPaths : []) {
+    const value = formatPhoneDisplayValue(readObjectPath(record, path));
     if (value) {
       return value;
     }
@@ -384,7 +508,7 @@ function buildOrganizationHeaderViewModel(options) {
     name,
     initials: buildOrganizationInitials(name),
     hqLabel: getHeadquartersLabel(locations),
-    phone: resolvePreferredFieldValue(record, schema, PHONE_FIELD_PATHS),
+    phone: resolvePreferredPhoneValue(record, schema, PHONE_FIELD_PATHS),
     websiteLabel,
     websiteUrl: normalizeUrl(websiteLabel),
     linkedInUrl: normalizeUrl(resolvePreferredFieldValue(record, schema, LINKEDIN_FIELD_PATHS))

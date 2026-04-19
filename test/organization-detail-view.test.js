@@ -52,6 +52,55 @@ test("organization header view model prefers live organization metadata", () => 
   });
 });
 
+test("organization header view model formats phone objects with extensions", () => {
+  const result = buildOrganizationHeaderViewModel({
+    record: {
+      name: "Acme Aerospace",
+      metadata: {
+        phone: {
+          phone: "555-0101",
+          ext: "22"
+        }
+      }
+    },
+    schema: {
+      document: {
+        fieldPaths: [{ path: "metadata.phone" }]
+      }
+    },
+    locations: []
+  });
+
+  assert.equal(result.phone, "555-0101 x22");
+});
+
+test("organization header view model selects the first grouped phone value", () => {
+  const result = buildOrganizationHeaderViewModel({
+    record: {
+      name: "Acme Aerospace",
+      metadata: {
+        phone: {
+          work: [
+            {
+              phone: "+1 (312) 555-0199",
+              extension: "104"
+            }
+          ],
+          mobile: ["+1 (773) 555-0123"]
+        }
+      }
+    },
+    schema: {
+      document: {
+        fieldPaths: [{ path: "metadata.phone" }]
+      }
+    },
+    locations: []
+  });
+
+  assert.equal(result.phone, "+1 (312) 555-0199 x104");
+});
+
 test("organization overview view model falls back to neutral placeholder values", () => {
   const result = buildOrganizationOverviewViewModel({
     record: {
