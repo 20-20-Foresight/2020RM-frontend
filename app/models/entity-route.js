@@ -1,6 +1,9 @@
 const {
   getOrganizationDetailTabConfig
 } = require("./organization-detail-config");
+const {
+  getPersonDetailTabConfig
+} = require("./person-detail-config");
 
 /**
  * Returns the collection route for one entity type.
@@ -52,9 +55,27 @@ function buildOrganizationPeoplePath(uuid) {
   return buildOrganizationDetailTabPath(uuid, "contacts");
 }
 
+/**
+ * Returns one contact detail-tab route for one person UUID.
+ * @param {string|null|undefined} uuid
+ * @param {"overview"|"lists"|"similarContacts"|"notes"} tabKey
+ * @returns {string|null}
+ */
+function buildPersonDetailTabPath(uuid, tabKey) {
+  const detailPath = buildEntityDetailPath("person", uuid);
+  const tabConfig = getPersonDetailTabConfig(tabKey);
+
+  if (!detailPath || !tabConfig) {
+    return null;
+  }
+
+  return tabConfig.segment ? `${detailPath}/${tabConfig.segment}` : detailPath;
+}
+
 module.exports = {
   buildEntityDetailPath,
   buildEntityListPath,
   buildOrganizationDetailTabPath,
-  buildOrganizationPeoplePath
+  buildOrganizationPeoplePath,
+  buildPersonDetailTabPath
 };

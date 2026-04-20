@@ -5,6 +5,7 @@ const { loadEntityDetailPage } = require("../app/models/entity-detail.server");
 const {
   buildEntityDetailPath,
   buildOrganizationDetailTabPath,
+  buildPersonDetailTabPath,
   buildEntityListPath,
   buildOrganizationPeoplePath
 } = require("../app/models/entity-route");
@@ -32,6 +33,16 @@ test("buildOrganizationDetailTabPath returns the expected organization tab route
   );
   assert.equal(buildOrganizationDetailTabPath("org-1", "locations"), "/organization/org-1/locations");
   assert.equal(buildOrganizationDetailTabPath("org-1", "notes"), "/organization/org-1/notes");
+});
+
+test("buildPersonDetailTabPath returns the expected contact tab routes", () => {
+  assert.equal(buildPersonDetailTabPath("person-1", "overview"), "/person/person-1");
+  assert.equal(buildPersonDetailTabPath("person-1", "lists"), "/person/person-1/lists");
+  assert.equal(
+    buildPersonDetailTabPath("person-1", "similarContacts"),
+    "/person/person-1/similar-contacts"
+  );
+  assert.equal(buildPersonDetailTabPath("person-1", "notes"), "/person/person-1/notes");
 });
 
 test("buildEntityListPath returns the matching list route", () => {

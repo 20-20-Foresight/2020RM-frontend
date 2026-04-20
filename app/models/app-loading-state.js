@@ -1,4 +1,5 @@
 const { isSameOrganizationDetailNavigation } = require("./organization-detail-tabs");
+const { isSamePersonDetailNavigation } = require("./person-detail-tabs");
 
 /**
  * Returns whether one pathname belongs to the admin data area.
@@ -134,6 +135,19 @@ function getAppLoadingOverlayState(options) {
 
   if (
     isSameOrganizationDetailNavigation({
+      currentPathname: options.currentPathname,
+      navigationPathname: pendingPathname
+    })
+  ) {
+    return {
+      isLoading: false,
+      isSubmitting: false,
+      label: null
+    };
+  }
+
+  if (
+    isSamePersonDetailNavigation({
       currentPathname: options.currentPathname,
       navigationPathname: pendingPathname
     })

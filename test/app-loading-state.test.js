@@ -130,6 +130,22 @@ test("loading overlay labels person detail navigations clearly", () => {
   );
 });
 
+test("loading overlay ignores same-person detail tab navigations so the page can render its inline loader", () => {
+  assert.deepEqual(
+    getAppLoadingOverlayState({
+      currentPathname: "/person/person-1",
+      navigationState: "loading",
+      navigationPathname: "/person/person-1/similar-contacts",
+      fetcherStates: []
+    }),
+    {
+      isLoading: false,
+      isSubmitting: false,
+      label: null
+    }
+  );
+});
+
 test("loading overlay preserves saving copy for admin data submissions", () => {
   assert.deepEqual(
     getAppLoadingOverlayState({

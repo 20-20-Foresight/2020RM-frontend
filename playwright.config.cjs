@@ -28,6 +28,7 @@ module.exports = {
         `ADMIN_DATA_DETAIL_FIXTURE_PATH=${path.resolve(__dirname, "test/fixtures/admin-data-detail.dashboard.json")}`,
         `ORGANIZATION_DETAIL_FIXTURE_PATH=${path.resolve(__dirname, "test/fixtures/organization-detail.dashboard.json")}`,
         `ORGANIZATION_PEOPLE_FIXTURE_PATH=${path.resolve(__dirname, "test/fixtures/organization-people.dashboard.json")}`,
+        `PERSON_DETAIL_FIXTURE_PATH=${path.resolve(__dirname, "test/fixtures/person-detail.dashboard.json")}`,
         "npm start"
       ].join(" ")
     ].join(" && "),

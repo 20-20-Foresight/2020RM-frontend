@@ -1,4 +1,5 @@
 import { isSameOrganizationDetailNavigation } from "./organization-detail-tabs.mjs";
+import { isSamePersonDetailNavigation } from "./person-detail-tabs.mjs";
 
 /**
  * Returns whether one pathname belongs to the admin data area.
@@ -133,6 +134,19 @@ export function getAppLoadingOverlayState(options) {
 
   if (
     isSameOrganizationDetailNavigation({
+      currentPathname: options.currentPathname,
+      navigationPathname: pendingPathname
+    })
+  ) {
+    return {
+      isLoading: false,
+      isSubmitting: false,
+      label: null
+    };
+  }
+
+  if (
+    isSamePersonDetailNavigation({
       currentPathname: options.currentPathname,
       navigationPathname: pendingPathname
     })
