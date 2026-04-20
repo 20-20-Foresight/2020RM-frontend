@@ -408,6 +408,28 @@ export function AppLayout({ user, meta, children }) {
         </Flex>
       </Flex>
 
+      {/* Thin progress bar: fires on every navigation state transition,
+          catching cases where the overlay is suppressed or the transition
+          resolves before a full render cycle completes. */}
+      {navigation.state !== "idle" ? (
+        <Box
+          position="fixed"
+          top={0}
+          left={0}
+          h="3px"
+          zIndex={9999}
+          bg={BRAND_RED}
+          sx={{
+            "@keyframes navProgress": {
+              "0%":   { width: "0%",   opacity: 1 },
+              "60%":  { width: "85%",  opacity: 1 },
+              "100%": { width: "95%",  opacity: 1 }
+            },
+            animation: "navProgress 8s ease-out forwards"
+          }}
+        />
+      ) : null}
+
       {loadingState.isLoading && loadingState.label ? (
         <BlockingLoadingOverlay label={loadingState.label} />
       ) : null}

@@ -1,7 +1,7 @@
 const {
   getOrganizationDetailTabConfig,
   getOrganizationDetailTabKeyFromSegment
-} = require("./organization-detail-config");
+} = require("./organization-detail-config.cjs");
 
 /**
  * Parses one organization detail pathname into organization and tab segments.

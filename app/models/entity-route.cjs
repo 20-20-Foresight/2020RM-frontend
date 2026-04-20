@@ -1,9 +1,9 @@
 const {
   getOrganizationDetailTabConfig
-} = require("./organization-detail-config");
+} = require("./organization-detail-config.cjs");
 const {
   getPersonDetailTabConfig
-} = require("./person-detail-config");
+} = require("./person-detail-config.cjs");
 
 /**
  * Returns the collection route for one entity type.

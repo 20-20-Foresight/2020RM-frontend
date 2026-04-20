@@ -1,7 +1,7 @@
 const {
   getPersonDetailTabConfig,
   getPersonDetailTabKeyFromSegment
-} = require("./person-detail-config");
+} = require("./person-detail-config.cjs");
 
 /**
  * Parses one contact detail pathname into person and tab segments.

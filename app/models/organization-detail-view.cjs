@@ -1,9 +1,9 @@
-const { buildOrganizationSegmentationViewModel } = require("./organization-segmentation");
+const { buildOrganizationSegmentationViewModel } = require("./organization-segmentation.cjs");
 const {
   getSearchResultFieldValue,
   readObjectPath,
   resolveSchemaFieldPath
-} = require("./search-result");
+} = require("./search-result.cjs");
 
 const DESCRIPTION_FIELD_PATHS = [
   "description",

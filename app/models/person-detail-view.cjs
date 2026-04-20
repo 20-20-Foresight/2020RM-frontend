@@ -2,7 +2,7 @@ const {
   getSearchResultFieldValue,
   readObjectPath,
   resolveSchemaFieldPath
-} = require("./search-result");
+} = require("./search-result.cjs");
 
 const TITLE_FIELD_PATHS = [
   "metadata.title",
