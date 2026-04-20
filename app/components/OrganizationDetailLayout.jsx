@@ -16,7 +16,7 @@ import { Link as RemixLink } from "@remix-run/react";
 import { FaLinkedin } from "react-icons/fa";
 import { FiGlobe, FiMapPin, FiPhone, FiSettings } from "react-icons/fi";
 import { MdBusiness } from "react-icons/md";
-import { buildOrganizationHeaderViewModel } from "../models/organization-detail-view";
+import { buildOrganizationHeaderViewModel } from "../models/organization-detail-view.mjs";
 
 const BRAND_BLUE = "#0F4C81";
 const PAGE_BG = "#F8FAFC";

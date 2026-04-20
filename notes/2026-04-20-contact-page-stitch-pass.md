@@ -47,3 +47,6 @@ shell in place.
   detail experience.
 - Lists, similar contacts, and notes remain intentionally placeholder-backed
   until their data sources are wired in a later pass.
+- Follow-up fix: browser-facing shared model imports now use explicit `.mjs`
+  wrappers backed by `.cjs` implementations so `npm run dev` does not trip over
+  CommonJS exports inside the Remix browser graph.

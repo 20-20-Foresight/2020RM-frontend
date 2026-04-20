@@ -22,7 +22,7 @@ import {
   Wrap,
   WrapItem
 } from "@chakra-ui/react";
-import { buildOrganizationSegmentationViewModel } from "../models/organization-segmentation";
+import { buildOrganizationSegmentationViewModel } from "../models/organization-segmentation.mjs";
 
 /**
  * Renders one segmentation chip.

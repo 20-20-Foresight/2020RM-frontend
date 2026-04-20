@@ -43,7 +43,7 @@ import {
   FiUsers
 } from "react-icons/fi";
 import { MdCampaign, MdSchool, MdWorkOutline } from "react-icons/md";
-import { buildPersonOverviewViewModel } from "../models/person-detail-view";
+import { buildPersonOverviewViewModel } from "../models/person-detail-view.mjs";
 
 const BRAND_BLUE = "#0F4C81";
 const BORDER_COLOR = "#D7DFEC";

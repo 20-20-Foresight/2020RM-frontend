@@ -14,7 +14,7 @@ import { DirectoryResultsContent } from "./DirectoryResultsContent";
 import {
   getDirectorySearchLoadingLabel,
   isDirectorySearchLoading
-} from "../models/directory-search-loading";
+} from "../models/directory-search-loading.mjs";
 
 export function SearchDirectoryPage({
   title,

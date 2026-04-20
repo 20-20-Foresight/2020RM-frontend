@@ -6,14 +6,14 @@ import { OrganizationDetailLayout } from "../components/OrganizationDetailLayout
 import { loadEntityDetailPage } from "../models/entity-detail.server";
 import {
   buildOrganizationDetailTabPath
-} from "../models/entity-route";
+} from "../models/entity-route.mjs";
 import {
   getOrganizationDetailTabUiState,
   shouldRevalidateOrganizationDetailRoute
 } from "../models/organization-detail-tabs.mjs";
 import {
   ORGANIZATION_DETAIL_TABS
-} from "../models/organization-detail-config";
+} from "../models/organization-detail-config.mjs";
 
 export async function loader({ request, params }) {
   return json(

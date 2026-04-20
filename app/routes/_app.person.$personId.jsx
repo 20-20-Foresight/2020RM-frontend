@@ -4,14 +4,14 @@ import { Outlet, useLoaderData, useLocation, useNavigation } from "@remix-run/re
 import { BlockingLoadingOverlay } from "../components/BlockingLoadingOverlay";
 import { PersonDetailLayout } from "../components/PersonDetailLayout";
 import { loadEntityDetailPage } from "../models/entity-detail.server";
-import { buildPersonDetailTabPath } from "../models/entity-route";
+import { buildPersonDetailTabPath } from "../models/entity-route.mjs";
 import {
   getPersonDetailTabUiState,
   shouldRevalidatePersonDetailRoute
 } from "../models/person-detail-tabs.mjs";
 import {
   PERSON_DETAIL_TABS
-} from "../models/person-detail-config";
+} from "../models/person-detail-config.mjs";
 
 export async function loader({ request, params }) {
   return json(

@@ -17,7 +17,7 @@ import {
 import { Link as RemixLink } from "@remix-run/react";
 import { FaLinkedin } from "react-icons/fa";
 import { FiMail, FiPhone, FiPhoneCall, FiSettings } from "react-icons/fi";
-import { buildPersonHeaderViewModel } from "../models/person-detail-view";
+import { buildPersonHeaderViewModel } from "../models/person-detail-view.mjs";
 
 const BRAND_BLUE = "#0F4C81";
 const PAGE_BG = "#F8FAFC";

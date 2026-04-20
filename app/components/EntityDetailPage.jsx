@@ -16,10 +16,10 @@ import { Link as RemixLink } from "@remix-run/react";
 import {
   getSearchResultFieldValue,
   resolveSchemaFieldPath
-} from "../models/search-result";
+} from "../models/search-result.mjs";
 import {
   buildEntityListPath
-} from "../models/entity-route";
+} from "../models/entity-route.mjs";
 import { OrganizationSegmentationSection } from "./OrganizationSegmentationSection";
 
 const DESCRIPTION_FIELD_PATHS = [

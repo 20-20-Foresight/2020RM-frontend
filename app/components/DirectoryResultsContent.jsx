@@ -12,11 +12,11 @@ import {
 } from "@chakra-ui/react";
 import { Link as RemixLink } from "@remix-run/react";
 import { FaLinkedin } from "react-icons/fa";
-import { buildEntityDetailPath } from "../models/entity-route";
+import { buildEntityDetailPath } from "../models/entity-route.mjs";
 import {
   getSearchResultFieldValue,
   resolveSchemaFieldPath
-} from "../models/search-result";
+} from "../models/search-result.mjs";
 
 /**
  * Format the attached related location for list display.

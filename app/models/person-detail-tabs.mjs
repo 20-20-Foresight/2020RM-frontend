@@ -1,4 +1,4 @@
-import personDetailTabsModule from "./person-detail-tabs.js";
+import personDetailTabsModule from "./person-detail-tabs.cjs";
 
 export const {
   getPersonDetailTabUiState,

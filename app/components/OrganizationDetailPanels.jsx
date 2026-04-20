@@ -52,12 +52,12 @@ import {
   buildOrganizationHeaderViewModel,
   buildOrganizationLocationsViewModel,
   buildOrganizationOverviewViewModel
-} from "../models/organization-detail-view";
+} from "../models/organization-detail-view.mjs";
 import {
   getSearchResultFieldValue,
   resolveSchemaFieldPath
-} from "../models/search-result";
-import { buildEntityDetailPath } from "../models/entity-route";
+} from "../models/search-result.mjs";
+import { buildEntityDetailPath } from "../models/entity-route.mjs";
 
 const BRAND_BLUE = "#0F4C81";
 const BORDER_COLOR = "#D7DFEC";
