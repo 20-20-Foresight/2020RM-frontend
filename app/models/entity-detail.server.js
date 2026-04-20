@@ -7,7 +7,7 @@
  *   statusExplained: string,
  *   error: string
  * }} options
- * @returns {{entityType: "organization"|"person", uuid: string, status: string, statusExplained: string, record: object|null, locations: object[], meta: {count: number}, schema: object|null, error: string}}
+ * @returns {{entityType: "organization"|"person", uuid: string, status: string, statusExplained: string, record: object|null, locations: object[], relationships: object[], workHistory: object[], meta: {count: number}, schema: object|null, error: string}}
  */
 function buildFailedEntityDetailState(options) {
   return {
@@ -17,6 +17,8 @@ function buildFailedEntityDetailState(options) {
     statusExplained: options.statusExplained,
     record: null,
     locations: [],
+    relationships: [],
+    workHistory: [],
     meta: {
       count: 0
     },
@@ -33,7 +35,7 @@ function buildFailedEntityDetailState(options) {
  *   uuid: string,
  *   fetchImpl?: typeof fetch
  * }} options
- * @returns {Promise<{entityType: "organization"|"person", uuid: string, status: string, statusExplained: string, record: object|null, locations: object[], meta: object, schema: object|null, error: string|null}>}
+ * @returns {Promise<{entityType: "organization"|"person", uuid: string, status: string, statusExplained: string, record: object|null, locations: object[], relationships: object[], workHistory: object[], meta: object, schema: object|null, error: string|null}>}
  */
 async function loadEntityDetailPage(options) {
   const fetchImpl = options.fetchImpl || fetch;
@@ -88,6 +90,8 @@ async function loadEntityDetailPage(options) {
           : "Detail loaded successfully.",
       record: payload && payload.record && typeof payload.record === "object" ? payload.record : null,
       locations: Array.isArray(payload?.locations) ? payload.locations : [],
+      relationships: Array.isArray(payload?.relationships) ? payload.relationships : [],
+      workHistory: Array.isArray(payload?.workHistory) ? payload.workHistory : [],
       meta:
         payload && payload.meta && typeof payload.meta === "object"
           ? payload.meta

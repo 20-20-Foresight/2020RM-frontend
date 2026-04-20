@@ -9,6 +9,7 @@ const TITLE_FIELD_PATHS = [
   "metadata.jobtitle",
   "metadata.job_title",
   "metadata.position",
+  "metadata.currenttitle",
   "title"
 ];
 
@@ -19,13 +20,21 @@ const COMPANY_FIELD_PATHS = [
   "metadata.organization_name",
   "metadata.employer",
   "metadata.employer_name",
+  "metadata.currentcompany",
+  "metadata.currentCompany",
+  "currentcompany",
+  "currentCompany",
   "company"
 ];
 
 const LEVEL_FIELD_PATHS = [
   "metadata.level",
   "metadata.seniority",
-  "metadata.seniority_level"
+  "metadata.seniority_level",
+  "metadata.positionlevel",
+  "metadata.positionLevel",
+  "positionlevel",
+  "positionLevel"
 ];
 
 const SUMMARY_FIELD_PATHS = [
@@ -37,6 +46,7 @@ const SUMMARY_FIELD_PATHS = [
 
 const LINKEDIN_FIELD_PATHS = [
   "metadata.socials.linkedin",
+  "socials.linkedin",
   "linkedin"
 ];
 
@@ -52,13 +62,16 @@ const WORK_EMAIL_FIELD_PATHS = [
   "metadata.primaryemail",
   "metadata.workemail",
   "metadata.email.work",
+  "primaryemail",
+  "workemail",
   "email"
 ];
 
 const PERSONAL_EMAIL_FIELD_PATHS = [
   "metadata.email.personal",
   "metadata.personalemail",
-  "metadata.personal_email"
+  "metadata.personal_email",
+  "personalemail"
 ];
 
 const WORK_PHONE_FIELD_PATHS = [
@@ -73,14 +86,17 @@ const MOBILE_PHONE_FIELD_PATHS = [
   "metadata.mobile_phone",
   "metadata.cellphone",
   "metadata.cell_phone",
-  "metadata.mobile.number"
+  "metadata.mobile.number",
+  "mobilephone"
 ];
 
 const HOME_LOCATION_FIELD_PATHS = [
   "metadata.homeaddress",
   "metadata.home_address",
   "metadata.home.location",
-  "metadata.homeLocation"
+  "metadata.homeLocation",
+  "homeaddress",
+  "location"
 ];
 
 const TENURE_FIELD_PATHS = [
@@ -101,13 +117,17 @@ const COMPENSATION_FIELD_PATHS = [
 const SKILLS_FIELD_PATHS = [
   "metadata.skills",
   "metadata.expertise",
-  "metadata.specialties"
+  "metadata.specialties",
+  "skills"
 ];
 
 const WORK_HISTORY_FIELD_PATHS = [
   "metadata.work_history",
   "metadata.workhistory",
-  "metadata.experience"
+  "metadata.workHistory",
+  "metadata.experience",
+  "work_history",
+  "workHistory"
 ];
 
 const EDUCATION_FIELD_PATHS = [
@@ -138,19 +158,6 @@ const PLACEHOLDER_WORK_HISTORY = [
     title: "Operations Manager",
     subtitle: "Streamline Systems Inc. • 2010 — 2014",
     description: "Focused on internal process automation and vendor relationship management."
-  }
-];
-
-const PLACEHOLDER_EDUCATION = [
-  {
-    degree: "MBA in Strategic Management",
-    institution: "Wharton School of Business",
-    subtitle: "Graduated 2010"
-  },
-  {
-    degree: "B.S. in Operations Research",
-    institution: "Georgia Institute of Technology",
-    subtitle: "Graduated 2008"
   }
 ];
 
@@ -397,11 +404,11 @@ function buildPersonInitials(name) {
 }
 
 /**
- * Formats one office location label.
+ * Formats one location label.
  * @param {object|null} location
  * @returns {string}
  */
-function formatOfficeLocationLabel(location) {
+function formatLocationLabel(location) {
   const address = normalizeDisplayString(location?.address);
   if (address) {
     return address;
@@ -415,33 +422,233 @@ function formatOfficeLocationLabel(location) {
     return `${city}, ${regionCode}`;
   }
 
-  return city || regionCode || countryCode || "Office location not available";
+  return city || regionCode || countryCode || "Location not available";
+}
+
+/**
+ * Returns one normalized relation label from a location or relationship row.
+ * @param {object|null} value
+ * @returns {string}
+ */
+function getRelationName(value) {
+  return normalizeDisplayString(value?.relationship?.relation || value?.relation || value?.type)?.toUpperCase() || "";
+}
+
+/**
+ * Returns sorted employment relationships with current roles first.
+ * @param {object[]} relationships
+ * @returns {object[]}
+ */
+function getEmploymentRelationships(relationships) {
+  const normalizedRelationships = Array.isArray(relationships) ? relationships : [];
+
+  return normalizedRelationships
+    .filter((relationship) => ["EMPLOYED_BY", "WORKS_AT"].includes(getRelationName(relationship)))
+    .slice()
+    .sort((left, right) => {
+      const leftCurrent = isCurrentEmploymentRelationship(left) ? 1 : 0;
+      const rightCurrent = isCurrentEmploymentRelationship(right) ? 1 : 0;
+      if (leftCurrent !== rightCurrent) {
+        return rightCurrent - leftCurrent;
+      }
+
+      return getRelationshipSortValue(right) - getRelationshipSortValue(left);
+    });
+}
+
+/**
+ * Returns one sortable date value for a relationship row.
+ * @param {object|null} relationship
+ * @returns {number}
+ */
+function getRelationshipSortValue(relationship) {
+  const dateCandidates = [
+    relationship?.periodend,
+    relationship?.periodEnd,
+    relationship?.end,
+    relationship?.periodstart,
+    relationship?.periodStart,
+    relationship?.start
+  ];
+
+  for (const candidate of dateCandidates) {
+    if (candidate == null || candidate === "") {
+      continue;
+    }
+
+    const date = new Date(candidate);
+    if (!Number.isNaN(date.getTime())) {
+      return date.getTime();
+    }
+  }
+
+  return 0;
+}
+
+/**
+ * Returns whether one employment relationship appears current.
+ * @param {object|null} relationship
+ * @returns {boolean}
+ */
+function isCurrentEmploymentRelationship(relationship) {
+  if (!relationship || typeof relationship !== "object") {
+    return false;
+  }
+
+  if (relationship.current === true || relationship?.metadata?.current === true) {
+    return true;
+  }
+
+  const endValue = relationship.periodend || relationship.periodEnd || relationship.end;
+  if (endValue == null || endValue === "") {
+    return true;
+  }
+
+  const endDate = new Date(endValue);
+  return Number.isNaN(endDate.getTime()) ? false : endDate.getTime() >= Date.now();
+}
+
+/**
+ * Returns the organization label from one employment relationship.
+ * @param {object|null} relationship
+ * @returns {string|null}
+ */
+function getEmploymentOrganizationLabel(relationship) {
+  return (
+    normalizeDisplayString(relationship?.organization?.name) ||
+    normalizeDisplayString(relationship?.entity1?.name) ||
+    normalizeDisplayString(relationship?.organizationName) ||
+    normalizeDisplayString(relationship?.company)
+  );
+}
+
+/**
+ * Returns the title from one employment relationship.
+ * @param {object|null} relationship
+ * @returns {string|null}
+ */
+function getEmploymentTitle(relationship) {
+  return (
+    normalizeDisplayString(relationship?.metadata?.title) ||
+    normalizeDisplayString(relationship?.title) ||
+    normalizeDisplayString(relationship?.role)
+  );
+}
+
+/**
+ * Returns the current employer label from one relationship list.
+ * @param {object[]} relationships
+ * @returns {string|null}
+ */
+function getCurrentEmployerLabel(relationships) {
+  return getEmploymentOrganizationLabel(getEmploymentRelationships(relationships)[0] || null);
+}
+
+/**
+ * Returns current employer UUIDs from one relationship list.
+ * @param {object[]} relationships
+ * @returns {Set<string>}
+ */
+function getCurrentEmployerUUIDs(relationships) {
+  const currentRelationships = getEmploymentRelationships(relationships);
+  const currentUUIDs = currentRelationships
+    .filter((relationship) => isCurrentEmploymentRelationship(relationship))
+    .map((relationship) => normalizeDisplayString(relationship?.entity1uuid))
+    .filter(Boolean);
+  const fallbackUUID = normalizeDisplayString(currentRelationships[0]?.entity1uuid);
+
+  return new Set(currentUUIDs.length ? currentUUIDs : fallbackUUID ? [fallbackUUID] : []);
 }
 
 /**
  * Returns the best office location for one person.
  * @param {object[]} locations
+ * @param {object[]} relationships
  * @returns {string}
  */
-function getOfficeLocationLabel(locations) {
+function getOfficeLocationLabel(locations, relationships) {
   const normalizedLocations = Array.isArray(locations) ? locations : [];
-  const hqLocation = normalizedLocations.find((location) => location?.relationship?.metadata?.isHQ);
-  return formatOfficeLocationLabel(hqLocation || normalizedLocations[0] || null);
+  const officeLocations = normalizedLocations.filter((location) => getRelationName(location) === "OFFICE_OF");
+  const currentEmployerUUIDs = getCurrentEmployerUUIDs(relationships);
+  const matchedCurrentHqLocation = officeLocations.find(
+    (location) =>
+      currentEmployerUUIDs.has(normalizeDisplayString(location?.subject?.uuid)) &&
+      location?.relationship?.metadata?.isHQ
+  );
+  const matchedCurrentLocation = officeLocations.find((location) =>
+    currentEmployerUUIDs.has(normalizeDisplayString(location?.subject?.uuid))
+  );
+  const hqLocation = officeLocations.find((location) => location?.relationship?.metadata?.isHQ);
+
+  return formatLocationLabel(matchedCurrentHqLocation || matchedCurrentLocation || hqLocation || officeLocations[0] || null)
+    .replace("Location not available", "Office location not available");
 }
 
 /**
- * Converts one raw string array into trimmed display tags.
+ * Returns the best home location label for one person.
+ * @param {object[]} locations
+ * @param {object|null} record
+ * @param {object|null} schema
+ * @returns {string}
+ */
+function getHomeLocationLabel(locations, record, schema) {
+  const normalizedLocations = Array.isArray(locations) ? locations : [];
+  const homeLocation = normalizedLocations.find((location) => getRelationName(location) === "RESIDES_AT");
+  if (homeLocation) {
+    return formatLocationLabel(homeLocation).replace("Location not available", "Home location not available");
+  }
+
+  return resolvePreferredFieldValue(record, schema, HOME_LOCATION_FIELD_PATHS) || "Home location not available";
+}
+
+/**
+ * Splits one tag-like string into display tokens.
+ * @param {string} value
+ * @returns {string[]}
+ */
+function splitDisplayTokens(value) {
+  return String(value || "")
+    .split(/[\n,;•]+/g)
+    .map((entry) => normalizeDisplayString(entry))
+    .filter(Boolean);
+}
+
+/**
+ * Converts one raw tag payload into trimmed display tags.
  * @param {unknown} value
  * @returns {string[]}
  */
 function normalizeStringArray(value) {
-  if (!Array.isArray(value)) {
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => normalizeStringArray(entry));
+  }
+
+  if (typeof value === "string") {
+    return splitDisplayTokens(value);
+  }
+
+  if (!value || typeof value !== "object") {
     return [];
   }
 
-  return value
-    .map((entry) => normalizeDisplayString(entry))
-    .filter(Boolean);
+  const labeledValue =
+    normalizeDisplayString(value.name) ||
+    normalizeDisplayString(value.label) ||
+    normalizeDisplayString(value.value) ||
+    normalizeDisplayString(value.skill) ||
+    normalizeDisplayString(value.title);
+  if (labeledValue) {
+    return splitDisplayTokens(labeledValue);
+  }
+
+  if (Object.values(value).every((entry) => typeof entry === "boolean")) {
+    return Object.entries(value)
+      .filter(([, isEnabled]) => isEnabled)
+      .map(([entry]) => normalizeDisplayString(entry))
+      .filter(Boolean);
+  }
+
+  return Object.values(value).flatMap((entry) => normalizeStringArray(entry));
 }
 
 /**
@@ -479,20 +686,19 @@ function formatWorkHistoryEntry(entry) {
     normalizeDisplayString(entry.company);
   const period =
     normalizeDisplayString(entry.period) ||
-    [
-      normalizeDisplayString(entry.start),
-      normalizeDisplayString(entry.end)
-    ]
-      .filter(Boolean)
-      .join(" — ");
+    formatRelationshipPeriod(entry);
   const subtitle = [organization, period].filter(Boolean).join(" • ");
   const description =
     normalizeDisplayString(entry.summary) ||
     normalizeDisplayString(entry.description) ||
     "Professional history details are not connected yet.";
 
+  if (!title) {
+    return null;
+  }
+
   return {
-    title: title || "Role unavailable",
+    title,
     subtitle: subtitle || "History sync pending",
     description
   };
@@ -525,18 +731,105 @@ function formatEducationEntry(entry) {
 }
 
 /**
+ * Formats one employment relationship entry for the work history timeline.
+ * @param {object|null} relationship
+ * @returns {{title: string, subtitle: string, description: string}|null}
+ */
+function formatEmploymentRelationshipEntry(relationship) {
+  if (!relationship || typeof relationship !== "object") {
+    return null;
+  }
+
+  const title = getEmploymentTitle(relationship);
+  const organization = getEmploymentOrganizationLabel(relationship);
+  const period = formatRelationshipPeriod(relationship);
+
+  if (!title) {
+    return null;
+  }
+
+  return {
+    title,
+    subtitle: [organization, period].filter(Boolean).join(" • ") || organization || "History sync pending",
+    description:
+      normalizeDisplayString(relationship?.metadata?.summary) ||
+      normalizeDisplayString(relationship?.metadata?.description) ||
+      "Relationship history synced from employment records."
+  };
+}
+
+/**
+ * Formats one relationship period label.
+ * @param {object|null} relationship
+ * @returns {string|null}
+ */
+function formatRelationshipPeriod(relationship) {
+  const start = formatRelationshipYear(relationship?.periodstart || relationship?.periodStart || relationship?.start);
+  const end = formatRelationshipYear(relationship?.periodend || relationship?.periodEnd || relationship?.end);
+
+  if (start && end) {
+    return `${start} — ${end}`;
+  }
+
+  if (start) {
+    return `${start} — Present`;
+  }
+
+  return null;
+}
+
+/**
+ * Formats one relationship date down to a display year.
+ * @param {unknown} value
+ * @returns {string|null}
+ */
+function formatRelationshipYear(value) {
+  const normalized = normalizeDisplayString(value);
+  if (!normalized) {
+    return null;
+  }
+
+  const date = new Date(normalized);
+  if (!Number.isNaN(date.getTime())) {
+    return String(date.getUTCFullYear());
+  }
+
+  const matchedYear = normalized.match(/\b(19|20)\d{2}\b/);
+  return matchedYear ? matchedYear[0] : normalized;
+}
+
+/**
  * Returns one normalized work history list with placeholders when unavailable.
  * @param {object|null} record
  * @param {object|null} schema
+ * @param {object[]} relationships
+ * @param {object[]} workHistory
  * @returns {Array<{title: string, subtitle: string, description: string}>}
  */
-function buildWorkHistory(record, schema) {
+function buildWorkHistory(record, schema, relationships, workHistory) {
+  const normalizedWorkHistory = Array.isArray(workHistory) ? workHistory : [];
+  const relationshipHistoryEntries = normalizedWorkHistory
+    .map((entry) => formatWorkHistoryEntry(entry))
+    .filter(Boolean);
+
+  if (relationshipHistoryEntries.length) {
+    return relationshipHistoryEntries;
+  }
+
   const rawEntries = resolvePreferredValue(record, schema, WORK_HISTORY_FIELD_PATHS);
   const liveEntries = Array.isArray(rawEntries)
     ? rawEntries.map((entry) => formatWorkHistoryEntry(entry)).filter(Boolean)
     : [];
 
-  return liveEntries.length ? liveEntries.slice(0, 4) : PLACEHOLDER_WORK_HISTORY;
+  if (liveEntries.length) {
+    return liveEntries;
+  }
+
+  const relationshipEntries = getEmploymentRelationships(relationships)
+    .map((relationship) => formatEmploymentRelationshipEntry(relationship))
+    .filter(Boolean);
+
+  return relationshipEntries.length ? relationshipEntries : PLACEHOLDER_WORK_HISTORY;
 }
 
 /**
@@ -551,7 +844,121 @@ function buildEducation(record, schema) {
     ? rawEntries.map((entry) => formatEducationEntry(entry)).filter(Boolean)
     : [];
 
-  return liveEntries.length ? liveEntries.slice(0, 4) : PLACEHOLDER_EDUCATION;
+  return liveEntries.slice(0, 4);
+}
+
+/**
+ * Returns one work-history row to use for primary tenure calculations.
+ * Prefers the current row that matches the header title and organization.
+ * @param {{
+ *   title: string,
+ *   organizationLabel: string
+ * }} header
+ * @param {object[]} workHistory
+ * @param {object[]} relationships
+ * @returns {object|null}
+ */
+function selectPrimaryTenureSource(header, workHistory, relationships) {
+  const normalizedWorkHistory = Array.isArray(workHistory) ? workHistory : [];
+  const normalizedRelationships = Array.isArray(relationships) ? relationships : [];
+  const currentWorkHistory = normalizedWorkHistory.filter((entry) => formatWorkHistoryEntry(entry));
+  const title = normalizeDisplayString(header?.title);
+  const organizationLabel = normalizeDisplayString(header?.organizationLabel);
+
+  const matchingCurrentWorkHistory = currentWorkHistory.find((entry) => {
+    const entryTitle = normalizeDisplayString(entry?.title || entry?.role || entry?.position);
+    const entryOrganization = normalizeDisplayString(entry?.organization || entry?.company);
+    const isCurrent = entry?.current === true || !normalizeDisplayString(entry?.end);
+
+    return isCurrent && entryTitle === title && entryOrganization === organizationLabel;
+  });
+  if (matchingCurrentWorkHistory) {
+    return matchingCurrentWorkHistory;
+  }
+
+  const fallbackCurrentWorkHistory = currentWorkHistory.find(
+    (entry) => entry?.current === true || !normalizeDisplayString(entry?.end)
+  );
+  if (fallbackCurrentWorkHistory) {
+    return fallbackCurrentWorkHistory;
+  }
+
+  const currentRelationship = getEmploymentRelationships(normalizedRelationships).find((relationship) => {
+    const relationshipTitle = getEmploymentTitle(relationship);
+    const relationshipOrganization = getEmploymentOrganizationLabel(relationship);
+
+    return (
+      isCurrentEmploymentRelationship(relationship) &&
+      relationshipTitle === title &&
+      relationshipOrganization === organizationLabel
+    );
+  });
+  if (currentRelationship) {
+    return currentRelationship;
+  }
+
+  return getEmploymentRelationships(normalizedRelationships).find((relationship) =>
+    isCurrentEmploymentRelationship(relationship)
+  ) || null;
+}
+
+/**
+ * Returns the whole-year difference between two dates.
+ * @param {Date} startDate
+ * @param {Date} endDate
+ * @returns {number}
+ */
+function getWholeYearDifference(startDate, endDate) {
+  let years = endDate.getUTCFullYear() - startDate.getUTCFullYear();
+  const monthDelta = endDate.getUTCMonth() - startDate.getUTCMonth();
+  const dayDelta = endDate.getUTCDate() - startDate.getUTCDate();
+
+  if (monthDelta < 0 || (monthDelta === 0 && dayDelta < 0)) {
+    years -= 1;
+  }
+
+  return years;
+}
+
+/**
+ * Returns one tenure label derived from explicit metadata or current-role history.
+ * @param {object|null} record
+ * @param {object|null} schema
+ * @param {{
+ *   title: string,
+ *   organizationLabel: string
+ * }} header
+ * @param {object[]} workHistory
+ * @param {object[]} relationships
+ * @returns {string}
+ */
+function buildTenureLabel(record, schema, header, workHistory, relationships) {
+  const explicitTenure = resolvePreferredFieldValue(record, schema, TENURE_FIELD_PATHS);
+  if (explicitTenure) {
+    return explicitTenure;
+  }
+
+  const tenureSource = selectPrimaryTenureSource(header, workHistory, relationships);
+  const startValue = normalizeDisplayString(
+    tenureSource?.start ||
+      tenureSource?.periodstart ||
+      tenureSource?.periodStart
+  );
+  if (!startValue) {
+    return "Tenure not available";
+  }
+
+  const startDate = new Date(startValue);
+  if (Number.isNaN(startDate.getTime())) {
+    return "Tenure not available";
+  }
+
+  const wholeYears = getWholeYearDifference(startDate, new Date());
+  if (wholeYears <= 0) {
+    return "Less than 1 year";
+  }
+
+  return `${wholeYears} year${wholeYears === 1 ? "" : "s"}`;
 }
 
 /**
@@ -687,7 +1094,7 @@ function buildInsight(summary, note) {
 
 /**
  * Builds the contact header view model used by the detail shell.
- * @param {{record: object|null, schema: object|null, locations: object[]}} options
+ * @param {{record: object|null, schema: object|null, locations: object[], relationships?: object[], workHistory?: object[]}} options
  * @returns {{
  *   name: string,
  *   initials: string,
@@ -707,10 +1114,16 @@ function buildPersonHeaderViewModel(options) {
   const record = options?.record && typeof options.record === "object" ? options.record : null;
   const schema = options?.schema && typeof options.schema === "object" ? options.schema : null;
   const locations = Array.isArray(options?.locations) ? options.locations : [];
+  const relationships = Array.isArray(options?.relationships) ? options.relationships : [];
   const name = getPersonName(record);
-  const title = resolvePreferredFieldValue(record, schema, TITLE_FIELD_PATHS) || "Role unavailable";
+  const title =
+    resolvePreferredFieldValue(record, schema, TITLE_FIELD_PATHS) ||
+    getEmploymentTitle(getEmploymentRelationships(relationships)[0] || null) ||
+    "Role unavailable";
   const organizationLabel =
-    resolvePreferredFieldValue(record, schema, COMPANY_FIELD_PATHS) || getOfficeLocationLabel(locations);
+    resolvePreferredFieldValue(record, schema, COMPANY_FIELD_PATHS) ||
+    getCurrentEmployerLabel(relationships) ||
+    getOfficeLocationLabel(locations, relationships);
   const levelLabel = resolvePreferredFieldValue(record, schema, LEVEL_FIELD_PATHS) || "Synced Profile";
 
   return {
@@ -736,7 +1149,7 @@ function buildPersonHeaderViewModel(options) {
 
 /**
  * Builds the overview tab's display data from available contact fields.
- * @param {{record: object|null, schema: object|null, locations: object[]}} options
+ * @param {{record: object|null, schema: object|null, locations: object[], relationships?: object[]}} options
  * @returns {{
  *   officeLocationLabel: string,
  *   homeLocationLabel: string,
@@ -758,18 +1171,22 @@ function buildPersonOverviewViewModel(options) {
   const record = options?.record && typeof options.record === "object" ? options.record : null;
   const schema = options?.schema && typeof options.schema === "object" ? options.schema : null;
   const locations = Array.isArray(options?.locations) ? options.locations : [];
+  const relationships = Array.isArray(options?.relationships) ? options.relationships : [];
+  const workHistory = Array.isArray(options?.workHistory) ? options.workHistory : [];
   const header = buildPersonHeaderViewModel({
     record,
     schema,
-    locations
+    locations,
+    relationships
   });
   const summary =
     resolvePreferredFieldValue(record, schema, SUMMARY_FIELD_PATHS) ||
     "Profile summary is not available yet.";
   const expertiseTags = buildExpertiseTags(record, schema);
+  const officeLocationLabel = getOfficeLocationLabel(locations, relationships);
   const contactStrengthScore = computeContactStrengthScore({
     summary,
-    officeLocationLabel: getOfficeLocationLabel(locations),
+    officeLocationLabel,
     linkedInUrl: header.linkedInUrl,
     workEmail: header.workEmail,
     personalEmail: header.personalEmail,
@@ -779,16 +1196,15 @@ function buildPersonOverviewViewModel(options) {
   });
 
   return {
-    officeLocationLabel: getOfficeLocationLabel(locations),
-    homeLocationLabel:
-      resolvePreferredFieldValue(record, schema, HOME_LOCATION_FIELD_PATHS) || "Home location not available",
+    officeLocationLabel,
+    homeLocationLabel: getHomeLocationLabel(locations, record, schema),
     title: header.title,
     levelLabel: resolvePreferredFieldValue(record, schema, LEVEL_FIELD_PATHS) || "Level unavailable",
-    tenureLabel: resolvePreferredFieldValue(record, schema, TENURE_FIELD_PATHS) || "Tenure not available",
+    tenureLabel: buildTenureLabel(record, schema, header, workHistory, relationships),
     compensationLabel:
       resolvePreferredFieldValue(record, schema, COMPENSATION_FIELD_PATHS) || "Compensation pending",
     summary,
-    workHistory: buildWorkHistory(record, schema),
+    workHistory: buildWorkHistory(record, schema, relationships, workHistory),
     education: buildEducation(record, schema),
     expertiseTags,
     contactStrengthScore,

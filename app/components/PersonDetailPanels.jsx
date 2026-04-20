@@ -235,7 +235,9 @@ function getListStatusColorScheme(status) {
  *   personDetail: {
  *     record: object|null,
  *     schema: object|null,
- *     locations: object[]
+ *     locations: object[],
+ *     relationships?: object[],
+ *     workHistory?: object[]
  *   }
  * }} props
  * @returns {JSX.Element}
@@ -244,7 +246,9 @@ export function PersonOverviewPanel({ personDetail }) {
   const overview = buildPersonOverviewViewModel({
     record: personDetail?.record || null,
     schema: personDetail?.schema || null,
-    locations: Array.isArray(personDetail?.locations) ? personDetail.locations : []
+    locations: Array.isArray(personDetail?.locations) ? personDetail.locations : [],
+    relationships: Array.isArray(personDetail?.relationships) ? personDetail.relationships : [],
+    workHistory: Array.isArray(personDetail?.workHistory) ? personDetail.workHistory : []
   });
 
   return (
@@ -360,43 +364,45 @@ export function PersonOverviewPanel({ personDetail }) {
             </Stack>
           </SurfaceCard>
 
-          <SurfaceCard p={0}>
-            <Box px={{ base: 5, md: 6 }} py={5} borderBottomWidth="1px" borderColor={BORDER_COLOR}>
-              <Heading size="md">Education</Heading>
-            </Box>
-            <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4} px={{ base: 5, md: 6 }} py={5}>
-              {overview.education.map((entry, index) => (
-                <HStack
-                  key={`${entry.degree}-${entry.institution}-${index}`}
-                  spacing={4}
-                  align="flex-start"
-                >
-                  <Flex
-                    boxSize="52px"
-                    borderRadius="lg"
-                    bg="#E6EEFF"
-                    color={BRAND_BLUE}
-                    align="center"
-                    justify="center"
-                    flexShrink={0}
+          {overview.education.length ? (
+            <SurfaceCard p={0}>
+              <Box px={{ base: 5, md: 6 }} py={5} borderBottomWidth="1px" borderColor={BORDER_COLOR}>
+                <Heading size="md">Education</Heading>
+              </Box>
+              <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4} px={{ base: 5, md: 6 }} py={5}>
+                {overview.education.map((entry, index) => (
+                  <HStack
+                    key={`${entry.degree}-${entry.institution}-${index}`}
+                    spacing={4}
+                    align="flex-start"
                   >
-                    <Icon as={MdSchool} boxSize={6} />
-                  </Flex>
-                  <Box>
-                    <Text fontWeight="semibold" color="gray.900">
-                      {entry.degree}
-                    </Text>
-                    <Text mt={1} color="#5A6B8C" fontSize="lg">
-                      {entry.institution}
-                    </Text>
-                    <Text mt={1} color="gray.500">
-                      {entry.subtitle}
-                    </Text>
-                  </Box>
-                </HStack>
-              ))}
-            </SimpleGrid>
-          </SurfaceCard>
+                    <Flex
+                      boxSize="52px"
+                      borderRadius="lg"
+                      bg="#E6EEFF"
+                      color={BRAND_BLUE}
+                      align="center"
+                      justify="center"
+                      flexShrink={0}
+                    >
+                      <Icon as={MdSchool} boxSize={6} />
+                    </Flex>
+                    <Box>
+                      <Text fontWeight="semibold" color="gray.900">
+                        {entry.degree}
+                      </Text>
+                      <Text mt={1} color="#5A6B8C" fontSize="lg">
+                        {entry.institution}
+                      </Text>
+                      <Text mt={1} color="gray.500">
+                        {entry.subtitle}
+                      </Text>
+                    </Box>
+                  </HStack>
+                ))}
+              </SimpleGrid>
+            </SurfaceCard>
+          ) : null}
         </Stack>
       </GridItem>
 

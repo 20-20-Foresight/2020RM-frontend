@@ -107,7 +107,31 @@ test("entity detail loader calls the organization detail REST endpoint and retur
               {
                 uuid: "loc-1",
                 city: "Chicago",
-                regionCode: "IL"
+                regionCode: "IL",
+                subject: {
+                  uuid: "org-1",
+                  type: "organization",
+                  name: "Acme"
+                }
+              }
+            ],
+            relationships: [
+              {
+                uuid: "rel-emp-1",
+                relation: "EMPLOYED_BY",
+                entity1uuid: "org-2",
+                entity2uuid: "person-1"
+              }
+            ],
+            workHistory: [
+              {
+                relationshipUUID: "rel-emp-1",
+                organizationUUID: "org-2",
+                organization: "Analytical Engines",
+                title: "Chief Mathematician",
+                start: "1833-01-01T00:00:00.000Z",
+                end: null,
+                current: true
               }
             ],
             meta: {
@@ -170,7 +194,31 @@ test("entity detail loader calls the organization detail REST endpoint and retur
       {
         uuid: "loc-1",
         city: "Chicago",
-        regionCode: "IL"
+        regionCode: "IL",
+        subject: {
+          uuid: "org-1",
+          type: "organization",
+          name: "Acme"
+        }
+      }
+    ],
+    relationships: [
+      {
+        uuid: "rel-emp-1",
+        relation: "EMPLOYED_BY",
+        entity1uuid: "org-2",
+        entity2uuid: "person-1"
+      }
+    ],
+    workHistory: [
+      {
+        relationshipUUID: "rel-emp-1",
+        organizationUUID: "org-2",
+        organization: "Analytical Engines",
+        title: "Chief Mathematician",
+        start: "1833-01-01T00:00:00.000Z",
+        end: null,
+        current: true
       }
     ],
     meta: {
@@ -213,6 +261,8 @@ test("entity detail loader returns a not found state when the backend returns 40
     statusExplained: "Requested record was not found.",
     record: null,
     locations: [],
+    relationships: [],
+    workHistory: [],
     meta: {
       count: 0
     },

@@ -75,6 +75,7 @@ function ContactMetaItem({ icon, label, href = null, isExternal = false }) {
  *     record: object|null,
  *     schema: object|null,
  *     locations: object[],
+ *     relationships?: object[],
  *     error: string|null
  *   },
  *   tabs: Array<{key: string, label: string, to: string|null|undefined}>,
@@ -87,7 +88,8 @@ export function PersonDetailLayout({ data, tabs, activeTabKey, children = null }
   const header = buildPersonHeaderViewModel({
     record: data?.record || null,
     schema: data?.schema || null,
-    locations: Array.isArray(data?.locations) ? data.locations : []
+    locations: Array.isArray(data?.locations) ? data.locations : [],
+    relationships: Array.isArray(data?.relationships) ? data.relationships : []
   });
 
   return (
@@ -166,19 +168,16 @@ export function PersonDetailLayout({ data, tabs, activeTabKey, children = null }
                 <Flex mt={4} wrap="wrap" gap={{ base: 3, md: 5 }}>
                   <ContactMetaItem
                     icon={FiMail}
-                    label={header.workEmail || "Work email pending"}
+                    label={header.workEmail}
                     href={header.workEmail ? `mailto:${header.workEmail}` : null}
                   />
-                  <ContactMetaItem icon={FiPhone} label={header.workPhone || "Work phone pending"} />
+                  <ContactMetaItem icon={FiPhone} label={header.workPhone} />
                   <ContactMetaItem
                     icon={FiMail}
-                    label={header.personalEmail || "Personal email pending"}
+                    label={header.personalEmail}
                     href={header.personalEmail ? `mailto:${header.personalEmail}` : null}
                   />
-                  <ContactMetaItem
-                    icon={FiPhoneCall}
-                    label={header.mobilePhone || "Mobile phone pending"}
-                  />
+                  <ContactMetaItem icon={FiPhoneCall} label={header.mobilePhone} />
                 </Flex>
               </Box>
             </HStack>
