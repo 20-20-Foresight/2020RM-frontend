@@ -1,3 +1,5 @@
+import { designPages } from "./design-pages.mjs";
+
 /**
  * Sidebar navigation model for the application shell.
  */
@@ -102,6 +104,14 @@ export const navItems = [
     label: "Settings",
     to: "/settings",
     icon: "settings"
+  },
+  {
+    key: "design",
+    label: "Design",
+    to: "/design",
+    icon: "palette",
+    dividerAbove: true,
+    children: designPages.map((p) => ({ key: `design-${p.key}`, label: p.label, to: p.to }))
   },
   {
     key: "data",
