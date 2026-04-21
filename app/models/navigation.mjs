@@ -1,4 +1,5 @@
 import { designPages } from "./design-pages.mjs";
+import { toolsConfig } from "./tools-config.mjs";
 
 /**
  * Sidebar navigation model for the application shell.
@@ -90,6 +91,15 @@ export const navItems = [
     label: "Marketing",
     to: "/marketing",
     icon: "campaign"
+  },
+  {
+    key: "tools",
+    label: "Tools",
+    to: "/tools",
+    icon: "build",
+    children: toolsConfig
+      .filter((t) => t.status === "available")
+      .map((t) => ({ key: `tools-${t.key}`, label: t.label, to: t.to }))
   },
   {
     key: "admin",

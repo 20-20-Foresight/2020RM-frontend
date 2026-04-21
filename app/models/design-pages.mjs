@@ -20,5 +20,11 @@ export const designPages = [
     label: "Learn — Topic Detail",
     to: "/design/learn-topic",
     description: "Category reference page with sticky right-side table of contents."
+  },
+  {
+    key: "tools-resegmentation",
+    label: "Tools — Resegmentation",
+    to: "/design/tools-resegmentation",
+    description: "Interactive mock for the resegmentation tool — single org and list modes with shimmer, results, and apply flow."
   }
 ];
