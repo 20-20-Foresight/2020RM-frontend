@@ -80,6 +80,12 @@ export const navItems = [
     ]
   },
   {
+    key: "learn",
+    label: "Learn",
+    to: "/learn",
+    icon: "school"
+  },
+  {
     key: "marketing",
     label: "Marketing",
     to: "/marketing",

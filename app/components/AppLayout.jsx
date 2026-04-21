@@ -29,6 +29,7 @@ import {
   MdSecurity,
   MdSettings,
   MdDashboard,
+  MdSchool,
   MdTableChart,
   MdPalette
 } from "react-icons/md";
@@ -53,6 +54,7 @@ const iconByName = {
   campaign: MdCampaign,
   security: MdSecurity,
   settings: MdSettings,
+  school: MdSchool,
   table_chart: MdTableChart,
   palette: MdPalette
 };

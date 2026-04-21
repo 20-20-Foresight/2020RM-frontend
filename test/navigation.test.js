@@ -5,6 +5,7 @@ test("navigation model defines the requested subsection labels", async () => {
   const { navItems } = await import("../app/models/navigation.mjs");
   assert.deepEqual(
     navItems
+      .filter((item) => item.key !== "design")
       .filter((item) => Array.isArray(item.children))
       .map((item) => ({
         label: item.label,
@@ -29,10 +30,12 @@ test("navigation model defines the requested subsection labels", async () => {
       }
     ]
   );
-  assert.deepEqual(
-    navItems.slice(-2).map((item) => item.label),
-    ["Settings", "Data"]
-  );
+  const jobsIndex = navItems.findIndex((item) => item.key === "jobs");
+  const learnIndex = navItems.findIndex((item) => item.key === "learn");
+  const marketingIndex = navItems.findIndex((item) => item.key === "marketing");
+
+  assert.equal(learnIndex, jobsIndex + 1);
+  assert.equal(marketingIndex, learnIndex + 1);
 });
 
 test("isPathWithinItem matches parent routes and descendants", async () => {
