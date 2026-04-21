@@ -31,7 +31,8 @@ import {
   MdDashboard,
   MdSchool,
   MdTableChart,
-  MdPalette
+  MdPalette,
+  MdBuild
 } from "react-icons/md";
 import { FiLogOut } from "react-icons/fi";
 import {
@@ -56,7 +57,8 @@ const iconByName = {
   settings: MdSettings,
   school: MdSchool,
   table_chart: MdTableChart,
-  palette: MdPalette
+  palette: MdPalette,
+  build: MdBuild
 };
 
 const SIDEBAR_BG = "#16181d";
