@@ -2,7 +2,7 @@
  * Design mock: Tools — Resegmentation
  * Fully interactive prototype with mock data. No real API calls.
  */
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import {
   Box, Heading, Text, Button, HStack, VStack, Flex,
   Tabs, TabList, Tab, TabPanels, TabPanel,
@@ -10,13 +10,14 @@ import {
   Table, Thead, Tbody, Tr, Th, Td, TableContainer,
   SimpleGrid, Tag, TagLabel, Wrap, WrapItem,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter,
+  Drawer, DrawerOverlay, DrawerContent, DrawerHeader, DrawerBody, DrawerFooter, DrawerCloseButton,
   Checkbox, Divider, Skeleton, SkeletonText,
   Select, List, ListItem,
   Badge, Icon, Tooltip, Stack, useDisclosure,
   useColorModeValue, Alert, AlertIcon
 } from "@chakra-ui/react";
 import {
-  MdSearch, MdPlayArrow, MdCheck, MdUpload, MdBusiness,
+  MdSearch, MdCheck, MdUpload, MdBusiness,
   MdAutorenew, MdVisibility, MdOutlineArrowForward
 } from "react-icons/md";
 
@@ -25,32 +26,32 @@ import {
 // ---------------------------------------------------------------------------
 
 const MOCK_ORGS = [
-  { id: "o1", name: "Acme Corp",         currentIndustry: "Manufacturing",   currentFocus: "Industrial B2B" },
-  { id: "o2", name: "Pinnacle Group",    currentIndustry: "Finance",          currentFocus: "Investment Management" },
-  { id: "o3", name: "Meridian Health",   currentIndustry: "Healthcare",       currentFocus: "Health Systems" },
-  { id: "o4", name: "Solaris Energy",    currentIndustry: "Energy",           currentFocus: "Renewables" },
-  { id: "o5", name: "Bright Horizons",   currentIndustry: "Education",        currentFocus: "EdTech" },
-  { id: "o6", name: "Nova Payments",     currentIndustry: "Finance",          currentFocus: "Payments" },
-  { id: "o7", name: "Cascade Logistics", currentIndustry: "Logistics",        currentFocus: "Supply Chain" },
-  { id: "o8", name: "Vertex Software",   currentIndustry: "Technology",       currentFocus: "Enterprise SaaS" },
+  { id: "o1", name: "Acme Corp",          currentIndustry: "Manufacturing",  currentFocus: "Industrial B2B" },
+  { id: "o2", name: "Pinnacle Group",     currentIndustry: "Finance",         currentFocus: "Investment Management" },
+  { id: "o3", name: "Meridian Health",    currentIndustry: "Healthcare",      currentFocus: "Health Systems" },
+  { id: "o4", name: "Solaris Energy",     currentIndustry: "Energy",          currentFocus: "Renewables" },
+  { id: "o5", name: "Bright Horizons",    currentIndustry: "Education",       currentFocus: "EdTech" },
+  { id: "o6", name: "Nova Payments",      currentIndustry: "Finance",         currentFocus: "Payments" },
+  { id: "o7", name: "Cascade Logistics",  currentIndustry: "Logistics",       currentFocus: "Supply Chain" },
+  { id: "o8", name: "Vertex Software",    currentIndustry: "Technology",      currentFocus: "Enterprise SaaS" },
 ];
 
 const MOCK_LISTS = [
-  { id: "l1", name: "Q4 2025 — Tech Prospects",    count: 12, type: "TEST", subtype: "organization" },
-  { id: "l2", name: "Healthcare Outreach Wave 3",  count: 8,  type: "TEST", subtype: "organization" },
-  { id: "l3", name: "Fintech Series B Targets",    count: 5,  type: "TEST", subtype: "organization" },
+  { id: "l1", name: "Q4 2025 — Tech Prospects",   count: 12, type: "TEST", subtype: "organization" },
+  { id: "l2", name: "Healthcare Outreach Wave 3", count: 8,  type: "TEST", subtype: "organization" },
+  { id: "l3", name: "Fintech Series B Targets",   count: 5,  type: "TEST", subtype: "organization" },
 ];
 
 const LIST_ORGS = {
   l1: [
-    { id: "lo1", name: "Vertex Software",   currentIndustry: "Technology",  currentFocus: "Enterprise SaaS" },
+    { id: "lo1", name: "Vertex Software",    currentIndustry: "Technology",  currentFocus: "Enterprise SaaS" },
     { id: "lo2", name: "Nova Payments",      currentIndustry: "Finance",     currentFocus: "Payments" },
     { id: "lo3", name: "Cascade Logistics",  currentIndustry: "Logistics",   currentFocus: "Supply Chain" },
     { id: "lo4", name: "BlueStar Analytics", currentIndustry: "Technology",  currentFocus: "Data & Analytics" },
   ],
   l2: [
-    { id: "lo5", name: "Meridian Health",  currentIndustry: "Healthcare",   currentFocus: "Health Systems" },
-    { id: "lo6", name: "CarePath Inc",     currentIndustry: "Healthcare",   currentFocus: "Health Tech" },
+    { id: "lo5", name: "Meridian Health",  currentIndustry: "Healthcare",  currentFocus: "Health Systems" },
+    { id: "lo6", name: "CarePath Inc",     currentIndustry: "Healthcare",  currentFocus: "Health Tech" },
   ],
   l3: [
     { id: "lo7", name: "Pinnacle Group",  currentIndustry: "Finance",  currentFocus: "Investment Management" },
@@ -60,13 +61,13 @@ const LIST_ORGS = {
 
 function mockSegmentationResult(org) {
   const upgrades = {
-    "Manufacturing":  { industry: "Industrial Technology",      focus: "B2B SaaS" },
-    "Finance":        { industry: "Financial Technology",        focus: "Enterprise Fintech" },
-    "Healthcare":     { industry: "Healthcare Technology",       focus: "Health Tech SaaS" },
-    "Energy":         { industry: "Clean Technology",            focus: "Energy Tech" },
-    "Education":      { industry: "Education Technology",        focus: "Learning Platforms" },
-    "Logistics":      { industry: "Supply Chain Technology",     focus: "Logistics SaaS" },
-    "Technology":     { industry: "Enterprise Software",         focus: "B2B SaaS" },
+    "Manufacturing":  { industry: "Industrial Technology",   focus: "B2B SaaS" },
+    "Finance":        { industry: "Financial Technology",    focus: "Enterprise Fintech" },
+    "Healthcare":     { industry: "Healthcare Technology",   focus: "Health Tech SaaS" },
+    "Energy":         { industry: "Clean Technology",        focus: "Energy Tech" },
+    "Education":      { industry: "Education Technology",   focus: "Learning Platforms" },
+    "Logistics":      { industry: "Supply Chain Technology", focus: "Logistics SaaS" },
+    "Technology":     { industry: "Enterprise Software",     focus: "B2B SaaS" },
   };
   const updated = upgrades[org.currentIndustry] ?? { industry: org.currentIndustry, focus: org.currentFocus };
   return {
@@ -99,7 +100,7 @@ function mockSegmentationResult(org) {
 }
 
 // ---------------------------------------------------------------------------
-// Sub-components
+// Shared display components
 // ---------------------------------------------------------------------------
 
 function SegmentTagList({ items, colorScheme = "blue" }) {
@@ -177,6 +178,8 @@ function SegmentCompare({ original, updated, loading }) {
 }
 
 function ReasonsTable({ reasons, loading }) {
+  const theadBg = useColorModeValue("gray.50", "gray.700");
+
   if (loading) {
     return (
       <Box mt={6}>
@@ -192,7 +195,7 @@ function ReasonsTable({ reasons, loading }) {
       <Text fontSize="sm" fontWeight="semibold" color="gray.700" mb={3}>Segmentation Reasoning</Text>
       <TableContainer border="1px solid" borderColor="gray.200" borderRadius="md">
         <Table size="sm" variant="simple">
-          <Thead bg={useColorModeValue("gray.50", "gray.700")}>
+          <Thead bg={theadBg}>
             <Tr>
               <Th>Source</Th>
               <Th>Sector</Th>
@@ -222,6 +225,10 @@ function ReasonsTable({ reasons, loading }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Apply modal (shared by both tabs)
+// ---------------------------------------------------------------------------
+
 function ApplyModal({ isOpen, onClose, onApply, orgName }) {
   const [saveSalesforce, setSaveSalesforce] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -249,7 +256,8 @@ function ApplyModal({ isOpen, onClose, onApply, orgName }) {
         <Divider />
         <ModalBody py={5}>
           <Text fontSize="sm" color="gray.600" mb={4}>
-            Apply the proposed segments to <Text as="span" fontWeight="semibold">{orgName}</Text>?
+            Apply the proposed segments to{" "}
+            <Text as="span" fontWeight="semibold">{orgName}</Text>?
           </Text>
           <Checkbox
             isChecked={saveSalesforce}
@@ -279,6 +287,76 @@ function ApplyModal({ isOpen, onClose, onApply, orgName }) {
 }
 
 // ---------------------------------------------------------------------------
+// Review drawer (list tab) — slides in from right, keeps table visible
+// ---------------------------------------------------------------------------
+
+function ReviewDrawer({ isOpen, onClose, org, result, onApply, isApplied }) {
+  const { isOpen: isApplyOpen, onOpen: openApply, onClose: closeApply } = useDisclosure();
+
+  if (!org) return null;
+
+  return (
+    <>
+      <Drawer isOpen={isOpen} onClose={onClose} placement="right" size="xl">
+        <DrawerOverlay />
+        <DrawerContent>
+          <DrawerCloseButton />
+          <DrawerHeader borderBottomWidth="1px" pb={4}>
+            <HStack spacing={2}>
+              <Icon as={MdBusiness} color="blue.500" boxSize={5} />
+              <Box>
+                <Text fontSize="md" fontWeight="bold">{org.name}</Text>
+                <Text fontSize="xs" color="gray.500" fontWeight="normal">
+                  Segmentation Review
+                </Text>
+              </Box>
+            </HStack>
+          </DrawerHeader>
+
+          <DrawerBody py={5}>
+            {isApplied && (
+              <Alert status="success" borderRadius="md" mb={5} size="sm">
+                <AlertIcon />
+                Segmentation has been applied.
+              </Alert>
+            )}
+
+            <SegmentCompare
+              original={result?.original}
+              updated={result?.updated}
+              loading={false}
+            />
+            <ReasonsTable reasons={result?.reasons} loading={false} />
+          </DrawerBody>
+
+          <DrawerFooter borderTopWidth="1px" gap={3} justifyContent="flex-start">
+            <Button
+              size="sm"
+              colorScheme={isApplied ? "green" : "blue"}
+              leftIcon={isApplied ? <MdCheck /> : undefined}
+              isDisabled={isApplied}
+              onClick={openApply}
+            >
+              {isApplied ? "Applied" : "Apply"}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={onClose}>
+              Close
+            </Button>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+
+      <ApplyModal
+        isOpen={isApplyOpen}
+        onClose={closeApply}
+        onApply={onApply}
+        orgName={org.name}
+      />
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Single organization tab
 // ---------------------------------------------------------------------------
 
@@ -291,6 +369,7 @@ function SingleOrgTab() {
   const [applied, setApplied] = useState(false);
   const { isOpen: isApplyOpen, onOpen: openApply, onClose: closeApply } = useDisclosure();
   const inputRef = useRef(null);
+  const dropdownBg = useColorModeValue("white", "gray.800");
 
   const filtered = query.length >= 1
     ? MOCK_ORGS.filter((o) => o.name.toLowerCase().includes(query.toLowerCase()))
@@ -313,12 +392,6 @@ function SingleOrgTab() {
       setIsSegmenting(false);
     }, 2200);
   }
-
-  function handleApplied() {
-    setApplied(true);
-  }
-
-  const headerBg = useColorModeValue("white", "gray.800");
 
   return (
     <Box>
@@ -352,7 +425,7 @@ function SingleOrgTab() {
             left={0}
             right={0}
             zIndex={10}
-            bg={headerBg}
+            bg={dropdownBg}
             border="1px solid"
             borderColor="gray.200"
             borderRadius="md"
@@ -387,7 +460,7 @@ function SingleOrgTab() {
         )}
       </Box>
 
-      {/* Selected org header */}
+      {/* Selected org header + actions */}
       {selectedOrg && (
         <Box>
           <Flex align="center" justify="space-between" mb={4} pb={4} borderBottom="1px solid" borderColor="gray.100">
@@ -441,6 +514,13 @@ function SingleOrgTab() {
           <ReasonsTable reasons={result?.reasons} loading={isSegmenting} />
         </Box>
       )}
+
+      <ApplyModal
+        isOpen={isApplyOpen}
+        onClose={closeApply}
+        onApply={() => setApplied(true)}
+        orgName={selectedOrg?.name ?? ""}
+      />
     </Box>
   );
 }
@@ -452,10 +532,15 @@ function SingleOrgTab() {
 function ListOrgsTab() {
   const [selectedListId, setSelectedListId] = useState("");
   const [segmentingIds, setSegmentingIds] = useState(new Set());
-  const [results, setResults] = useState({});  // orgId → segmentation result
+  const [results, setResults] = useState({});
   const [applied, setApplied] = useState(new Set());
+  const [reviewOrg, setReviewOrg] = useState(null);
   const { isOpen: isApplyOpen, onOpen: openApply, onClose: closeApply } = useDisclosure();
+  const { isOpen: isReviewOpen, onOpen: openReview, onClose: closeReview } = useDisclosure();
   const [pendingApplyOrg, setPendingApplyOrg] = useState(null);
+
+  const headerBg = useColorModeValue("gray.50", "gray.700");
+  const appliedRowBg = useColorModeValue("green.50", "green.900");
 
   const selectedList = MOCK_LISTS.find((l) => l.id === selectedListId);
   const orgs = selectedListId ? (LIST_ORGS[selectedListId] ?? []) : [];
@@ -494,8 +579,16 @@ function ListOrgsTab() {
     }
   }
 
-  const headerBg = useColorModeValue("gray.50", "gray.700");
-  const shimmerColor = useColorModeValue("blue.50", "blue.900");
+  function handleReviewApplied() {
+    if (reviewOrg) {
+      setApplied((prev) => new Set([...prev, reviewOrg.id]));
+    }
+  }
+
+  function openReviewFor(org) {
+    setReviewOrg(org);
+    openReview();
+  }
 
   return (
     <Box>
@@ -513,6 +606,7 @@ function ListOrgsTab() {
               setSegmentingIds(new Set());
               setResults({});
               setApplied(new Set());
+              setReviewOrg(null);
             }}
             size="sm"
           >
@@ -586,11 +680,7 @@ function ListOrgsTab() {
                   const hasResult = !!result;
 
                   return (
-                    <Tr
-                      key={org.id}
-                      bg={isApplied ? useColorModeValue("green.50", "green.900") : undefined}
-                      opacity={isApplied ? 0.75 : 1}
-                    >
+                    <Tr key={org.id} bg={isApplied ? appliedRowBg : undefined} opacity={isApplied ? 0.75 : 1}>
                       <Td fontWeight="medium" fontSize="sm">
                         <HStack spacing={1}>
                           <Icon as={MdBusiness} color="gray.400" boxSize={3.5} />
@@ -641,22 +731,24 @@ function ListOrgsTab() {
                             leftIcon={<MdVisibility />}
                             isDisabled={!hasResult}
                             variant="ghost"
-                            colorScheme="gray"
-                            onClick={() => alert(`Review modal for ${org.name} — coming soon`)}
+                            colorScheme="blue"
+                            onClick={() => openReviewFor(org)}
                           >
                             Review
                           </Button>
                         </Tooltip>
                       </Td>
                       <Td>
-                        <Tooltip label={!hasResult ? "Segment first" : isApplied ? "Already applied" : ""} isDisabled={hasResult && !isApplied}>
+                        <Tooltip
+                          label={!hasResult ? "Segment first" : isApplied ? "Already applied" : ""}
+                          isDisabled={hasResult && !isApplied}
+                        >
                           <Button
                             size="xs"
                             leftIcon={isApplied ? <MdCheck /> : undefined}
                             colorScheme={isApplied ? "green" : "blue"}
                             isDisabled={!hasResult || isApplied}
                             onClick={() => startApply(org)}
-                            variant={isApplied ? "solid" : "solid"}
                           >
                             {isApplied ? "Applied" : "Apply"}
                           </Button>
@@ -671,11 +763,22 @@ function ListOrgsTab() {
         </Box>
       )}
 
+      {/* Apply modal for table-row apply button */}
       <ApplyModal
         isOpen={isApplyOpen}
         onClose={closeApply}
         onApply={handleApplied}
         orgName={pendingApplyOrg?.name ?? ""}
+      />
+
+      {/* Review drawer — slides in from right, keeps table in view */}
+      <ReviewDrawer
+        isOpen={isReviewOpen}
+        onClose={closeReview}
+        org={reviewOrg}
+        result={reviewOrg ? results[reviewOrg.id] : null}
+        onApply={handleReviewApplied}
+        isApplied={reviewOrg ? applied.has(reviewOrg.id) : false}
       />
     </Box>
   );
