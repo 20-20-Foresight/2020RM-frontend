@@ -7,13 +7,13 @@ import { json, redirect } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { FeedsListPage } from "../components/FeedsListPage";
 import {
-  loadFeedsList,
+  loadMockFeedsList,
   groupFeedsBySource,
   computeFeedStats
 } from "../models/feeds.server";
 
 export async function loader() {
-  const feeds = await loadFeedsList();
+  const feeds = await loadMockFeedsList();
   return json({
     feedsBySource: groupFeedsBySource(feeds),
     stats: computeFeedStats(feeds),
