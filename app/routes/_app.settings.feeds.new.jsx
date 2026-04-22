@@ -1,6 +1,7 @@
 import { json, redirect } from "@remix-run/node";
 import { useActionData, useLoaderData } from "@remix-run/react";
 import { FeedNewPage } from "../components/FeedEditorPage";
+import { createFeed, FeedApiError, readFeedFormPayload } from "../models/feeds.server";
 
 export async function loader({ request }) {
   const url = new URL(request.url);
@@ -10,29 +11,44 @@ export async function loader({ request }) {
 
 export async function action({ request }) {
   const formData = await request.formData();
+  let payload;
 
-  const name = formData.get("name")?.toString().trim();
-  const source = formData.get("source")?.toString().trim();
+  try {
+    payload = readFeedFormPayload(formData, {
+      includeSource: true
+    });
+  } catch (error) {
+    return json(
+      {
+        error: error instanceof Error ? error.message : "Feed settings are invalid."
+      },
+      {
+        status: error instanceof FeedApiError ? error.statusCode : 400
+      }
+    );
+  }
 
-  if (!name || !source) {
+  if (!payload.name || !payload.source) {
     return json({ error: "Feed name and source are required." }, { status: 400 });
   }
 
-  // TODO: call real API — POST /api/feeds
-  // const feed = await createFeed({
-  //   name,
-  //   source,
-  //   description: formData.get("description"),
-  //   interval_days: Number(formData.get("interval_days")) || 7,
-  //   records_limit: Number(formData.get("records_limit")) || null,
-  //   crm_age_days: Number(formData.get("crm_age_days")) || null,
-  //   next_run_at: formData.get("next_run_at") || null,
-  //   enabled: formData.get("enabled") === "true",
-  //   settings: JSON.parse(formData.get("settingsJson") || "{}")
-  // }, request);
+  try {
+    const feed = await createFeed({
+      request,
+      feed: payload
+    });
 
-  // Mock: redirect to list with a fake success
-  return redirect("/settings/feeds");
+    return redirect(feed?.id ? `/settings/feeds/${feed.id}` : "/settings/feeds");
+  } catch (error) {
+    return json(
+      {
+        error: error instanceof FeedApiError ? error.message : "Unable to create feed."
+      },
+      {
+        status: error instanceof FeedApiError ? error.statusCode : 500
+      }
+    );
+  }
 }
 
 export default function FeedNewRoute() {

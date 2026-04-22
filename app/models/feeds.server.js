@@ -257,25 +257,403 @@ const MOCK_FEEDS = [
 // ---------------------------------------------------------------------------
 
 /**
- * Returns a stable summary of all feeds.
- * In production this would call the backend feeds service API.
+ * Error raised when one feed API request fails.
+ */
+class FeedApiError extends Error {
+  /**
+   * @param {string} message
+   * @param {{code?: string, statusCode?: number, cause?: unknown}} [options]
+   */
+  constructor(message, options = {}) {
+    super(message, options.cause ? { cause: options.cause } : undefined);
+    this.name = "FeedApiError";
+    this.code = options.code || "feed_request_failed";
+    this.statusCode = options.statusCode || 500;
+  }
+}
+
+/**
+ * Returns whether one value is a plain object.
+ * @param {unknown} value
+ * @returns {value is Record<string, unknown>}
+ */
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
+ * Reads a trimmed string or null.
+ * @param {unknown} value
+ * @returns {string|null}
+ */
+function readTrimmedString(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+/**
+ * Reads one integer-like value.
+ * @param {unknown} value
+ * @returns {number|null}
+ */
+function readInteger(value) {
+  if (typeof value === "number" && Number.isInteger(value)) {
+    return value;
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
+/**
+ * Reads one boolean-like value.
+ * @param {unknown} value
+ * @returns {boolean|undefined}
+ */
+function readBoolean(value) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (["1", "true", "yes", "y", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "n", "off"].includes(normalized)) {
+    return false;
+  }
+
+  return undefined;
+}
+
+/**
+ * Reads a JSON response body without assuming shape.
+ * @param {{ json?: Function }} response
+ * @returns {Promise<Record<string, unknown>|null>}
+ */
+async function tryReadJson(response) {
+  if (!response || typeof response.json !== "function") {
+    return null;
+  }
+
+  try {
+    const payload = await response.json();
+    return isPlainObject(payload) ? payload : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+/**
+ * Normalizes one feed payload into a shared UI shape.
+ * @param {unknown} value
+ * @returns {object|null}
+ */
+function normalizeFeed(value) {
+  if (!isPlainObject(value)) {
+    return null;
+  }
+
+  return {
+    ...value,
+    id: readInteger(value.id),
+    name: readTrimmedString(value.name) || "",
+    source: readTrimmedString(value.source) || "",
+    description: value.description == null ? null : readTrimmedString(value.description) || "",
+    interval_days: readInteger(value.interval_days) ?? 7,
+    records_limit: readInteger(value.records_limit),
+    crm_age_days: readInteger(value.crm_age_days),
+    enabled: value.enabled !== false,
+    settings: isPlainObject(value.settings) ? value.settings : {},
+    last_run_started_at: readTrimmedString(value.last_run_started_at),
+    last_run_completed_at: readTrimmedString(value.last_run_completed_at),
+    last_run_status: readTrimmedString(value.last_run_status),
+    last_result_count: readInteger(value.last_result_count),
+    last_queued_count: readInteger(value.last_queued_count),
+    last_error: readTrimmedString(value.last_error),
+    next_run_at: readTrimmedString(value.next_run_at),
+    createddate: readTrimmedString(value.createddate),
+    modifieddate: readTrimmedString(value.modifieddate)
+  };
+}
+
+/**
+ * Returns one cloned mock feed list for design-only routes.
  * @returns {Promise<object[]>}
  */
-export async function loadFeedsList() {
-  // TODO: replace with real API call to GET /api/feeds
-  return MOCK_FEEDS.map((feed) => ({ ...feed }));
+async function loadMockFeedsList() {
+  return MOCK_FEEDS.map((feed) => normalizeFeed(feed));
+}
+
+/**
+ * Calls one normalized feed REST route through the frontend BFF.
+ * @param {{
+ *   request: Request,
+ *   pathname: string,
+ *   method?: string,
+ *   body?: Record<string, unknown>|null,
+ *   fetchImpl?: typeof fetch,
+ *   allowNotFound?: boolean
+ * }} options
+ * @returns {Promise<Record<string, unknown>|null>}
+ */
+async function requestFeedApi(options) {
+  const fetchImpl = options.fetchImpl || globalThis.fetch;
+  if (typeof fetchImpl !== "function") {
+    throw new Error("Fetch is required to load feeds.");
+  }
+
+  const target = new URL(options.pathname, options.request.url);
+  let response;
+
+  try {
+    const headers = {
+      cookie: options.request.headers.get("cookie") || ""
+    };
+
+    /** @type {RequestInit} */
+    const requestInit = {
+      method: options.method,
+      headers
+    };
+
+    if (options.body && isPlainObject(options.body)) {
+      headers["content-type"] = "application/json";
+      requestInit.body = JSON.stringify(options.body);
+    }
+
+    response = await fetchImpl(target, requestInit);
+  } catch (error) {
+    throw new FeedApiError("Unable to reach the feeds service.", {
+      code: "feed_unreachable",
+      statusCode: 502,
+      cause: error
+    });
+  }
+
+  if (response.status === 204) {
+    return null;
+  }
+
+  const payload = await tryReadJson(response);
+  if (response.status === 404 && options.allowNotFound) {
+    return null;
+  }
+
+  if (!response.ok) {
+    const errorCode = readTrimmedString(payload?.error) || "feed_request_failed";
+    const errorMessage =
+      readTrimmedString(payload?.message) ||
+      `Feed request failed (HTTP ${response.status}).`;
+
+    throw new FeedApiError(errorMessage, {
+      code: errorCode,
+      statusCode: response.status
+    });
+  }
+
+  return payload;
+}
+
+/**
+ * Builds the feed list path with optional filters.
+ * @param {{source?: string|null, enabled?: boolean|undefined}} [options]
+ * @returns {string}
+ */
+function buildFeedListPath(options = {}) {
+  const pathname = "/api/rest/feeds";
+  const source = readTrimmedString(options.source);
+  const enabled = typeof options.enabled === "boolean" ? String(options.enabled) : null;
+  if (!source && !enabled) {
+    return pathname;
+  }
+
+  const searchParams = new URLSearchParams();
+  if (source) {
+    searchParams.append("source", source);
+  }
+  if (enabled) {
+    searchParams.append("enabled", enabled);
+  }
+
+  return `${pathname}?${searchParams.toString()}`;
+}
+
+/**
+ * Returns a stable summary of all feeds from the backend feed API.
+ * @param {{request: Request, source?: string|null, enabled?: boolean|undefined, fetchImpl?: typeof fetch}} options
+ * @returns {Promise<object[]>}
+ */
+async function loadFeedsList(options) {
+  const payload = await requestFeedApi({
+    request: options.request,
+    pathname: buildFeedListPath({
+      source: options.source,
+      enabled: options.enabled
+    }),
+    fetchImpl: options.fetchImpl
+  });
+
+  return Array.isArray(payload?.feeds)
+    ? payload.feeds.map((feed) => normalizeFeed(feed)).filter(Boolean)
+    : [];
 }
 
 /**
  * Returns a single feed by id.
- * @param {string|number} id
+ * @param {{request: Request, id: string|number, fetchImpl?: typeof fetch}} options
  * @returns {Promise<object|null>}
  */
-export async function loadFeedById(id) {
-  const numId = Number(id);
-  const feed = MOCK_FEEDS.find((f) => f.id === numId);
-  // TODO: replace with real API call to GET /api/feeds/:id
-  return feed ? { ...feed } : null;
+async function loadFeedById(options) {
+  const id = readInteger(options.id);
+  if (!id) {
+    return null;
+  }
+
+  const payload = await requestFeedApi({
+    request: options.request,
+    pathname: `/api/rest/feeds/${encodeURIComponent(String(id))}`,
+    fetchImpl: options.fetchImpl,
+    allowNotFound: true
+  });
+
+  return normalizeFeed(payload?.feed);
+}
+
+/**
+ * Creates one feed through the backend feed API.
+ * @param {{request: Request, feed: Record<string, unknown>, fetchImpl?: typeof fetch}} options
+ * @returns {Promise<object|null>}
+ */
+async function createFeed(options) {
+  const payload = await requestFeedApi({
+    request: options.request,
+    pathname: "/api/rest/feeds",
+    method: "POST",
+    body: isPlainObject(options.feed) ? options.feed : {},
+    fetchImpl: options.fetchImpl
+  });
+
+  return normalizeFeed(payload?.feed);
+}
+
+/**
+ * Updates one feed through the backend feed API.
+ * @param {{request: Request, id: string|number, feed: Record<string, unknown>, fetchImpl?: typeof fetch}} options
+ * @returns {Promise<object|null>}
+ */
+async function updateFeed(options) {
+  const id = readInteger(options.id);
+  const payload = await requestFeedApi({
+    request: options.request,
+    pathname: `/api/rest/feeds/${encodeURIComponent(String(id))}`,
+    method: "PUT",
+    body: isPlainObject(options.feed) ? options.feed : {},
+    fetchImpl: options.fetchImpl
+  });
+
+  return normalizeFeed(payload?.feed);
+}
+
+/**
+ * Updates one feed enabled flag through the convenience patch route.
+ * @param {{request: Request, id: string|number, enabled: boolean, fetchImpl?: typeof fetch}} options
+ * @returns {Promise<object|null>}
+ */
+async function setFeedEnabled(options) {
+  const id = readInteger(options.id);
+  const payload = await requestFeedApi({
+    request: options.request,
+    pathname: `/api/rest/feeds/${encodeURIComponent(String(id))}/enabled`,
+    method: "PATCH",
+    body: {
+      enabled: options.enabled
+    },
+    fetchImpl: options.fetchImpl
+  });
+
+  return normalizeFeed(payload?.feed);
+}
+
+/**
+ * Deletes one feed through the backend feed API.
+ * @param {{request: Request, id: string|number, fetchImpl?: typeof fetch}} options
+ * @returns {Promise<void>}
+ */
+async function deleteFeed(options) {
+  const id = readInteger(options.id);
+  await requestFeedApi({
+    request: options.request,
+    pathname: `/api/rest/feeds/${encodeURIComponent(String(id))}`,
+    method: "DELETE",
+    fetchImpl: options.fetchImpl
+  });
+}
+
+/**
+ * Reads one mutable feed payload from a Remix form submission.
+ * @param {FormData} formData
+ * @param {{includeSource?: boolean}} [options]
+ * @returns {Record<string, unknown>}
+ * @throws {FeedApiError}
+ */
+function readFeedFormPayload(formData, options = {}) {
+  let settings = {};
+  const settingsJson = readTrimmedString(formData.get("settingsJson"));
+  if (settingsJson) {
+    try {
+      const parsed = JSON.parse(settingsJson);
+      settings = isPlainObject(parsed) ? parsed : {};
+    } catch (error) {
+      throw new FeedApiError("Feed settings are invalid.", {
+        code: "invalid_settings",
+        statusCode: 400,
+        cause: error
+      });
+    }
+  }
+
+  const payload = {
+    name: readTrimmedString(formData.get("name")) || "",
+    description: readTrimmedString(formData.get("description")),
+    interval_days: readInteger(formData.get("interval_days")),
+    records_limit: readInteger(formData.get("records_limit")),
+    crm_age_days: readInteger(formData.get("crm_age_days")),
+    next_run_at: readTrimmedString(formData.get("next_run_at")),
+    enabled: formData.get("enabled") === "true",
+    settings
+  };
+
+  if (options.includeSource) {
+    payload.source = readTrimmedString(formData.get("source")) || "";
+  }
+
+  return payload;
 }
 
 /**
@@ -283,7 +661,7 @@ export async function loadFeedById(id) {
  * @param {string} [source]
  * @returns {object}
  */
-export function buildEmptyFeed(source) {
+function buildEmptyFeed(source) {
   return {
     id: null,
     name: "",
@@ -309,7 +687,7 @@ export function buildEmptyFeed(source) {
  * @param {object[]} feeds
  * @returns {Record<string, object[]>}
  */
-export function groupFeedsBySource(feeds) {
+function groupFeedsBySource(feeds) {
   const groups = {};
   for (const feed of feeds) {
     const key = feed.source || "unknown";
@@ -324,7 +702,7 @@ export function groupFeedsBySource(feeds) {
  * @param {object[]} feeds
  * @returns {{total: number, enabled: number, running: number, failed: number}}
  */
-export function computeFeedStats(feeds) {
+function computeFeedStats(feeds) {
   return {
     total: feeds.length,
     enabled: feeds.filter((f) => f.enabled).length,
@@ -332,3 +710,18 @@ export function computeFeedStats(feeds) {
     failed: feeds.filter((f) => f.last_run_status === "failed").length
   };
 }
+
+module.exports = {
+  FeedApiError,
+  buildEmptyFeed,
+  computeFeedStats,
+  createFeed,
+  deleteFeed,
+  groupFeedsBySource,
+  loadFeedById,
+  loadFeedsList,
+  loadMockFeedsList,
+  readFeedFormPayload,
+  setFeedEnabled,
+  updateFeed
+};

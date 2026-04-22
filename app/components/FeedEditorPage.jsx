@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   AlertDescription,
@@ -37,11 +37,12 @@ import {
   Wrap,
   WrapItem
 } from "@chakra-ui/react";
-import { Form, Link } from "@remix-run/react";
+import { Form, Link, useNavigation } from "@remix-run/react";
 import { MdArrowBack, MdDelete, MdSave } from "react-icons/md";
 import { SurfaceCard } from "./ui/atoms/SurfaceCard";
 import { SectionLabel } from "./ui/atoms/SectionLabel";
 import { getFeedSourceColor, getFeedSourceLabel, FEED_SOURCES, FEED_SOURCE_KEYS } from "../models/feed-sources.mjs";
+import { readFeedFormIntent } from "../models/feed-form-intent.mjs";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -273,6 +274,7 @@ function SourceFiltersCard({ sourceKey, settings, onSettingsChange }) {
 // ---------------------------------------------------------------------------
 
 function FeedEditorForm({ feed, isNew, actionData }) {
+  const navigation = useNavigation();
   const [name, setName] = useState(feed.name || "");
   const [source, setSource] = useState(feed.source || "");
   const [description, setDescription] = useState(feed.description || "");
@@ -286,9 +288,30 @@ function FeedEditorForm({ feed, isNew, actionData }) {
 
   const sourceColor = getFeedSourceColor(source);
   const isSourceLocked = !isNew && !!feed.source;
+  const navigationIntent = readFeedFormIntent(navigation.formData);
+  const isSaving =
+    navigation.state !== "idle" &&
+    (navigationIntent === "create" || navigationIntent === "update");
 
-  function handleSubmit() {
-    setTone("saving");
+  useEffect(() => {
+    if (navigation.state === "idle" && tone === "saving") {
+      setTone("default");
+    }
+  }, [navigation.state, tone]);
+
+  function handleSubmit(event) {
+    const submitterIntent =
+      typeof event?.nativeEvent?.submitter?.value === "string"
+        ? event.nativeEvent.submitter.value.trim()
+        : "";
+    if (submitterIntent === "create" || submitterIntent === "update") {
+      setTone("saving");
+      return;
+    }
+
+    if (tone === "saving") {
+      setTone("default");
+    }
   }
 
   return (
@@ -547,7 +570,7 @@ function FeedEditorForm({ feed, isNew, actionData }) {
               colorScheme="blue"
               size="sm"
               leftIcon={<MdSave />}
-              isLoading={tone === "saving"}
+              isLoading={isSaving}
             >
               {isNew ? "Create Feed" : "Save Changes"}
             </Button>
