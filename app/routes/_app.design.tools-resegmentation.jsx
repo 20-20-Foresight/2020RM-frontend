@@ -37,9 +37,9 @@ const MOCK_ORGS = [
 ];
 
 const MOCK_LISTS = [
-  { id: "l1", name: "Q4 2025 — Tech Prospects",   count: 12, type: "TEST", subtype: "organization" },
-  { id: "l2", name: "Healthcare Outreach Wave 3", count: 8,  type: "TEST", subtype: "organization" },
-  { id: "l3", name: "Fintech Series B Targets",   count: 5,  type: "TEST", subtype: "organization" },
+  { id: "l1", name: "Q4 2025 — Tech Prospects",   count: 12, type: "LIST", subtype: "ORGANIZATION" },
+  { id: "l2", name: "Healthcare Outreach Wave 3", count: 8,  type: "LIST", subtype: "ORGANIZATION" },
+  { id: "l3", name: "Fintech Series B Targets",   count: 5,  type: "LIST", subtype: "ORGANIZATION" },
 ];
 
 const LIST_ORGS = {
@@ -592,7 +592,7 @@ function ListOrgsTab() {
 
   return (
     <Box>
-      {/* List selector + upload */}
+      {/* List selector + phase-2 import */}
       <Flex align="flex-end" gap={4} mb={6} flexWrap="wrap">
         <Box flex="1" minW="220px" maxW="380px">
           <Text fontSize="sm" fontWeight="medium" mb={2} color="gray.700">
@@ -617,15 +617,17 @@ function ListOrgsTab() {
             ))}
           </Select>
         </Box>
-        <Button
-          size="sm"
-          leftIcon={<Icon as={MdUpload} />}
-          variant="outline"
-          colorScheme="gray"
-          onClick={() => alert("Upload list — not yet implemented")}
-        >
-          Upload List
-        </Button>
+        <Tooltip label="Phase 1 uses seeded backend lists. CSV/XLSX import lands in phase 2.">
+          <Button
+            size="sm"
+            leftIcon={<Icon as={MdUpload} />}
+            variant="outline"
+            colorScheme="gray"
+            isDisabled
+          >
+            Import List (Phase 2)
+          </Button>
+        </Tooltip>
       </Flex>
 
       {selectedList && (

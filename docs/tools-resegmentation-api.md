@@ -1,273 +1,426 @@
-# Resegmentation Tool — Implementation Documentation
+# Resegmentation Tool — API And Phase Plan
 
-## Overview
+## Goal
 
-The Resegmentation Tool allows CRM users to re-run organization segmentation on demand. It operates in two modes: **single organization** (search, segment, review, apply) and **list of organizations** (bulk flow, row-by-row execution).
+Move the resegmentation tool from `/design/tools-resegmentation` into the real
+`/tools/resegmentation` flow using the backend list support that already exists.
 
-The frontend mock lives at `/design/tools-resegmentation`. The production route is at `/tools/resegmentation`.
+Status on April 22, 2026:
 
----
+- phase 1 is now implemented in the production route
+- the design mock still exists at `/design/tools-resegmentation`
+- CSV/XLSX import remains phase 2
 
-## Expected API Endpoints
+Phase 1 is intentionally narrow:
 
-### Organization Search
+- disable list import on the page
+- seed a couple of real organization lists for testing
+- add one dry-run resegmentation RPC that can also persist on rerun
+- wire single-org and list-org review flows against that contract
 
-```
-GET /api/organizations/search
-  ?q=<string>          – partial name match (min 1 char)
-  &limit=20            – results cap
+CSV/XLSX import is phase 2 and is not part of the first implementation pass.
 
-Response 200:
-[
-  {
-    "uuid": "abc-123",
-    "name": "Acme Corp",
-    "currentIndustry": "Manufacturing",
-    "currentFocus": "Industrial B2B"
-  },
-  ...
-]
-```
+## Current Backend Reality
 
-Used by the Single Organization tab autocomplete dropdown.
+### Already available
 
----
+- `entity/findOrganization`
+- `entity/exportOrganization`
+- `entity/findList`
+- `entity/getListDetail`
+- `entity/saveList`
+- `entity/addListMember`
+- `entity/resegmentOrganization`
 
-### Get Current Segmentation for an Org
+### Not available yet
 
-```
-GET /api/organizations/:uuid/segmentation
+- list upload / import endpoint
+- bulk list resegmentation RPC
 
-Response 200:
+That means phase 1 should reuse the list browse/detail APIs we already have and
+call resegmentation one organization at a time.
+
+## Phase 1 Scope
+
+### 1. Disable list import in the tool UI
+
+The design mock currently exposes an upload action. For phase 1 that control
+should be disabled and explicitly labeled as phase 2.
+
+Reason: the backend can browse and read lists now, but it cannot ingest CSV or
+Excel into list membership yet.
+
+### 2. Seed two real organization lists for testing
+
+Seed two static lists in the backend:
+
+- organizations where `organization.name ILIKE '%rose%'`
+- organizations where `organization.name ILIKE '%builders%'`
+
+Use these list headers:
+
+- `listTypeSlug = 'LIST'`
+- `listSubTypeSlug = 'ORGANIZATION'`
+- `subjectType = 'organization'`
+- `membershipMode = 'static'`
+- `status = 'active'`
+
+The SQL for this lives in
+`backend-v3.11/sql/2026-04-22-resegmentation-test-lists.sql`.
+
+### 3. Add one organization resegmentation RPC
+
+Do not split preview and apply into separate algorithms. Instead, add one RPC
+action that reruns segmentation every time:
+
+- first call with `dryRun: true`
+- second call with `dryRun: false` to persist
+
+This matches the product assumption that recomputing is cheap and avoids
+introducing stateful preview tokens or cached draft rows.
+
+### 4. Keep list-mode execution client-side in phase 1
+
+Do not add a list-wide bulk RPC yet.
+
+The list tab can:
+
+- load the selected list header + members
+- call the same organization resegmentation RPC per row
+- fan out "Segment All" from the client with normal loading state
+
+That keeps the first pass simple and uses the same review/apply path everywhere.
+
+## Existing RPC Contracts To Use
+
+### Organization search
+
+Use `entity/findOrganization` for the single-organization picker.
+
+Requested settings:
+
+```json
 {
-  "uuid": "abc-123",
-  "name": "Acme Corp",
-  "segmentation": {
-    "sector": "Technology",
-    "industry": ["Manufacturing"],
-    "focus": ["Industrial B2B"],
-    "emIndustry": "Industrial Manufacturing"
-  }
+  "name": "rose",
+  "limit": 20
 }
 ```
 
-Loaded when the user selects an org — populates the "Current Segments" panel.
+Returned rows already look like lightweight candidates:
 
----
-
-### Run Segmentation (Single Org)
-
+```json
+[
+  {
+    "uuid": "org-uuid",
+    "name": "Rose Builders Group",
+    "website": "https://example.com",
+    "linkedin": "https://www.linkedin.com/company/example",
+    "match": {
+      "score": 20,
+      "matchedOn": ["name"],
+      "explanation": "Matched on name."
+    }
+  }
+]
 ```
-POST /api/organizations/:uuid/segmentation/run
 
-Response 200:
+Important: this lookup does not return current industry/focus. After selection,
+load the full organization document separately.
+
+### Current organization document
+
+Use `entity/exportOrganization` after an org is selected.
+
+Requested settings:
+
+```json
 {
-  "uuid": "abc-123",
-  "name": "Acme Corp",
-  "original": {
-    "industry": "Manufacturing",
-    "focus": "Industrial B2B"
+  "uuid": "org-uuid"
+}
+```
+
+Use this response for:
+
+- current segmentation chips
+- any baseline data needed before dry-run
+
+The frontend already has `buildOrganizationSegmentationViewModel`, so the new
+tool should reuse that normalization logic instead of inventing a second display
+shape.
+
+### Organization list picker
+
+Use `entity/findList` for the list dropdown.
+
+Requested settings:
+
+```json
+{
+  "listTypeSlug": "LIST",
+  "listSubTypeSlug": "ORGANIZATION",
+  "subjectType": "organization",
+  "status": "active",
+  "membershipMode": "static",
+  "limit": 100
+}
+```
+
+Returned rows:
+
+```json
+[
+  {
+    "uuid": "list-uuid",
+    "type": "list",
+    "name": "Resegmentation Test - Rose Organizations",
+    "listTypeSlug": "LIST",
+    "listSubTypeSlug": "ORGANIZATION",
+    "status": "active",
+    "membershipMode": "static",
+    "subjectType": "organization",
+    "memberCount": 12,
+    "createdDate": "2026-04-22T15:00:00.000Z",
+    "modifiedDate": "2026-04-22T15:00:00.000Z"
+  }
+]
+```
+
+### Selected list detail
+
+Use `entity/getListDetail` once a list is chosen.
+
+Requested settings:
+
+```json
+{
+  "uuid": "list-uuid"
+}
+```
+
+Returned detail:
+
+```json
+{
+  "list": {
+    "uuid": "list-uuid",
+    "type": "list",
+    "name": "Resegmentation Test - Rose Organizations",
+    "listTypeSlug": "LIST",
+    "listSubTypeSlug": "ORGANIZATION",
+    "status": "active",
+    "membershipMode": "static",
+    "subjectType": "organization",
+    "memberCount": 12
   },
-  "proposed": {
-    "sector": "Technology",
-    "industry": ["Industrial Technology"],
-    "focus": ["B2B SaaS"]
-  },
-  "reasons": [
+  "members": [
     {
-      "source": "website_content",
-      "sector": "Technology",
-      "industry": "Industrial Technology",
-      "focus": "B2B SaaS",
-      "reason": "Homepage describes a B2B SaaS platform..."
+      "uuid": "membership-uuid",
+      "relation": "LIST_MEMBER",
+      "position": 1,
+      "addedAt": "2026-04-22T15:00:00.000Z",
+      "source": "seed_sql",
+      "member": {
+        "uuid": "org-uuid",
+        "type": "organization",
+        "name": "Rose Builders Group"
+      }
     }
   ],
-  "emIndustry": {
-    "calculatedEMIndustry": "Industrial Technology",
-    "calculatedEMIndustryLabel": "Industrial Technology",
-    "selected": null,
-    "selectedLabel": "Not set",
-    "source": "segmentation",
-    "sourceLabel": "Derived from segmentation",
-    "usedSegmentationValue": null,
-    "reason": "No prior Salesforce record found."
+  "targets": [],
+  "permissions": {
+    "owners": [],
+    "viewers": [],
+    "editors": []
   }
 }
 ```
 
-Triggered by "Segment Now". Response shape mirrors the existing `orgSegmentation` fragment data structure (see `backend/src/business/reports/fragments/orgSegmentation`).
+Important: `members[]` only gives the lightweight organization summary. If the
+table needs current industry/focus on initial load, the frontend will need to
+hydrate those rows separately. Phase 1 should prefer lazy row hydration:
 
----
+- show name immediately from `getListDetail`
+- fetch `entity/exportOrganization` when a row is reviewed or segmented
+- optionally prefetch visible rows later if needed
 
-### Apply Segmentation (Single Org)
+## New RPC To Add
 
-```
-POST /api/organizations/:uuid/segmentation/apply
+### Action name
 
-Body:
+Recommended action: `entity/resegmentOrganization`
+
+### Why one action instead of two
+
+The user flow wants dry-run first, then save by rerunning the same logic. A
+single action with `dryRun` keeps the backend and frontend simpler:
+
+- same request shape
+- same response shape
+- no temporary preview state to store
+- no risk of applying stale preview data
+
+### Request shape
+
+```json
 {
-  "saveSalesforce": true | false
+  "uuid": "org-uuid",
+  "dryRun": true,
+  "saveSalesforce": false,
+  "includeExplanation": true
 }
+```
 
-Response 200:
+Rules:
+
+- `dryRun` defaults to `true`
+- `saveSalesforce` is ignored when `dryRun` is `true`
+- apply is just the same action with `dryRun: false`
+
+### Response shape
+
+```json
 {
-  "uuid": "abc-123",
-  "applied": true,
-  "salesforceRecordId": "0015X000..." | null
-}
-```
-
-Triggered by the "Apply" button after modal confirmation. `saveSalesforce` corresponds to the checkbox in the apply modal.
-
----
-
-### List Entities (TEST / organization)
-
-```
-GET /api/lists
-  ?type=TEST
-  &subtype=organization
-
-Response 200:
-[
-  {
-    "id": "list-uuid-1",
-    "name": "Q4 2025 — Tech Prospects",
-    "count": 12,
-    "type": "TEST",
-    "subtype": "organization",
-    "createdAt": "2025-10-01T00:00:00Z"
+  "organization": {
+    "uuid": "org-uuid",
+    "name": "Rose Builders Group"
   },
-  ...
-]
-```
-
-Used to populate the list dropdown in the "List of Organizations" tab. Filters to `list` entity type with `type=TEST` and `subtype=organization`.
-
----
-
-### Get Organizations in a List
-
-```
-GET /api/lists/:listId/organizations
-
-Response 200:
-[
-  {
-    "id": "list-org-row-uuid",
-    "organizationUuid": "abc-123",
-    "name": "Acme Corp",
-    "currentIndustry": "Manufacturing",
-    "currentFocus": "Industrial B2B"
+  "current": {
+    "sector": "Real Estate",
+    "industry": ["Homebuilding"],
+    "focus": ["Residential Builders"],
+    "calculatedEMIndustry": "Home Builders"
   },
-  ...
-]
-```
-
-Loaded when the user selects a list. Drives the bulk table rows.
-
----
-
-### Upload a List
-
-```
-POST /api/lists/upload
-Content-Type: multipart/form-data
-
-Fields:
-  file: CSV or XLSX
-  type: "TEST"
-  subtype: "organization"
-
-Response 201:
-{
-  "id": "list-uuid-new",
-  "name": "Uploaded List — 2025-04-21",
-  "count": 34
+  "proposed": {
+    "sector": "Real Estate",
+    "industry": ["Homebuilding"],
+    "focus": ["Residential Builders"],
+    "calculatedEMIndustry": "Home Builders"
+  },
+  "explanations": [
+    {
+      "source": "companyName",
+      "dimension": "Focus",
+      "value": "Homebuilding",
+      "score": 5,
+      "crosswalkDocumentName": null,
+      "rule": "reason-uuid",
+      "reasonHtml": "&ldquo;Rose <mark>Builders</mark> Group...&rdquo;"
+    }
+  ],
+  "persisted": false,
+  "salesforce": {
+    "attempted": false,
+    "staged": false,
+    "stagedCount": 0,
+    "recordIds": []
+  }
 }
 ```
 
-Triggered by the "Upload List" button. Expected CSV columns: `organization_name`, `organization_uuid` (optional — used for matching if provided).
+Implementation note: phase 1 stages Salesforce account updates when the user
+checks the apply-modal option. It does not run a separate direct-save workflow
+inside the RPC request.
 
----
+### Explanation payload requirement
 
-### Run Segmentation for One Org in a List
+The response must return the explanation rows in a format the frontend can
+render directly inside the existing explanation table:
 
-```
-POST /api/lists/:listId/organizations/:rowId/segmentation/run
+- `source`
+- `dimension`
+- `value`
+- `score`
+- `crosswalkDocumentName`
+- `rule`
+- `reasonHtml`
 
-Response 200: (same shape as single-org /run response above)
-```
+That aligns with the current `OrganizationSegmentationSection` display model and
+avoids a second explanation adapter in the frontend.
 
-Called one at a time when the user clicks "Segment" on a row, or sequentially when "Segment All" is clicked. The frontend queues them and fires them one at a time.
+### Apply call
 
----
+Apply is the same action with:
 
-### Apply Segmentation for One Org in a List
-
-```
-POST /api/lists/:listId/organizations/:rowId/segmentation/apply
-
-Body:
+```json
 {
-  "saveSalesforce": true | false
-}
-
-Response 200:
-{
-  "rowId": "list-org-row-uuid",
-  "applied": true,
-  "salesforceRecordId": "..." | null
+  "uuid": "org-uuid",
+  "dryRun": false,
+  "saveSalesforce": true,
+  "includeExplanation": true
 }
 ```
 
----
+The response should still include the full result payload so the UI can refresh
+from the save call directly.
 
-## Frontend State Model
+## Frontend Wiring Plan
 
-### Single Org Tab
+### Single organization tab
 
-| State | Type | Notes |
-|---|---|---|
-| `query` | string | Search box value |
-| `selectedOrg` | object \| null | Chosen org from dropdown |
-| `isSegmenting` | boolean | Shimmer shown while POST is in flight |
-| `result` | object \| null | Proposed segments + reasons |
-| `applied` | boolean | Whether Apply was confirmed |
+1. Use `entity/findOrganization` for the search dropdown.
+2. Use `entity/exportOrganization` after selection to populate current values.
+3. Call `entity/resegmentOrganization` with `dryRun: true` when "Segment Now" is
+   clicked.
+4. Show explanation rows from `result.explanations`.
+5. Call the same action with `dryRun: false` when the user confirms "Apply".
 
-### List Orgs Tab
+### List tab
 
-| State | Type | Notes |
-|---|---|---|
-| `selectedListId` | string | Drives list org table |
-| `segmentingIds` | Set\<string\> | Row IDs currently running segmentation |
-| `results` | Map\<rowId → result\> | Per-row segmentation results |
-| `applied` | Set\<rowId\> | Rows where Apply was confirmed |
+1. Use `entity/findList` to populate the dropdown.
+2. Use `entity/getListDetail` after selection.
+3. Disable import in phase 1.
+4. For row review, call `entity/exportOrganization` if current segmentation has
+   not been hydrated yet.
+5. For "Segment" and "Segment All", call `entity/resegmentOrganization` per
+   organization row.
+6. For "Apply", call the same action again with `dryRun: false`.
 
----
+### BFF shape
 
-## Segmentation Result Display
+The production route uses thin Remix loader/action helpers that post to
+`/api/rpc`. The source of truth stays the backend RPC actions above; there is no
+separate guessed REST contract for resegmentation.
 
-The "Proposed Segments" panel and "Segmentation Reasoning" table mirror the data produced by `backend/src/business/reports/fragments/orgSegmentation`. Key fields:
+## Seed SQL
 
-- `proposed.industry[]` — one or more industry tags (shown as green `Tag` components)
-- `proposed.focus[]` — one or more focus tags
-- `reasons[]` — table rows: Source · Sector · Industry · Focus · Reason (may contain highlighted quote spans)
-- `emIndustry` — EM Industry decision block (source, calculated vs. selected, whether Salesforce value was used)
+Seed script:
 
-The Reasoning table should render reason text as HTML (use `dangerouslySetInnerHTML` for the highlighted `<span class="highlight">` markup that comes from the backend).
+- `backend-v3.11/sql/2026-04-22-resegmentation-test-lists.sql`
 
----
+What it does:
 
-## Salesforce Integration
+- creates or updates two list headers
+- attaches matching organizations through `LIST_MEMBER`
+- recalculates `metadata.memberCount`
+- leaves the lists in a stable shape for repeat dev/test runs
 
-The "Save in Salesforce" checkbox in the Apply modal maps to `saveSalesforce: true` in the apply POST body. The backend writes to Salesforce using the existing Salesforce sync infrastructure. The frontend should reflect the saved Salesforce record ID in a success toast after apply.
+Expected seeded list names:
 
----
+- `Resegmentation Test - Rose Organizations`
+- `Resegmentation Test - Builders Organizations`
 
-## Navigation
+## Phase 2: CSV And Excel Import
 
-- Tools section added to sidebar nav (`navigation.mjs`) between Marketing and Admin.
-- Tools registry lives in `app/models/tools-config.mjs` — add entries here to surface new tools on the index page.
-- Production route: `/tools/resegmentation`
-- Design mock: `/design/tools-resegmentation`
+Phase 2 starts only after phase 1 is working end to end.
+
+### Required backend work
+
+- import RPC or upload endpoint
+- CSV/XLSX parsing
+- organization matching strategy
+- import preview summary
+- duplicate handling
+- list creation + membership writes from the parsed file
+
+### Required product decisions
+
+- accepted columns
+- whether UUID is required or optional
+- matching precedence: UUID, website/domain, exact name, fuzzy name
+- how unmatched rows are reported
+- whether import is synchronous or queued
+
+### Recommendation
+
+Do not design the final import contract until phase 1 proves that the browse,
+review, dry-run, and apply flow is correct.
