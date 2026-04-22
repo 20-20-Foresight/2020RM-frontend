@@ -1,11 +1,5 @@
-import { Heading, Text, VStack, Box } from "@chakra-ui/react";
+import { Outlet } from "@remix-run/react";
 
 export default function SettingsPage() {
-  return (
-    <VStack align="start" spacing={3}>
-      <Heading size="md">Settings</Heading>
-      <Text color="gray.600">User and org settings.</Text>
-      <Box w="full" h="200px" bg="white" borderRadius="lg" shadow="sm" p={4} />
-    </VStack>
-  );
+  return <Outlet />;
 }

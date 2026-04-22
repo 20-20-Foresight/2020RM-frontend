@@ -26,5 +26,11 @@ export const designPages = [
     label: "Tools — Resegmentation",
     to: "/design/tools-resegmentation",
     description: "Interactive mock for the resegmentation tool — single org and list modes with shimmer, results, and apply flow."
+  },
+  {
+    key: "settings-feeds",
+    label: "Settings — Search Feeds",
+    to: "/design/settings-feeds",
+    description: "Live mock for the Feeds settings page — list view grouped by source with status badges, toggles, and stats. Production at /settings/feeds."
   }
 ];
