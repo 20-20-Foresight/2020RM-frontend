@@ -67,15 +67,10 @@ export async function loader({ request }) {
       error: null,
     });
   } catch (error) {
-    return json(
-      {
-        lists: [],
-        error: error instanceof Error ? error.message : "Unable to load resegmentation lists.",
-      },
-      {
-        status: error instanceof ResegmentationApiError ? error.statusCode : 500,
-      }
-    );
+    return json({
+      lists: [],
+      error: error instanceof Error ? error.message : "Unable to load resegmentation lists.",
+    });
   }
 }
 

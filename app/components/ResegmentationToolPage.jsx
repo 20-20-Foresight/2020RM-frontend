@@ -66,8 +66,6 @@ import {
 } from "react-icons/md";
 import { buildOrganizationSegmentationViewModel } from "../models/organization-segmentation.mjs";
 
-const ACTION_PATH = "/tools/resegmentation";
-
 /**
  * Read one trimmed string.
  * @param {unknown} value
@@ -100,6 +98,33 @@ function buildRecordSegmentationSummary(record) {
  */
 function readPrimaryValue(values, fallback = "Not set") {
   return Array.isArray(values) && values.length ? values[0] : fallback;
+}
+
+/**
+ * Reads one route-action response without hiding HTML/auth/404 failures behind JSON parse errors.
+ * @param {Response} response
+ * @returns {Promise<object>}
+ */
+async function readActionResponse(response) {
+  const contentType = response.headers.get("content-type") || "";
+  const bodyText = await response.text();
+
+  if (contentType.includes("application/json")) {
+    try {
+      return bodyText ? JSON.parse(bodyText) : {};
+    } catch (error) {
+      throw new Error("The resegmentation action returned invalid JSON.");
+    }
+  }
+
+  const titleMatch = bodyText.match(/<title>([^<]+)<\/title>/i);
+  const title = titleMatch ? titleMatch[1].trim() : "";
+  const message = title || bodyText.trim() || response.statusText || "Unexpected non-JSON response.";
+  throw new Error(
+    response.redirected || bodyText.includes("<!DOCTYPE")
+      ? `${message}. The request returned an HTML page instead of JSON; refresh the page and sign in again if needed.`
+      : message
+  );
 }
 
 /**
@@ -604,11 +629,12 @@ export function ResegmentationToolPage({
       formData.set(key, typeof value === "boolean" ? String(value) : String(value));
     });
 
-    const response = await fetch(ACTION_PATH, {
+    const actionPath = `${window.location.pathname}${window.location.search}`;
+    const response = await fetch(actionPath, {
       method: "POST",
       body: formData,
     });
-    const payload = await response.json();
+    const payload = await readActionResponse(response);
     if (!response.ok) {
       throw new Error(payload?.error || "Resegmentation request failed.");
     }
