@@ -32,7 +32,8 @@
 
 ## Implemented UI
 
-- `/tools/resegmentation` now uses the live backend RPCs through the Remix BFF.
+- `/tools/resegmentation` now uses normalized `2020RM-backend` REST routes
+  through the Remix BFF; `2020RM-backend` owns the live upstream RPC calls.
 - Single-org mode searches with `entity/findOrganization`, hydrates the selected
   organization with `entity/exportOrganization`, and previews/applies through
   `entity/resegmentOrganization`.
@@ -42,6 +43,16 @@
 
 ## Open Follow-Up
 
+- Architecture correction: the frontend must not call any non-2020RM backend
+  service directly. All resegmentation data access must go through
+  `2020RM-backend` API routes, even when `2020RM-backend` delegates to the
+  upstream RPC service internally.
+- `2020RM-backend` is also the normalization boundary. The frontend should
+  receive UI-friendly REST responses from `2020RM-backend`, not raw RPC
+  envelopes, raw RPC status fields, or upstream action-specific result shapes.
+- Implemented frontend calls now use `/api/rest/resegmentation/*` routes:
+  lists, list detail, organization search/detail, and organization segment
+  preview/apply.
 - Phase 2 still needs CSV/XLSX import design and backend ingestion support.
 - The current apply flow stages Salesforce account updates when requested; it
   does not do a direct synchronous Salesforce write inside the RPC call.

@@ -66,6 +66,8 @@ import {
 } from "react-icons/md";
 import { buildOrganizationSegmentationViewModel } from "../models/organization-segmentation.mjs";
 
+const ORGANIZATION_SEARCH_DEBOUNCE_MS = 2000;
+
 /**
  * Read one trimmed string.
  * @param {unknown} value
@@ -76,18 +78,42 @@ function readTrimmedString(value) {
 }
 
 /**
+ * Normalize one segmentation summary for resegmentation visuals.
+ * Sector is intentionally excluded from this page for now.
+ * @param {object|null|undefined} summary
+ * @returns {{industry: string[], focus: string[]}}
+ */
+function normalizeSegmentationVisualSummary(summary) {
+  return {
+    industry: Array.isArray(summary?.industry)
+      ? summary.industry.filter((value) => readTrimmedString(value))
+      : [],
+    focus: Array.isArray(summary?.focus)
+      ? summary.focus.filter((value) => readTrimmedString(value))
+      : [],
+  };
+}
+
+/**
+ * Returns whether one normalized segmentation summary has any visible values.
+ * @param {{industry?: string[], focus?: string[]}|null|undefined} summary
+ * @returns {boolean}
+ */
+function hasVisibleSegmentationSummary(summary) {
+  return Boolean(summary?.industry?.length || summary?.focus?.length);
+}
+
+/**
  * Build the comparison-friendly summary from one exported organization record.
  * @param {object|null} record
- * @returns {{sector: string|null, industry: string[], focus: string[], calculatedEMIndustry: string|null}}
+ * @returns {{industry: string[], focus: string[]}}
  */
 function buildRecordSegmentationSummary(record) {
   const segmentation = buildOrganizationSegmentationViewModel(record);
-  return {
-    sector: segmentation?.primarySector || null,
-    industry: Array.isArray(segmentation?.industries) ? segmentation.industries : [],
-    focus: Array.isArray(segmentation?.focuses) ? segmentation.focuses : [],
-    calculatedEMIndustry: null,
-  };
+  return normalizeSegmentationVisualSummary({
+    industry: segmentation?.industries,
+    focus: segmentation?.focuses,
+  });
 }
 
 /**
@@ -98,6 +124,50 @@ function buildRecordSegmentationSummary(record) {
  */
 function readPrimaryValue(values, fallback = "Not set") {
   return Array.isArray(values) && values.length ? values[0] : fallback;
+}
+
+/**
+ * Returns the display-ready explanation rows for this page.
+ * Sector rows are intentionally hidden until the backend sector issue is fixed.
+ * @param {object[]|null|undefined} explanations
+ * @returns {object[]}
+ */
+function readDisplayedExplanations(explanations) {
+  return (Array.isArray(explanations) ? explanations : []).filter(
+    (row) => readTrimmedString(row?.dimension).toLowerCase() !== "sector"
+  );
+}
+
+/**
+ * Read one explanation score for display.
+ * @param {unknown} value
+ * @returns {number}
+ */
+function readDisplayedExplanationScore(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 3;
+}
+
+/**
+ * Build one compact explanation segmentation label.
+ * @param {object|null|undefined} row
+ * @returns {string}
+ */
+function buildExplanationSegmentationLabel(row) {
+  const dimension = readTrimmedString(row?.dimension) || "Not set";
+  const value = readTrimmedString(row?.value) || "Not set";
+  const score = readDisplayedExplanationScore(row?.score);
+  return `${dimension}: ${value} (${score})`;
+}
+
+/**
+ * Read the current segmentation summary for one list row.
+ * @param {object|null|undefined} org
+ * @param {object|null|undefined} result
+ * @returns {{industry: string[], focus: string[]}}
+ */
+function readListRowCurrentSummary(org, result) {
+  return normalizeSegmentationVisualSummary(result?.current || org?.currentSegmentation || null);
 }
 
 /**
@@ -210,8 +280,8 @@ function SegmentTagList({ items, colorScheme = "blue" }) {
 /**
  * Renders one current-vs-proposed comparison panel.
  * @param {{
- *   current?: {sector?: string|null, industry?: string[], focus?: string[], calculatedEMIndustry?: string|null}|null,
- *   proposed?: {sector?: string|null, industry?: string[], focus?: string[], calculatedEMIndustry?: string|null}|null,
+ *   current?: {industry?: string[], focus?: string[]}|null,
+ *   proposed?: {industry?: string[], focus?: string[]}|null,
  *   loading?: boolean
  * }} props
  * @returns {JSX.Element|null}
@@ -219,6 +289,8 @@ function SegmentTagList({ items, colorScheme = "blue" }) {
 function SegmentCompare({ current, proposed, loading = false }) {
   const panelBg = useColorModeValue("gray.50", "gray.700");
   const newBg = useColorModeValue("green.50", "green.900");
+  const currentSummary = normalizeSegmentationVisualSummary(current);
+  const proposedSummary = normalizeSegmentationVisualSummary(proposed);
 
   if (loading) {
     return (
@@ -242,7 +314,12 @@ function SegmentCompare({ current, proposed, loading = false }) {
     );
   }
 
-  if (!current && !proposed) {
+  if (
+    !currentSummary.industry.length &&
+    !currentSummary.focus.length &&
+    !proposedSummary.industry.length &&
+    !proposedSummary.focus.length
+  ) {
     return null;
   }
 
@@ -262,21 +339,15 @@ function SegmentCompare({ current, proposed, loading = false }) {
         <Stack spacing={3}>
           <Box>
             <Text fontSize="xs" color="gray.500" mb={1}>
-              Sector
-            </Text>
-            <SegmentTagList items={current?.sector ? [current.sector] : []} colorScheme="gray" />
-          </Box>
-          <Box>
-            <Text fontSize="xs" color="gray.500" mb={1}>
               Industry
             </Text>
-            <SegmentTagList items={current?.industry || []} colorScheme="gray" />
+            <SegmentTagList items={currentSummary.industry} colorScheme="gray" />
           </Box>
           <Box>
             <Text fontSize="xs" color="gray.500" mb={1}>
               Focus
             </Text>
-            <SegmentTagList items={current?.focus || []} colorScheme="gray" />
+            <SegmentTagList items={currentSummary.focus} colorScheme="gray" />
           </Box>
         </Stack>
       </Box>
@@ -298,28 +369,19 @@ function SegmentCompare({ current, proposed, loading = false }) {
             </Badge>
           ) : null}
         </HStack>
-        {proposed ? (
+        {proposedSummary.industry.length || proposedSummary.focus.length ? (
           <Stack spacing={3}>
-            <Box>
-              <Text fontSize="xs" color="gray.500" mb={1}>
-                Sector
-              </Text>
-              <SegmentTagList
-                items={proposed?.sector ? [proposed.sector] : []}
-                colorScheme="green"
-              />
-            </Box>
             <Box>
               <Text fontSize="xs" color="gray.500" mb={1}>
                 Industry
               </Text>
-              <SegmentTagList items={proposed?.industry || []} colorScheme="green" />
+              <SegmentTagList items={proposedSummary.industry} colorScheme="green" />
             </Box>
             <Box>
               <Text fontSize="xs" color="gray.500" mb={1}>
                 Focus
               </Text>
-              <SegmentTagList items={proposed?.focus || []} colorScheme="green" />
+              <SegmentTagList items={proposedSummary.focus} colorScheme="green" />
             </Box>
           </Stack>
         ) : (
@@ -339,6 +401,7 @@ function SegmentCompare({ current, proposed, loading = false }) {
  */
 function ExplanationTable({ explanations, loading = false }) {
   const theadBg = useColorModeValue("gray.50", "gray.700");
+  const visibleExplanations = readDisplayedExplanations(explanations);
 
   if (loading) {
     return (
@@ -351,7 +414,7 @@ function ExplanationTable({ explanations, loading = false }) {
     );
   }
 
-  if (!Array.isArray(explanations) || !explanations.length) {
+  if (!visibleExplanations.length) {
     return null;
   }
 
@@ -364,24 +427,20 @@ function ExplanationTable({ explanations, loading = false }) {
         <Table size="sm" variant="simple">
           <Thead bg={theadBg}>
             <Tr>
+              <Th>Segmentation</Th>
               <Th>Source</Th>
-              <Th>Dimension</Th>
-              <Th>Value</Th>
-              <Th>Score</Th>
               <Th>Crosswalk</Th>
-              <Th>Rule</Th>
               <Th>How Derived</Th>
             </Tr>
           </Thead>
           <Tbody>
-            {explanations.map((row, index) => (
+            {visibleExplanations.map((row, index) => (
               <Tr key={`${row.source || "source"}-${index}`}>
+                <Td fontSize="xs" fontWeight="medium">
+                  {buildExplanationSegmentationLabel(row)}
+                </Td>
                 <Td fontSize="xs">{row.source || "Not set"}</Td>
-                <Td fontSize="xs">{row.dimension || "Not set"}</Td>
-                <Td fontSize="xs">{row.value || "Not set"}</Td>
-                <Td fontSize="xs">{row.score == null ? "Not set" : String(row.score)}</Td>
                 <Td fontSize="xs">{row.crosswalkDocumentName || "Not set"}</Td>
-                <Td fontSize="xs">{row.rule || "Not set"}</Td>
                 <Td fontSize="xs" maxW="340px" whiteSpace="normal" lineHeight="1.5">
                   <Box
                     sx={{
@@ -614,30 +673,78 @@ export function ResegmentationToolPage({
   const appliedRowBg = useColorModeValue("green.50", "green.900");
 
   /**
-   * Submit one route action request from the browser.
+   * Calls one same-origin 2020RM-backend proxy endpoint for an interactive tool action.
    * @param {string} intent
    * @param {Record<string, unknown>} fields
    * @returns {Promise<object>}
    */
   async function postAction(intent, fields = {}) {
-    const formData = new FormData();
-    formData.set("_action", intent);
-    Object.entries(fields).forEach(([key, value]) => {
-      if (value == null) {
-        return;
-      }
-      formData.set(key, typeof value === "boolean" ? String(value) : String(value));
-    });
+    const uuid = readTrimmedString(fields.uuid);
+    let requestPath = "";
+    const requestOptions = {
+      method: "GET",
+      credentials: "same-origin",
+    };
 
-    const actionPath = `${window.location.pathname}${window.location.search}`;
-    const response = await fetch(actionPath, {
-      method: "POST",
-      body: formData,
-    });
+    if (intent === "searchOrganizations") {
+      const params = new URLSearchParams({
+        name: readTrimmedString(fields.query),
+      });
+      requestPath = `/api/rest/resegmentation/organizations?${params.toString()}`;
+    } else if (intent === "loadOrganization") {
+      requestPath = `/api/rest/resegmentation/organizations/${encodeURIComponent(uuid)}`;
+    } else if (intent === "loadListDetail") {
+      requestPath = `/api/rest/resegmentation/lists/${encodeURIComponent(uuid)}`;
+    } else if (intent === "segmentOrganization") {
+      requestPath = `/api/rest/resegmentation/organizations/${encodeURIComponent(uuid)}/segment`;
+      requestOptions.method = "POST";
+      requestOptions.headers = {
+        "content-type": "application/json",
+      };
+      requestOptions.body = JSON.stringify({
+        dryRun: fields.dryRun !== false,
+        saveSalesforce: fields.saveSalesforce === true,
+        includeExplanation: fields.includeExplanation !== false,
+      });
+    } else {
+      throw new Error("Unknown resegmentation action.");
+    }
+
+    const response = await fetch(requestPath, requestOptions);
     const payload = await readActionResponse(response);
     if (!response.ok) {
-      throw new Error(payload?.error || "Resegmentation request failed.");
+      throw new Error(payload?.message || payload?.error || "Resegmentation request failed.");
     }
+
+    if (intent === "searchOrganizations") {
+      return {
+        organizations: Array.isArray(payload.organizations) ? payload.organizations : [],
+        status: payload.status,
+        statusExplained: payload.statusExplained,
+      };
+    }
+    if (intent === "loadOrganization") {
+      return {
+        organization: payload.organization || null,
+        status: payload.status,
+        statusExplained: payload.statusExplained,
+      };
+    }
+    if (intent === "loadListDetail") {
+      return {
+        listDetail: payload.listDetail || null,
+        status: payload.status,
+        statusExplained: payload.statusExplained,
+      };
+    }
+    if (intent === "segmentOrganization") {
+      return {
+        resegmentation: payload.resegmentation || null,
+        status: payload.status,
+        statusExplained: payload.statusExplained,
+      };
+    }
+
     return payload;
   }
 
@@ -677,14 +784,17 @@ export function ResegmentationToolPage({
           setIsSearching(false);
         }
       }
-    }, 250);
+    }, ORGANIZATION_SEARCH_DEBOUNCE_MS);
 
     return () => clearTimeout(timeout);
   }, [singleQuery, selectedOrganization?.summary?.name]);
 
+  const resultCurrentSummary = normalizeSegmentationVisualSummary(singleResult?.current);
   const selectedCurrentSummary = singleApplied
     ? buildRecordSegmentationSummary(selectedOrganization?.record || null)
-    : singleResult?.current || buildRecordSegmentationSummary(selectedOrganization?.record || null);
+    : hasVisibleSegmentationSummary(resultCurrentSummary)
+      ? resultCurrentSummary
+      : buildRecordSegmentationSummary(selectedOrganization?.record || null);
 
   const selectedListRows = Array.isArray(selectedListDetail?.members)
     ? selectedListDetail.members
@@ -693,6 +803,9 @@ export function ResegmentationToolPage({
           membershipUUID: row.uuid,
           uuid: row.member.uuid,
           name: row.member.name || "Unnamed organization",
+          currentSegmentation: normalizeSegmentationVisualSummary(
+            row.member.currentSegmentation || null
+          ),
         }))
     : [];
 
@@ -1203,6 +1316,7 @@ export function ResegmentationToolPage({
                           const result = rowResults[org.uuid];
                           const isSegmenting = rowSegmentingIds.has(org.uuid);
                           const isApplied = rowAppliedIds.has(org.uuid);
+                          const currentSummary = readListRowCurrentSummary(org, result);
 
                           return (
                             <Tr
@@ -1217,14 +1331,10 @@ export function ResegmentationToolPage({
                                 </HStack>
                               </Td>
                               <Td fontSize="xs" color="gray.600">
-                                {result
-                                  ? readPrimaryValue(result.current?.industry)
-                                  : "Load on segment"}
+                                {readPrimaryValue(currentSummary.industry)}
                               </Td>
                               <Td fontSize="xs" color="gray.600">
-                                {result
-                                  ? readPrimaryValue(result.current?.focus)
-                                  : "Load on segment"}
+                                {readPrimaryValue(currentSummary.focus)}
                               </Td>
                               <Td>
                                 {isSegmenting ? (

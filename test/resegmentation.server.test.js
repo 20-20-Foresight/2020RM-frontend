@@ -10,7 +10,7 @@ const {
   searchResegmentationOrganizations,
 } = require("../app/models/resegmentation.server");
 
-test("loadResegmentationLists calls the backend RPC proxy with the organization-list filters", async () => {
+test("loadResegmentationLists calls the normalized backend resegmentation REST route", async () => {
   const calls = [];
   const result = await loadResegmentationLists({
     request: new Request("http://localhost:3000/tools/resegmentation", {
@@ -22,15 +22,14 @@ test("loadResegmentationLists calls the backend RPC proxy with the organization-
       calls.push({
         url: String(url),
         options,
-        body: JSON.parse(options.body),
       });
       return {
         ok: true,
         async json() {
           return {
             status: "completed",
-            status_explained: "Lists loaded successfully.",
-            response: [
+            statusExplained: "Lists loaded successfully.",
+            lists: [
               {
                 uuid: "list-1",
                 name: "Resegmentation Test - Rose Organizations",
@@ -46,28 +45,10 @@ test("loadResegmentationLists calls the backend RPC proxy with the organization-
   });
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, "http://localhost:3000/api/rpc");
-  assert.equal(calls[0].options.method, "POST");
+  assert.equal(calls[0].url, "http://localhost:3000/api/rest/resegmentation/lists");
+  assert.equal(calls[0].options.method, "GET");
   assert.equal(calls[0].options.headers.cookie, "sid=123");
-  assert.equal(calls[0].options.headers["content-type"], "application/json");
-  assert.deepEqual(calls[0].body, {
-    mode: "sync-required",
-    actions: [
-      {
-        name: "result",
-        action: "entity/findList",
-        settings: {
-          listTypeSlug: "LIST",
-          listSubTypeSlug: "ORGANIZATION",
-          subjectType: "organization",
-          status: "active",
-          membershipMode: "static",
-          limit: 100,
-        },
-        respond: true,
-      },
-    ],
-  });
+  assert.equal(calls[0].options.headers["content-type"], undefined);
   assert.deepEqual(result, {
     status: "completed",
     statusExplained: "Lists loaded successfully.",
@@ -83,7 +64,7 @@ test("loadResegmentationLists calls the backend RPC proxy with the organization-
   });
 });
 
-test("searchResegmentationOrganizations calls the organization lookup RPC", async () => {
+test("searchResegmentationOrganizations calls the normalized backend organization search route", async () => {
   const calls = [];
   await searchResegmentationOrganizations({
     request: new Request("http://localhost:3000/tools/resegmentation"),
@@ -91,15 +72,15 @@ test("searchResegmentationOrganizations calls the organization lookup RPC", asyn
     fetchImpl: async (url, options) => {
       calls.push({
         url: String(url),
-        body: JSON.parse(options.body),
+        method: options.method,
       });
       return {
         ok: true,
         async json() {
           return {
             status: "completed",
-            status_explained: "Organization lookup completed.",
-            response: [],
+            statusExplained: "Organization lookup completed.",
+            organizations: [],
             meta: {
               count: 0,
             },
@@ -110,27 +91,27 @@ test("searchResegmentationOrganizations calls the organization lookup RPC", asyn
   });
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, "http://localhost:3000/api/rpc");
-  assert.deepEqual(calls[0].body.actions[0].settings, {
-    name: "rose",
-    limit: 20,
-  });
+  assert.equal(calls[0].url, "http://localhost:3000/api/rest/resegmentation/organizations?name=rose");
+  assert.equal(calls[0].method, "GET");
 });
 
-test("loadResegmentationOrganization calls exportOrganization", async () => {
+test("loadResegmentationOrganization calls the normalized organization detail route", async () => {
   const calls = [];
   const result = await loadResegmentationOrganization({
     request: new Request("http://localhost:3000/tools/resegmentation"),
     uuid: "org-123",
-    fetchImpl: async (_url, options) => {
-      calls.push(JSON.parse(options.body));
+    fetchImpl: async (url, options) => {
+      calls.push({
+        url: String(url),
+        method: options.method,
+      });
       return {
         ok: true,
         async json() {
           return {
             status: "completed",
-            status_explained: "Organization export loaded successfully.",
-            response: {
+            statusExplained: "Organization export loaded successfully.",
+            organization: {
               uuid: "org-123",
               type: "organization",
               name: "Rose Builders Group",
@@ -144,27 +125,28 @@ test("loadResegmentationOrganization calls exportOrganization", async () => {
     },
   });
 
-  assert.equal(calls[0].actions[0].action, "entity/exportOrganization");
-  assert.deepEqual(calls[0].actions[0].settings, {
-    uuid: "org-123",
-  });
+  assert.equal(calls[0].url, "http://localhost:3000/api/rest/resegmentation/organizations/org-123");
+  assert.equal(calls[0].method, "GET");
   assert.equal(result.data.uuid, "org-123");
 });
 
-test("loadResegmentationListDetail calls getListDetail", async () => {
+test("loadResegmentationListDetail calls the normalized list detail route", async () => {
   const calls = [];
   const result = await loadResegmentationListDetail({
     request: new Request("http://localhost:3000/tools/resegmentation"),
     uuid: "list-123",
-    fetchImpl: async (_url, options) => {
-      calls.push(JSON.parse(options.body));
+    fetchImpl: async (url, options) => {
+      calls.push({
+        url: String(url),
+        method: options.method,
+      });
       return {
         ok: true,
         async json() {
           return {
             status: "completed",
-            status_explained: "List detail loaded successfully.",
-            response: {
+            statusExplained: "List detail loaded successfully.",
+            listDetail: {
               list: {
                 uuid: "list-123",
               },
@@ -179,11 +161,12 @@ test("loadResegmentationListDetail calls getListDetail", async () => {
     },
   });
 
-  assert.equal(calls[0].actions[0].action, "entity/getListDetail");
+  assert.equal(calls[0].url, "http://localhost:3000/api/rest/resegmentation/lists/list-123");
+  assert.equal(calls[0].method, "GET");
   assert.equal(result.data.list.uuid, "list-123");
 });
 
-test("runOrganizationResegmentation calls the resegmentation RPC", async () => {
+test("runOrganizationResegmentation calls the normalized segment route", async () => {
   const calls = [];
   const result = await runOrganizationResegmentation({
     request: new Request("http://localhost:3000/tools/resegmentation"),
@@ -191,15 +174,20 @@ test("runOrganizationResegmentation calls the resegmentation RPC", async () => {
     dryRun: false,
     saveSalesforce: true,
     includeExplanation: true,
-    fetchImpl: async (_url, options) => {
-      calls.push(JSON.parse(options.body));
+    fetchImpl: async (url, options) => {
+      calls.push({
+        url: String(url),
+        method: options.method,
+        headers: options.headers,
+        body: JSON.parse(options.body),
+      });
       return {
         ok: true,
         async json() {
           return {
             status: "completed",
-            status_explained: "Organization resegmentation completed successfully.",
-            response: {
+            statusExplained: "Organization resegmentation completed successfully.",
+            resegmentation: {
               organization: {
                 uuid: "org-123",
               },
@@ -214,9 +202,10 @@ test("runOrganizationResegmentation calls the resegmentation RPC", async () => {
     },
   });
 
-  assert.equal(calls[0].actions[0].action, "entity/resegmentOrganization");
-  assert.deepEqual(calls[0].actions[0].settings, {
-    uuid: "org-123",
+  assert.equal(calls[0].url, "http://localhost:3000/api/rest/resegmentation/organizations/org-123/segment");
+  assert.equal(calls[0].method, "POST");
+  assert.equal(calls[0].headers["content-type"], "application/json");
+  assert.deepEqual(calls[0].body, {
     dryRun: false,
     saveSalesforce: true,
     includeExplanation: true,
@@ -224,7 +213,7 @@ test("runOrganizationResegmentation calls the resegmentation RPC", async () => {
   assert.equal(result.data.persisted, true);
 });
 
-test("frontend resegmentation helpers raise ResegmentationApiError on RPC failures", async () => {
+test("frontend resegmentation helpers raise ResegmentationApiError on backend API failures", async () => {
   await assert.rejects(
     async () => {
       await loadResegmentationLists({

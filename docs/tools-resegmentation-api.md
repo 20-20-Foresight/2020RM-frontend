@@ -355,31 +355,66 @@ from the save call directly.
 
 ## Frontend Wiring Plan
 
+### API boundary rule
+
+The frontend must only call `2020RM-backend` API routes. It must not call the
+standalone backend RPC server or any other 2020 service directly.
+
+`2020RM-backend` owns the upstream RPC integration and acts as the response
+normalization layer. The frontend should consume stable, UI-oriented REST
+responses from `2020RM-backend`, while `2020RM-backend` translates those
+requests into RPC actions and normalizes raw RPC envelopes into simpler response
+objects.
+
+### `2020RM-backend` REST endpoints
+
+The production tool should call these frontend-proxy routes:
+
+- `GET /api/rest/resegmentation/lists`
+- `GET /api/rest/resegmentation/lists/:uuid`
+- `GET /api/rest/resegmentation/organizations?name=foo`
+- `GET /api/rest/resegmentation/organizations/:uuid`
+- `POST /api/rest/resegmentation/organizations/:uuid/segment`
+
+`2020RM-backend` exposes matching canonical routes without the `/api` prefix.
+
 ### Single organization tab
 
-1. Use `entity/findOrganization` for the search dropdown.
-2. Use `entity/exportOrganization` after selection to populate current values.
-3. Call `entity/resegmentOrganization` with `dryRun: true` when "Segment Now" is
-   clicked.
+1. Call `/api/rest/resegmentation/organizations?name=...` for the search
+   dropdown; `2020RM-backend` maps that to `entity/findOrganization`.
+2. Call `/api/rest/resegmentation/organizations/:uuid` after selection to
+   populate current values; `2020RM-backend` maps that to
+   `entity/exportOrganization`.
+3. Call `/api/rest/resegmentation/organizations/:uuid/segment` with
+   `dryRun: true` when "Segment Now" is clicked.
 4. Show explanation rows from `result.explanations`.
-5. Call the same action with `dryRun: false` when the user confirms "Apply".
+5. Call the same segment endpoint with `dryRun: false` when the user confirms
+   "Apply".
 
 ### List tab
 
-1. Use `entity/findList` to populate the dropdown.
-2. Use `entity/getListDetail` after selection.
+1. Call `/api/rest/resegmentation/lists` to populate the dropdown;
+   `2020RM-backend` maps that to `entity/findList`.
+2. Call `/api/rest/resegmentation/lists/:uuid` after selection;
+   `2020RM-backend` maps that to `entity/getListDetail`.
 3. Disable import in phase 1.
-4. For row review, call `entity/exportOrganization` if current segmentation has
-   not been hydrated yet.
-5. For "Segment" and "Segment All", call `entity/resegmentOrganization` per
+4. For row review, call the normalized organization detail endpoint if current
+   segmentation has not been hydrated yet.
+5. For "Segment" and "Segment All", call the normalized segment endpoint per
    organization row.
-6. For "Apply", call the same action again with `dryRun: false`.
+6. For "Apply", call the same segment endpoint again with `dryRun: false`.
 
 ### BFF shape
 
-The production route uses thin Remix loader/action helpers that post to
-`/api/rpc`. The source of truth stays the backend RPC actions above; there is no
-separate guessed REST contract for resegmentation.
+The production route should use thin Remix loader/action helpers that call
+`2020RM-backend` REST endpoints through the existing frontend `/api/rest/*`
+proxy. The source of truth stays the backend RPC actions above, but the RPC
+transport details and action envelopes belong behind `2020RM-backend`, not in
+the frontend route model.
+
+This means the resegmentation tool should not introduce a frontend `/api/rpc`
+path. If an endpoint needs RPC-backed data, add a `2020RM-backend` REST route
+that calls the RPC client internally and returns normalized JSON for the page.
 
 ## Seed SQL
 

@@ -1,5 +1,5 @@
 /**
- * Error raised when one resegmentation RPC request fails.
+ * Error raised when one resegmentation API request fails.
  */
 class ResegmentationApiError extends Error {
   /**
@@ -57,40 +57,43 @@ async function tryReadJson(response) {
 }
 
 /**
- * Calls one backend RPC action through the frontend proxy.
+ * Calls one normalized resegmentation REST endpoint through the frontend proxy.
  * @param {{
  *   request: Request,
- *   action: string,
- *   settings?: Record<string, unknown>,
+ *   path: string,
+ *   method?: string,
+ *   body?: Record<string, unknown>,
+ *   readData?: (payload: Record<string, unknown>|null) => unknown,
  *   fetchImpl?: typeof fetch
  * }} options
  * @returns {Promise<{status: string, statusExplained: string, data: unknown, meta: Record<string, unknown>}>}
  */
-async function requestResegmentationRpc(options) {
+async function requestResegmentationRest(options) {
   const fetchImpl = options.fetchImpl || globalThis.fetch;
   if (typeof fetchImpl !== "function") {
     throw new Error("Fetch is required to load resegmentation data.");
   }
 
-  const target = new URL("/api/rpc", options.request.url);
-  const response = await fetchImpl(target, {
-    method: "POST",
+  const method = (readTrimmedString(options.method) || "GET").toUpperCase();
+  const headers = {
+    cookie: options.request.headers.get("cookie") || "",
+  };
+  if (method !== "GET" && method !== "HEAD") {
+    headers["content-type"] = "application/json";
+  }
+
+  const requestInit = {
+    method,
     headers: {
-      cookie: options.request.headers.get("cookie") || "",
-      "content-type": "application/json",
+      ...headers,
     },
-    body: JSON.stringify({
-      mode: "sync-required",
-      actions: [
-        {
-          name: "result",
-          action: options.action,
-          settings: options.settings || {},
-          respond: true,
-        },
-      ],
-    }),
-  });
+  };
+  if (method !== "GET" && method !== "HEAD") {
+    requestInit.body = JSON.stringify(options.body || {});
+  }
+
+  const target = new URL(options.path, options.request.url);
+  const response = await fetchImpl(target, requestInit);
 
   const payload = await tryReadJson(response);
   if (!response.ok) {
@@ -105,9 +108,9 @@ async function requestResegmentationRpc(options) {
   return {
     status: readTrimmedString(payload?.status) || "completed",
     statusExplained:
-      readTrimmedString(payload?.status_explained) ||
+      readTrimmedString(payload?.statusExplained) ||
       "Resegmentation request completed successfully.",
-    data: payload?.response ?? null,
+    data: typeof options.readData === "function" ? options.readData(payload) : payload,
     meta:
       payload && payload.meta && typeof payload.meta === "object"
         ? payload.meta
@@ -121,17 +124,12 @@ async function requestResegmentationRpc(options) {
  * @returns {Promise<{status: string, statusExplained: string, data: object[], meta: Record<string, unknown>}>}
  */
 async function loadResegmentationLists(options) {
-  return await requestResegmentationRpc({
+  return await requestResegmentationRest({
     request: options.request,
     fetchImpl: options.fetchImpl,
-    action: "entity/findList",
-    settings: {
-      listTypeSlug: "LIST",
-      listSubTypeSlug: "ORGANIZATION",
-      subjectType: "organization",
-      status: "active",
-      membershipMode: "static",
-      limit: 100,
+    path: "/api/rest/resegmentation/lists",
+    readData(payload) {
+      return Array.isArray(payload?.lists) ? payload.lists : [];
     },
   });
 }
@@ -142,12 +140,12 @@ async function loadResegmentationLists(options) {
  * @returns {Promise<{status: string, statusExplained: string, data: object|null, meta: Record<string, unknown>}>}
  */
 async function loadResegmentationListDetail(options) {
-  return await requestResegmentationRpc({
+  return await requestResegmentationRest({
     request: options.request,
     fetchImpl: options.fetchImpl,
-    action: "entity/getListDetail",
-    settings: {
-      uuid: readTrimmedString(options.uuid),
+    path: `/api/rest/resegmentation/lists/${encodeURIComponent(readTrimmedString(options.uuid))}`,
+    readData(payload) {
+      return payload?.listDetail ?? null;
     },
   });
 }
@@ -158,12 +156,12 @@ async function loadResegmentationListDetail(options) {
  * @returns {Promise<{status: string, statusExplained: string, data: object|null, meta: Record<string, unknown>}>}
  */
 async function loadResegmentationOrganization(options) {
-  return await requestResegmentationRpc({
+  return await requestResegmentationRest({
     request: options.request,
     fetchImpl: options.fetchImpl,
-    action: "entity/exportOrganization",
-    settings: {
-      uuid: readTrimmedString(options.uuid),
+    path: `/api/rest/resegmentation/organizations/${encodeURIComponent(readTrimmedString(options.uuid))}`,
+    readData(payload) {
+      return payload?.organization ?? null;
     },
   });
 }
@@ -174,13 +172,15 @@ async function loadResegmentationOrganization(options) {
  * @returns {Promise<{status: string, statusExplained: string, data: object[], meta: Record<string, unknown>}>}
  */
 async function searchResegmentationOrganizations(options) {
-  return await requestResegmentationRpc({
+  const target = new URL("/api/rest/resegmentation/organizations", options.request.url);
+  target.searchParams.set("name", readTrimmedString(options.query));
+
+  return await requestResegmentationRest({
     request: options.request,
     fetchImpl: options.fetchImpl,
-    action: "entity/findOrganization",
-    settings: {
-      name: readTrimmedString(options.query),
-      limit: 20,
+    path: `${target.pathname}${target.search}`,
+    readData(payload) {
+      return Array.isArray(payload?.organizations) ? payload.organizations : [];
     },
   });
 }
@@ -198,15 +198,18 @@ async function searchResegmentationOrganizations(options) {
  * @returns {Promise<{status: string, statusExplained: string, data: object|null, meta: Record<string, unknown>}>}
  */
 async function runOrganizationResegmentation(options) {
-  return await requestResegmentationRpc({
+  return await requestResegmentationRest({
     request: options.request,
     fetchImpl: options.fetchImpl,
-    action: "entity/resegmentOrganization",
-    settings: {
-      uuid: readTrimmedString(options.uuid),
+    path: `/api/rest/resegmentation/organizations/${encodeURIComponent(readTrimmedString(options.uuid))}/segment`,
+    method: "POST",
+    body: {
       dryRun: options.dryRun !== false,
       saveSalesforce: options.saveSalesforce === true,
       includeExplanation: options.includeExplanation !== false,
+    },
+    readData(payload) {
+      return payload?.resegmentation ?? null;
     },
   });
 }
@@ -216,7 +219,7 @@ module.exports = {
   loadResegmentationLists,
   loadResegmentationListDetail,
   loadResegmentationOrganization,
-  requestResegmentationRpc,
+  requestResegmentationRest,
   runOrganizationResegmentation,
   searchResegmentationOrganizations,
 };
