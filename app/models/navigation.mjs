@@ -48,7 +48,7 @@ export const navItems = [
       {
         key: "people-advanced-search",
         label: "Advanced Search",
-        to: "/people/advanced-search"
+        to: "/people"
       }
     ]
   },
