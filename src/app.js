@@ -58,6 +58,24 @@ function buildBackendProxyRequestInit(req) {
 }
 
 /**
+ * Resolves the upstream path for one frontend `/api/*` proxy request.
+ * Most backend APIs are mounted under `/api`, but the RPC server is mounted at
+ * `/rpc`, so `/api/rpc*` needs a narrow compatibility mapping.
+ * @param {string} originalUrl
+ * @returns {string}
+ */
+function resolveBackendProxyPath(originalUrl) {
+  const fallbackPath = typeof originalUrl === "string" && originalUrl ? originalUrl : "/";
+  const parsed = new URL(fallbackPath, "http://localhost");
+
+  if (parsed.pathname === "/api/rpc" || parsed.pathname.startsWith("/api/rpc/")) {
+    return `${parsed.pathname.replace(/^\/api\/rpc/, "/rpc")}${parsed.search}`;
+  }
+
+  return fallbackPath;
+}
+
+/**
  * Returns the public favicon target for the frontend shell.
  * Prefer an explicit env override and otherwise fall back to the shared 2020 logo asset.
  *
@@ -408,7 +426,7 @@ function createApp(config, remixHandler, deps = {}) {
   app.use("/api", requireSessionAuth, async (req, res) => {
     try {
       // Preserve the full API path when proxying to backend.
-      const backendPath = req.originalUrl || "/";
+      const backendPath = resolveBackendProxyPath(req.originalUrl || "/");
       const target = new URL(backendPath, config.backendBaseUrl);
       const backendRes = await fetch(target, buildBackendProxyRequestInit(req));
 
@@ -498,5 +516,6 @@ module.exports = {
   buildBackendProxyRequestInit,
   createApp,
   filterAdminDataFixtureList,
+  resolveBackendProxyPath,
   resolveFaviconTarget
 };

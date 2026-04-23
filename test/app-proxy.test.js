@@ -2,7 +2,12 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { PassThrough } = require("node:stream");
 
-const { buildBackendProxyRequestInit, filterAdminDataFixtureList, resolveFaviconTarget } = require("../src/app");
+const {
+  buildBackendProxyRequestInit,
+  filterAdminDataFixtureList,
+  resolveBackendProxyPath,
+  resolveFaviconTarget
+} = require("../src/app");
 
 test("frontend proxy request builder forwards POST bodies and content headers", async () => {
   const requestStream = new PassThrough();
@@ -80,6 +85,18 @@ test("resolveFaviconTarget prefers an explicit env override", () => {
       process.env.FAVICON_URL = originalValue;
     }
   }
+});
+
+test("resolveBackendProxyPath maps frontend api rpc paths to the backend rpc app", () => {
+  assert.equal(resolveBackendProxyPath("/api/rpc"), "/rpc");
+  assert.equal(
+    resolveBackendProxyPath("/api/rpc/request/request-1/events?tail=1"),
+    "/rpc/request/request-1/events?tail=1"
+  );
+  assert.equal(
+    resolveBackendProxyPath("/api/rest/admin/data?type=segmentation"),
+    "/api/rest/admin/data?type=segmentation"
+  );
 });
 
 test("filterAdminDataFixtureList narrows the admin data fixture by type and search text", () => {

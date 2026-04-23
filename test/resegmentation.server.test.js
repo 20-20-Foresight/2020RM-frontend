@@ -248,3 +248,26 @@ test("frontend resegmentation helpers raise ResegmentationApiError on RPC failur
     }
   );
 });
+
+test("frontend resegmentation helpers report plain text upstream failures", async () => {
+  await assert.rejects(
+    async () => {
+      await loadResegmentationLists({
+        request: new Request("http://localhost:3000/tools/resegmentation"),
+        fetchImpl: async () => ({
+          ok: false,
+          status: 404,
+          async text() {
+            return "Not Found";
+          },
+        }),
+      });
+    },
+    (error) => {
+      assert.ok(error instanceof ResegmentationApiError);
+      assert.equal(error.statusCode, 404);
+      assert.equal(error.message, "Not Found");
+      return true;
+    }
+  );
+});

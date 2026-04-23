@@ -25,6 +25,38 @@ function readTrimmedString(value) {
 }
 
 /**
+ * Best-effort JSON reader that preserves plain-text upstream errors.
+ * @param {Response|{json?: Function, text?: Function}} response
+ * @returns {Promise<Record<string, unknown>|null>}
+ */
+async function tryReadJson(response) {
+  if (typeof response.text === "function") {
+    const text = await response.text();
+    if (!text) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      return {
+        message: text,
+      };
+    }
+  }
+
+  if (typeof response.json !== "function") {
+    return null;
+  }
+
+  try {
+    return await response.json();
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
  * Calls one backend RPC action through the frontend proxy.
  * @param {{
  *   request: Request,
@@ -60,7 +92,7 @@ async function requestResegmentationRpc(options) {
     }),
   });
 
-  const payload = await response.json();
+  const payload = await tryReadJson(response);
   if (!response.ok) {
     throw new ResegmentationApiError(
       readTrimmedString(payload?.message) || "Resegmentation request failed.",
