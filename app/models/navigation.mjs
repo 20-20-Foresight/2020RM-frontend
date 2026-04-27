@@ -54,23 +54,23 @@ export const navItems = [
   },
   {
     key: "jobs",
-    label: "Jobs",
+    label: "Services",
     to: "/jobs",
     icon: "work",
     children: [
       {
         key: "jobs-my-jobs",
-        label: "My Jobs",
+        label: "My Services",
         to: "/jobs/my-jobs"
       },
       {
         key: "jobs-all-em-jobs",
-        label: "All EM Jobs",
+        label: "EM Services",
         to: "/jobs/all-em-jobs"
       },
       {
         key: "jobs-all-es-jobs",
-        label: "All ES Jobs",
+        label: "ES Services",
         to: "/jobs/all-es-jobs"
       },
       {

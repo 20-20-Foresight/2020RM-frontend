@@ -103,10 +103,9 @@ export function OrganizationSegmentationSection({ record }) {
 
       <VStack align="stretch" spacing={4}>
         <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6}>
-          <SegmentationGroup label="Sector:" values={segmentation.sectors} />
           <SegmentationGroup label="Industries" values={segmentation.industries} />
+          <SegmentationGroup label="Focuses" values={segmentation.focuses} />
         </SimpleGrid>
-        <SegmentationGroup label="Focuses" values={segmentation.focuses} />
         <Button variant="link" alignSelf="flex-start" colorScheme="blue" size="sm" onClick={onOpen}>
           explain
         </Button>
@@ -137,7 +136,7 @@ export function OrganizationSegmentationSection({ record }) {
                       <Tr key={`${row.source || "source"}-${index}`}>
                         <Td>{formatExplanationCell(row.source)}</Td>
                         <Td>{formatExplanationCell(row.dimension)}</Td>
-                        <Td>{formatExplanationCell(row.value)}</Td>
+                        <Td whiteSpace="pre-line">{formatExplanationCell(row.value)}</Td>
                         <Td>{row.score == null ? "Not set" : String(row.score)}</Td>
                         <Td>{formatExplanationCell(row.crosswalkDocumentName)}</Td>
                         <Td>{formatExplanationCell(row.rule)}</Td>

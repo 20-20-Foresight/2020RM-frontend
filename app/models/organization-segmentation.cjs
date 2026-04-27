@@ -73,6 +73,64 @@ function normalizeChoiceList(value) {
 }
 
 /**
+ * Normalize one score map from object or array forms.
+ * @param {unknown} value
+ * @returns {Record<string, number>}
+ */
+function normalizeScoreMap(value) {
+  /** @type {Record<string, number>} */
+  const map = {};
+
+  if (typeof value === "string") {
+    const name = readTrimmedString(value);
+    if (name) {
+      map[name] = 1;
+    }
+    return map;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((entry) => {
+      const name = readTrimmedString(entry);
+      if (name) {
+        map[name] = map[name] || 1;
+      }
+    });
+    return map;
+  }
+
+  if (!isObjectLike(value)) {
+    return map;
+  }
+
+  Object.entries(value).forEach(([key, score]) => {
+    const name = readTrimmedString(key);
+    const parsedScore = Number(score);
+    if (name && Number.isFinite(parsedScore) && parsedScore > 0) {
+      map[name] = parsedScore;
+    }
+  });
+
+  return map;
+}
+
+/**
+ * Rank one score map for display.
+ * @param {unknown} value
+ * @returns {string[]}
+ */
+function rankScoreMapKeys(value) {
+  const map = normalizeScoreMap(value);
+  const position = new Map();
+  Object.keys(map).forEach((key, index) => position.set(key, index));
+  return Object.keys(map).sort((left, right) => {
+    const scoreDelta = map[right] - map[left];
+    if (scoreDelta !== 0) return scoreDelta;
+    return (position.get(left) || 0) - (position.get(right) || 0);
+  });
+}
+
+/**
  * Builds highlighted quote HTML for one phrase match.
  * @param {string|null} match
  * @param {string|null} phrase
@@ -159,6 +217,16 @@ function readLegacySegmentation(record) {
  * @returns {Array<{name: string, score: number, reasons: object[], sourceDocumentId: string|null, sourceDocumentName: string|null}>}
  */
 function normalizeScoredEntries(value) {
+  if (isObjectLike(value)) {
+    return rankScoreMapKeys(value).map((name) => ({
+      name,
+      score: normalizeScoreMap(value)[name],
+      reasons: [],
+      sourceDocumentId: null,
+      sourceDocumentName: null
+    }));
+  }
+
   const list = Array.isArray(value) ? value : [];
   return list
     .map((entry) => {
@@ -204,7 +272,7 @@ function normalizeScoredEntries(value) {
 /**
  * Builds the best available industry/focus projection from one record.
  * @param {unknown} record
- * @returns {{industry: ReturnType<typeof normalizeScoredEntries>, focus: ReturnType<typeof normalizeScoredEntries>, sectors: string[], legacyReasons: object[]}|null}
+ * @returns {{industry: ReturnType<typeof normalizeScoredEntries>, focus: ReturnType<typeof normalizeScoredEntries>, legacyReasons: object[]}|null}
  */
 function readSegmentationProjection(record) {
   const legacySegmentation = readLegacySegmentation(record);
@@ -230,19 +298,17 @@ function readSegmentationProjection(record) {
     normalizeScoredEntries(projection?.focus).length
       ? normalizeScoredEntries(projection?.focus)
       : legacyFocusScores;
-  const sectors = normalizeChoiceList(legacySegmentation?.sector);
   const legacyReasons = Array.isArray(legacySegmentation?.reasons)
     ? legacySegmentation.reasons.filter((reason) => isObjectLike(reason))
     : [];
 
-  if (!industry.length && !focus.length && !sectors.length && !legacyReasons.length) {
+  if (!industry.length && !focus.length && !legacyReasons.length) {
     return null;
   }
 
   return {
     industry,
     focus,
-    sectors,
     legacyReasons
   };
 }
@@ -341,11 +407,23 @@ function buildProjectionExplanationRows(options) {
 function buildLegacyExplanationRows(reasons) {
   return (Array.isArray(reasons) ? reasons : [])
     .map((reason) => {
-      const industry = readTrimmedString(reason?.industry);
-      const focus = readTrimmedString(reason?.focus);
-      const sector = readTrimmedString(reason?.sector);
-      const value = focus || industry || sector;
-      const dimension = focus ? "Focus" : industry ? "Industry" : sector ? "Sector" : null;
+      const industry = normalizeScoreMap(reason?.industry);
+      const focus = normalizeScoreMap(reason?.focus);
+      const industryValues = rankScoreMapKeys(industry).map(
+        (key) => `Industry: ${key} (+${industry[key]})`
+      );
+      const focusValues = rankScoreMapKeys(focus).map(
+        (key) => `Focus: ${key} (+${focus[key]})`
+      );
+      const value = [...industryValues, ...focusValues].join("\n");
+      const dimension =
+        industryValues.length && focusValues.length
+          ? "Industry/Focus"
+          : focusValues.length
+            ? "Focus"
+            : industryValues.length
+              ? "Industry"
+              : null;
 
       if (!value || !dimension) {
         return null;
@@ -371,8 +449,6 @@ function buildLegacyExplanationRows(reasons) {
  * Builds display-ready segmentation data for one organization record.
  * @param {unknown} record
  * @returns {{
- *   primarySector: string|null,
- *   sectors: string[],
  *   industries: string[],
  *   focuses: string[],
  *   explanations: Array<{source: string|null, dimension: string, value: string, score: number|null, crosswalkDocumentName: string|null, rule: string|null, reasonHtml: string}>
@@ -384,7 +460,6 @@ function buildOrganizationSegmentationViewModel(record) {
     return null;
   }
 
-  const sectors = buildOrderedSectors(projection.sectors, projection.legacyReasons);
   const industries = projection.industry.map((entry) => entry.name);
   const focuses = projection.focus.map((entry) => entry.name);
   const explanations = [
@@ -399,13 +474,11 @@ function buildOrganizationSegmentationViewModel(record) {
     ...buildLegacyExplanationRows(projection.legacyReasons)
   ];
 
-  if (!sectors.length && !industries.length && !focuses.length && !explanations.length) {
+  if (!industries.length && !focuses.length && !explanations.length) {
     return null;
   }
 
   return {
-    primarySector: sectors[0] || null,
-    sectors,
     industries,
     focuses,
     explanations

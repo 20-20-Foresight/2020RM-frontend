@@ -728,7 +728,6 @@ function buildLeafPayload(row, options = {}) {
   };
 
   const description = readTrimmedString(row.description);
-  const sector = readTrimmedString(row.sector);
   const industry = readTrimmedString(row.industry);
   const focus = readTrimmedString(row.focus);
   const notes = readTrimmedString(row.notes);
@@ -740,10 +739,6 @@ function buildLeafPayload(row, options = {}) {
 
   if (options.includeDescription && description) {
     payload.description = description;
-  }
-
-  if (sector) {
-    payload.sector = sector;
   }
 
   if (primaryIndustry) {
