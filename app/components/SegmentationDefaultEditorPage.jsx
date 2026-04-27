@@ -38,6 +38,13 @@ import { EditIcon, SearchIcon } from "@chakra-ui/icons";
 import { useLocation } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { MdDescription } from "react-icons/md";
+import {
+  applyBulkRemap,
+  buildTaxonomyOptions,
+  readDisplayValue,
+  readRowTaxonomyWarnings,
+  rowMatchesFilters
+} from "../models/segmentation-default-page.mjs";
 import { buildSegmentationDefaultSubmitFormData } from "../models/segmentation-default-submit.mjs";
 import { InlineSaveStatus } from "./InlineSaveStatus";
 import { useQueuedDocumentSave } from "../hooks/useQueuedDocumentSave";
@@ -101,31 +108,6 @@ function buildEmptyTargetRow() {
     name: "",
     score: "3"
   };
-}
-
-/**
- * Builds a compact display string for one target list.
- * @param {Array<{name?: string, score?: string|number}>|null|undefined} targets
- * @param {string} fallback
- * @returns {string}
- */
-function summarizeTargets(targets, fallback = "") {
-  const entries = Array.isArray(targets) ? targets : [];
-  if (!entries.length) {
-    return fallback;
-  }
-
-  return entries
-    .map((entry) => {
-      const name = readTrimmedString(entry?.name);
-      const score = entry?.score == null ? "" : String(entry.score).trim();
-      if (!name) {
-        return "";
-      }
-      return score ? `${name} (${score})` : name;
-    })
-    .filter(Boolean)
-    .join(", ");
 }
 
 /**
@@ -222,108 +204,25 @@ function buildEmptySegmentationRow(categoryDepth, branchFieldNames = []) {
 }
 
 /**
+ * Builds one empty bulk-remap draft.
+ * @returns {{dimension: "industry"|"focus", findValue: string, replaceValue: string, scope: "both"|"primary"|"targets"}}
+ */
+function buildEmptyBulkRemapDraft() {
+  return {
+    dimension: "industry",
+    findValue: "",
+    replaceValue: "",
+    scope: "both"
+  };
+}
+
+/**
  * Builds one normalized column key for category filters.
  * @param {number} index
  * @returns {string}
  */
 function buildCategoryFilterKey(index) {
   return `category-${index}`;
-}
-
-/**
- * Builds category options for segmentation rules from the current category docs plus current rows.
- * @param {{industryOptions?: string[], focusOptions?: string[]}|null|undefined} categoryCatalog
- * @param {Array<{sector: string, industry: string, focus: string, industryTargets?: Array<{name?: string, score?: string|number}>, focusTargets?: Array<{name?: string, score?: string|number}>}>} rows
- * @returns {{
- *   industryOptions: string[],
- *   focusOptions: string[]
- * }}
- */
-function buildTaxonomyOptions(categoryCatalog, rows) {
-  const industrySet = new Set(Array.isArray(categoryCatalog?.industryOptions) ? categoryCatalog.industryOptions : []);
-  const focusSet = new Set(Array.isArray(categoryCatalog?.focusOptions) ? categoryCatalog.focusOptions : []);
-
-  for (const row of Array.isArray(rows) ? rows : []) {
-    const industry = readTrimmedString(row.industry);
-    const focus = readTrimmedString(row.focus);
-    const industryTargets = cloneTargetRows(row.industryTargets);
-    const focusTargets = cloneTargetRows(row.focusTargets);
-
-    if (industry) {
-      industrySet.add(industry);
-    }
-    industryTargets.forEach((target) => {
-      if (target.name) {
-        industrySet.add(target.name);
-      }
-    });
-
-    if (focus) {
-      focusSet.add(focus);
-    }
-    focusTargets.forEach((target) => {
-      if (target.name) {
-        focusSet.add(target.name);
-      }
-    });
-  }
-
-  return {
-    industryOptions: Array.from(industrySet).sort((left, right) => left.localeCompare(right)),
-    focusOptions: Array.from(focusSet).sort((left, right) => left.localeCompare(right))
-  };
-}
-
-/**
- * Returns whether one row matches the active filter set.
- * @param {{
- *   categories: string[],
- *   description?: string,
- *   sector: string,
- *   industry: string,
- *   focus: string,
- *   industryTargets?: Array<{name?: string, score?: string|number}>,
- *   focusTargets?: Array<{name?: string, score?: string|number}>
- * }} row
- * @param {Record<string, string>} filters
- * @returns {boolean}
- */
-function rowMatchesFilters(row, filters) {
-  for (const [key, value] of Object.entries(filters)) {
-    const normalizedFilter = readTrimmedString(value);
-    if (!normalizedFilter) {
-      continue;
-    }
-
-    if (key.startsWith("category-")) {
-      const index = Number(key.slice("category-".length));
-      const cellValue = readTrimmedString(row.categories?.[index]).toLowerCase();
-      if (!cellValue.includes(normalizedFilter.toLowerCase())) {
-        return false;
-      }
-      continue;
-    }
-
-    if (key === "description") {
-      const cellValue = readTrimmedString(row.description).toLowerCase();
-      if (!cellValue.includes(normalizedFilter.toLowerCase())) {
-        return false;
-      }
-      continue;
-    }
-
-    const rowValue =
-      key === "industry"
-        ? summarizeTargets(row.industryTargets, readTrimmedString(row[key])).toLowerCase()
-        : key === "focus"
-          ? summarizeTargets(row.focusTargets, readTrimmedString(row[key])).toLowerCase()
-          : readTrimmedString(row[key]).toLowerCase();
-    if (rowValue !== normalizedFilter.toLowerCase()) {
-      return false;
-    }
-  }
-
-  return true;
 }
 
 /**
@@ -477,6 +376,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
   const [openFilterKeys, setOpenFilterKeys] = useState({});
   const [editingRowIndex, setEditingRowIndex] = useState(null);
   const [draftRow, setDraftRow] = useState(() => buildEmptySegmentationRow(categoryDepth, defaultBranchFieldNames));
+  const [bulkRemapDraft, setBulkRemapDraft] = useState(() => buildEmptyBulkRemapDraft());
   const {
     isOpen: isRowModalOpen,
     onOpen: openRowModal,
@@ -486,6 +386,11 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
     isOpen: isMetadataModalOpen,
     onOpen: openMetadataModal,
     onClose: closeMetadataModal
+  } = useDisclosure();
+  const {
+    isOpen: isBulkRemapModalOpen,
+    onOpen: openBulkRemapModal,
+    onClose: closeBulkRemapModal
   } = useDisclosure();
   const {
     saveSummary,
@@ -519,6 +424,8 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
     savedVisible,
     saveErrorMessage: saveError?.message || actionData?.error?.message || null
   });
+  const voidRowBg = "gray.50";
+  const warningRowBg = "orange.50";
 
   useEffect(() => {
     setMetadata(isPlainObject(data.metadata) ? { ...data.metadata } : {});
@@ -536,10 +443,12 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
     setFilters({});
     setDraftFilters({});
     setOpenFilterKeys({});
+    setBulkRemapDraft(buildEmptyBulkRemapDraft());
   }, [categoryDepth, data.description, data.editorType, data.id, data.version]);
 
   const taxonomyOptions = buildTaxonomyOptions(data.categoryCatalog, rows);
-  const filteredRows = rows.filter((row) => rowMatchesFilters(row, filters));
+  const filteredRows = rows.filter((row) => rowMatchesFilters(row, filters, taxonomyOptions));
+  const bulkRemapPreview = applyBulkRemap(rows, bulkRemapDraft);
 
   /**
    * Builds one queued-save payload for the current editor state.
@@ -815,6 +724,39 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
     closeMetadataModal();
   }
 
+  /**
+   * Updates one bulk-remap field.
+   * @param {"dimension"|"findValue"|"replaceValue"|"scope"} key
+   * @param {string} value
+   */
+  function updateBulkRemapDraft(key, value) {
+    setBulkRemapDraft((currentValue) => ({
+      ...currentValue,
+      [key]: value
+    }));
+  }
+
+  /**
+   * Applies the current bulk remap across the document and queues one save.
+   */
+  function saveBulkRemapChanges() {
+    const result = applyBulkRemap(rows, bulkRemapDraft);
+    if (!result.changedRowCount) {
+      return;
+    }
+
+    setRows(result.rows);
+    markRowsChanged(result.changedRowIndexes);
+    requestSave((summary) =>
+      buildSaveFormData({
+        summary,
+        nextRows: result.rows
+      })
+    );
+    setBulkRemapDraft(buildEmptyBulkRemapDraft());
+    closeBulkRemapModal();
+  }
+
   const displayDescription = readTrimmedString(description);
   const displayName = readTrimmedString(metadata?.name) || data.name;
   const editorTypeLabel = readTrimmedString(editorConfig?.type) || data.editorType || "segmentation.default";
@@ -868,6 +810,9 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
             <Flex justify="space-between" align={{ base: "stretch", xl: "end" }} gap={4} wrap="wrap">
               <Box />
               <HStack spacing={3} align="center" flexWrap="wrap">
+                <Button type="button" variant="outline" onClick={openBulkRemapModal}>
+                  Bulk Remap
+                </Button>
                 <Button type="button" variant="outline" onClick={() => openRowEditor(null)}>
                   Add Row
                 </Button>
@@ -951,60 +896,80 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                   </Thead>
                   <Tbody>
                     {filteredRows.length ? (
-                      filteredRows.map((row, rowIndex) => (
-                        <Tr
-                          key={row.rowId || `${data.id || "segmentation"}-${rowIndex}`}
-                          bg={
-                            rowHighlightStateByKey[String(rows.indexOf(row))] === "saving"
-                              ? "blue.50"
-                              : rowHighlightStateByKey[String(rows.indexOf(row))] === "saved"
-                                ? "green.50"
-                                : isIncompleteRow(row)
-                                  ? "red.50"
-                                  : undefined
-                          }
-                          transition="background-color 0.35s ease"
-                        >
-                          {data.segmentationDefault.categoryColumns.map((_, categoryIndex) => (
-                            <Td key={`${rowIndex}-category-${categoryIndex}`}>{row.categories[categoryIndex] || ""}</Td>
-                          ))}
-                          {valueColumns.map((column) => (
-                            <Td key={`${rowIndex}-${column.key}`}>{readTrimmedString(row[column.key])}</Td>
-                          ))}
-                          <Td sx={{ borderLeft: "4px double", borderLeftColor: "#CBD5E0" }}>
-                            {summarizeTargets(row.industryTargets, row.industry || "")}
-                          </Td>
-                          <Td>{summarizeTargets(row.focusTargets, row.focus || "")}</Td>
-                          <Td>
-                            <Tooltip label={row.notes || "No notes"} hasArrow openDelay={200}>
+                      filteredRows.map((row, rowIndex) => {
+                        const sourceRowIndex = rows.indexOf(row);
+                        const rowWarnings = readRowTaxonomyWarnings(row, taxonomyOptions);
+                        const hasWarning = rowWarnings.length > 0;
+
+                        return (
+                          <Tr
+                            key={row.rowId || `${data.id || "segmentation"}-${rowIndex}`}
+                            bg={
+                              rowHighlightStateByKey[String(sourceRowIndex)] === "saving"
+                                ? "blue.50"
+                                : rowHighlightStateByKey[String(sourceRowIndex)] === "saved"
+                                  ? "green.50"
+                                  : hasWarning
+                                    ? warningRowBg
+                                    : isIncompleteRow(row)
+                                      ? voidRowBg
+                                      : undefined
+                            }
+                            transition="background-color 0.35s ease"
+                          >
+                            {data.segmentationDefault.categoryColumns.map((_, categoryIndex) => (
+                              <Td key={`${rowIndex}-category-${categoryIndex}`}>{row.categories[categoryIndex] || ""}</Td>
+                            ))}
+                            {valueColumns.map((column) => (
+                              <Td key={`${rowIndex}-${column.key}`}>{readTrimmedString(row[column.key])}</Td>
+                            ))}
+                            <Td sx={{ borderLeft: "4px double", borderLeftColor: "#CBD5E0" }}>
+                              {readDisplayValue({
+                                key: "industry",
+                                row,
+                                taxonomyOptions
+                              })}
+                            </Td>
+                            <Td>
+                              {readDisplayValue({
+                                key: "focus",
+                                row,
+                                taxonomyOptions
+                              })}
+                            </Td>
+                            <Td>
+                              <Tooltip label={row.notes || "No notes"} hasArrow openDelay={200}>
+                                <IconButton
+                                  aria-label={`View notes for row ${rowIndex + 1}`}
+                                  icon={<MdDescription />}
+                                  size="sm"
+                                  type="button"
+                                  variant="ghost"
+                                  colorScheme={row.notes ? "blue" : "gray"}
+                                />
+                              </Tooltip>
+                              {hasWarning ? (
+                                <Tooltip label={rowWarnings.join("\n")} hasArrow openDelay={200}>
+                                  <Text mt={1} fontSize="xs" color="orange.700">
+                                    Warning
+                                  </Text>
+                                </Tooltip>
+                              ) : null}
+                            </Td>
+                            <Td textAlign="right" whiteSpace="nowrap">
                               <IconButton
-                                aria-label={`View notes for row ${rowIndex + 1}`}
-                                icon={<MdDescription />}
+                                aria-label={`Edit row ${rowIndex + 1}`}
+                                icon={<EditIcon />}
                                 size="sm"
                                 type="button"
                                 variant="ghost"
-                                colorScheme={row.notes ? "blue" : isIncompleteRow(row) ? "red" : "gray"}
+                                colorScheme="blue"
+                                onClick={() => openRowEditor(sourceRowIndex)}
                               />
-                            </Tooltip>
-                            {isIncompleteRow(row) ? (
-                              <Text mt={1} fontSize="xs" color="red.600">
-                                Incomplete
-                              </Text>
-                            ) : null}
-                          </Td>
-                          <Td textAlign="right" whiteSpace="nowrap">
-                            <IconButton
-                              aria-label={`Edit row ${rowIndex + 1}`}
-                              icon={<EditIcon />}
-                              size="sm"
-                              type="button"
-                              variant="ghost"
-                              colorScheme="blue"
-                              onClick={() => openRowEditor(rows.indexOf(row))}
-                            />
-                          </Td>
-                        </Tr>
-                      ))
+                            </Td>
+                          </Tr>
+                        );
+                      })
                     ) : (
                       <Tr>
                         <Td colSpan={data.segmentationDefault.categoryColumns.length + valueColumns.length + 5}>
@@ -1028,9 +993,9 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
           <ModalBody pb={6}>
             <VStack align="stretch" spacing={4}>
               {isIncompleteRow(draftRow) ? (
-                <Alert status="warning" borderRadius="md">
+                <Alert status="info" borderRadius="md">
                   <AlertIcon />
-                  <AlertDescription>This row is incomplete and will be skipped by segmentation until it has Industry or Focus output.</AlertDescription>
+                  <AlertDescription>This row has no Industry or Focus output, so segmentation skips it until one is added.</AlertDescription>
                 </Alert>
               ) : null}
               {data.segmentationDefault.categoryColumns.map((columnLabel, index) => (
@@ -1144,6 +1109,94 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
               </Button>
               <Button type="button" colorScheme="blue" onClick={saveDraftRow} isLoading={isSaving} loadingText="Saving">
                 Save Row
+              </Button>
+            </HStack>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={isBulkRemapModalOpen} onClose={closeBulkRemapModal} size="xl" isCentered>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Bulk Remap Industry/Focus</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb={6}>
+            <VStack align="stretch" spacing={4}>
+              <Alert status="info" borderRadius="md">
+                <AlertIcon />
+                <AlertDescription>
+                  Remap one Industry or Focus value across this document, then save once.
+                </AlertDescription>
+              </Alert>
+
+              <FormControl>
+                <FormLabel>Column</FormLabel>
+                <Select
+                  value={bulkRemapDraft.dimension}
+                  onChange={(event) => updateBulkRemapDraft("dimension", event.target.value)}
+                  bg="white"
+                >
+                  <option value="industry">Industry</option>
+                  <option value="focus">Focus</option>
+                </Select>
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Find</FormLabel>
+                <Input
+                  value={bulkRemapDraft.findValue}
+                  onChange={(event) => updateBulkRemapDraft("findValue", event.target.value)}
+                  bg="white"
+                  placeholder="e.g. re-commercial"
+                />
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Replace With</FormLabel>
+                <Input
+                  value={bulkRemapDraft.replaceValue}
+                  onChange={(event) => updateBulkRemapDraft("replaceValue", event.target.value)}
+                  bg="white"
+                  placeholder="e.g. RE Commercial"
+                />
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Scope</FormLabel>
+                <Select
+                  value={bulkRemapDraft.scope}
+                  onChange={(event) => updateBulkRemapDraft("scope", event.target.value)}
+                  bg="white"
+                >
+                  <option value="both">Primary value and targets</option>
+                  <option value="primary">Primary value only</option>
+                  <option value="targets">Targets only</option>
+                </Select>
+              </FormControl>
+
+              <Box borderWidth="1px" borderColor="gray.200" borderRadius="md" bg="gray.50" px={4} py={3}>
+                <Text fontSize="sm" color="gray.700">
+                  Preview: {bulkRemapPreview.changedRowCount} row
+                  {bulkRemapPreview.changedRowCount === 1 ? "" : "s"} and {bulkRemapPreview.changedValueCount} value
+                  {bulkRemapPreview.changedValueCount === 1 ? "" : "s"} will change.
+                </Text>
+              </Box>
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <HStack spacing={3}>
+              <Button type="button" variant="ghost" onClick={closeBulkRemapModal}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                colorScheme="blue"
+                onClick={saveBulkRemapChanges}
+                isDisabled={!bulkRemapPreview.changedRowCount}
+                isLoading={isSaving}
+                loadingText="Saving"
+              >
+                Apply Remap
               </Button>
             </HStack>
           </ModalFooter>

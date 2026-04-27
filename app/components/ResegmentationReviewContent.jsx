@@ -1,0 +1,359 @@
+import { useState } from "react";
+import {
+  Alert,
+  AlertIcon,
+  Badge,
+  Box,
+  Button,
+  Checkbox,
+  Divider,
+  HStack,
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalOverlay,
+  SimpleGrid,
+  Skeleton,
+  Stack,
+  Table,
+  TableContainer,
+  Tag,
+  TagLabel,
+  Tbody,
+  Td,
+  Text,
+  Th,
+  Thead,
+  Tooltip,
+  Tr,
+  useColorModeValue,
+  Wrap,
+  WrapItem
+} from "@chakra-ui/react";
+import {
+  buildExplanationSegmentationLabel,
+  normalizeSegmentationVisualSummary,
+  readDisplayedExplanations
+} from "../models/resegmentation-ui.mjs";
+
+/**
+ * Renders one segmentation chip list.
+ * @param {{items?: string[]|null, colorScheme?: string}} props
+ * @returns {JSX.Element}
+ */
+export function SegmentTagList({ items, colorScheme = "blue" }) {
+  if (!Array.isArray(items) || !items.length) {
+    return (
+      <Text color="gray.400" fontSize="sm">
+        Not set
+      </Text>
+    );
+  }
+
+  return (
+    <Wrap spacing={1}>
+      {items.map((item) => (
+        <WrapItem key={item}>
+          <Tag size="sm" colorScheme={colorScheme} borderRadius="full">
+            <TagLabel>{item}</TagLabel>
+          </Tag>
+        </WrapItem>
+      ))}
+    </Wrap>
+  );
+}
+
+/**
+ * Renders one current-vs-proposed comparison panel.
+ * @param {{
+ *   current?: {industry?: string[], focus?: string[]}|null,
+ *   proposed?: {industry?: string[], focus?: string[]}|null,
+ *   loading?: boolean
+ * }} props
+ * @returns {JSX.Element|null}
+ */
+export function SegmentCompare({ current, proposed, loading = false }) {
+  const panelBg = useColorModeValue("gray.50", "gray.700");
+  const newBg = useColorModeValue("green.50", "green.900");
+  const currentSummary = normalizeSegmentationVisualSummary(current);
+  const proposedSummary = normalizeSegmentationVisualSummary(proposed);
+
+  if (loading) {
+    return (
+      <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={4} mt={4}>
+        {[0, 1].map((index) => (
+          <Box
+            key={index}
+            p={4}
+            borderRadius="md"
+            border="1px solid"
+            borderColor="gray.200"
+            bg={panelBg}
+          >
+            <Skeleton height="18px" mb={3} width="40%" />
+            <Skeleton height="16px" mb={2} />
+            <Skeleton height="16px" mb={2} />
+            <Skeleton height="16px" />
+          </Box>
+        ))}
+      </SimpleGrid>
+    );
+  }
+
+  if (
+    !currentSummary.industry.length &&
+    !currentSummary.focus.length &&
+    !proposedSummary.industry.length &&
+    !proposedSummary.focus.length
+  ) {
+    return null;
+  }
+
+  return (
+    <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={4} mt={4}>
+      <Box p={4} borderRadius="md" border="1px solid" borderColor="gray.200" bg={panelBg}>
+        <Text
+          fontSize="xs"
+          fontWeight="bold"
+          color="gray.500"
+          textTransform="uppercase"
+          letterSpacing="wide"
+          mb={3}
+        >
+          Current Segments
+        </Text>
+        <Stack spacing={3}>
+          <Box>
+            <Text fontSize="xs" color="gray.500" mb={1}>
+              Industry
+            </Text>
+            <SegmentTagList items={currentSummary.industry} colorScheme="gray" />
+          </Box>
+          <Box>
+            <Text fontSize="xs" color="gray.500" mb={1}>
+              Focus
+            </Text>
+            <SegmentTagList items={currentSummary.focus} colorScheme="gray" />
+          </Box>
+        </Stack>
+      </Box>
+
+      <Box p={4} borderRadius="md" border="1px solid" borderColor="green.200" bg={newBg}>
+        <HStack mb={3} justify="space-between">
+          <Text
+            fontSize="xs"
+            fontWeight="bold"
+            color="green.600"
+            textTransform="uppercase"
+            letterSpacing="wide"
+          >
+            Proposed Segments
+          </Text>
+          {proposed ? (
+            <Badge colorScheme="green" fontSize="xs">
+              Preview
+            </Badge>
+          ) : null}
+        </HStack>
+        {proposedSummary.industry.length || proposedSummary.focus.length ? (
+          <Stack spacing={3}>
+            <Box>
+              <Text fontSize="xs" color="gray.500" mb={1}>
+                Industry
+              </Text>
+              <SegmentTagList items={proposedSummary.industry} colorScheme="green" />
+            </Box>
+            <Box>
+              <Text fontSize="xs" color="gray.500" mb={1}>
+                Focus
+              </Text>
+              <SegmentTagList items={proposedSummary.focus} colorScheme="green" />
+            </Box>
+          </Stack>
+        ) : (
+          <Text fontSize="sm" color="gray.500">
+            Run segmentation to preview the proposed updates.
+          </Text>
+        )}
+      </Box>
+    </SimpleGrid>
+  );
+}
+
+/**
+ * Renders one explanation table.
+ * @param {{explanations?: object[]|null, loading?: boolean}} props
+ * @returns {JSX.Element|null}
+ */
+export function ExplanationTable({ explanations, loading = false }) {
+  const theadBg = useColorModeValue("gray.50", "gray.700");
+  const visibleExplanations = readDisplayedExplanations(explanations);
+
+  if (loading) {
+    return (
+      <Box mt={6}>
+        <Skeleton height="16px" width="30%" mb={3} />
+        <Skeleton height="16px" mb={2} />
+        <Skeleton height="16px" mb={2} />
+        <Skeleton height="16px" />
+      </Box>
+    );
+  }
+
+  if (!visibleExplanations.length) {
+    return null;
+  }
+
+  return (
+    <Box mt={6}>
+      <Text fontSize="sm" fontWeight="semibold" color="gray.700" mb={3}>
+        Segmentation Reasoning
+      </Text>
+      <TableContainer border="1px solid" borderColor="gray.200" borderRadius="md">
+        <Table size="sm" variant="simple">
+          <Thead bg={theadBg}>
+            <Tr>
+              <Th>Segmentation</Th>
+              <Th>Source</Th>
+              <Th>Crosswalk</Th>
+              <Th>How Derived</Th>
+            </Tr>
+          </Thead>
+          <Tbody>
+            {visibleExplanations.map((row, index) => (
+              <Tr key={`${row.source || "source"}-${index}`}>
+                <Td fontSize="xs" fontWeight="medium">
+                  {buildExplanationSegmentationLabel(row)}
+                </Td>
+                <Td fontSize="xs">{row.source || "Not set"}</Td>
+                <Td fontSize="xs">{row.crosswalkDocumentName || "Not set"}</Td>
+                <Td fontSize="xs" maxW="340px" whiteSpace="normal" lineHeight="1.5">
+                  <Box
+                    sx={{
+                      mark: {
+                        bg: "yellow.100",
+                        px: 1,
+                        borderRadius: "sm"
+                      }
+                    }}
+                    dangerouslySetInnerHTML={{
+                      __html: row.reasonHtml || "Not provided"
+                    }}
+                  />
+                </Td>
+              </Tr>
+            ))}
+          </Tbody>
+        </Table>
+      </TableContainer>
+    </Box>
+  );
+}
+
+/**
+ * Shared apply modal for single-org review flows.
+ * @param {{
+ *   isOpen: boolean,
+ *   onClose: Function,
+ *   onApply: ({saveSalesforce: boolean}) => Promise<void>,
+ *   orgName: string,
+ *   isDisabled?: boolean,
+ *   disabledReason?: string
+ * }} props
+ * @returns {JSX.Element}
+ */
+export function ApplyModal({
+  isOpen,
+  onClose,
+  onApply,
+  orgName,
+  isDisabled = false,
+  disabledReason = ""
+}) {
+  const [saveSalesforce, setSaveSalesforce] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleApply() {
+    if (isDisabled) {
+      return;
+    }
+
+    setApplying(true);
+    setError("");
+    try {
+      await onApply({ saveSalesforce });
+      setSaveSalesforce(false);
+      onClose();
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Unable to apply resegmentation.");
+    } finally {
+      setApplying(false);
+    }
+  }
+
+  function handleClose() {
+    setSaveSalesforce(false);
+    setApplying(false);
+    setError("");
+    onClose();
+  }
+
+  return (
+    <Modal isOpen={isOpen} onClose={handleClose} size="sm" isCentered>
+      <ModalOverlay />
+      <ModalContent>
+        <ModalHeader fontSize="md">Apply Segmentation</ModalHeader>
+        <Divider />
+        <ModalBody py={5}>
+          <Text fontSize="sm" color="gray.600" mb={4}>
+            Apply the proposed segments to{" "}
+            <Text as="span" fontWeight="semibold">
+              {orgName}
+            </Text>
+            ?
+          </Text>
+          <Checkbox
+            isChecked={saveSalesforce}
+            onChange={(event) => setSaveSalesforce(event.target.checked)}
+            colorScheme="blue"
+            mb={error || isDisabled ? 4 : 0}
+            isDisabled={isDisabled}
+          >
+            <Text fontSize="sm">Stage Salesforce account updates</Text>
+          </Checkbox>
+          {isDisabled && disabledReason ? (
+            <Tooltip label={disabledReason} shouldWrapChildren>
+              <Text fontSize="sm" color="gray.500">
+                {disabledReason}
+              </Text>
+            </Tooltip>
+          ) : null}
+          {error ? (
+            <Alert status="error" borderRadius="md" mt={4}>
+              <AlertIcon />
+              {error}
+            </Alert>
+          ) : null}
+        </ModalBody>
+        <ModalFooter gap={2}>
+          <Button size="sm" variant="ghost" onClick={handleClose} isDisabled={applying}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            colorScheme="blue"
+            onClick={handleApply}
+            isLoading={applying}
+            loadingText="Applying..."
+            isDisabled={isDisabled}
+          >
+            Apply
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
+}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Badge,
   Box,
@@ -24,9 +24,10 @@ import {
   Th,
   Thead,
   Tr,
+  useDisclosure,
   VStack
 } from "@chakra-ui/react";
-import { Link as RemixLink } from "@remix-run/react";
+import { Link as RemixLink, useRevalidator } from "@remix-run/react";
 import { FaLinkedin } from "react-icons/fa";
 import {
   FiArrowUpRight,
@@ -58,6 +59,7 @@ import {
   resolveSchemaFieldPath
 } from "../models/search-result.mjs";
 import { buildEntityDetailPath } from "../models/entity-route.mjs";
+import { OrganizationResegmentationFlyout } from "./OrganizationResegmentationFlyout.jsx";
 
 const BRAND_BLUE = "#0F4C81";
 const BORDER_COLOR = "#D7DFEC";
@@ -333,8 +335,23 @@ function filterContacts(options) {
  * @returns {JSX.Element}
  */
 export function OrganizationOverviewPanel({ organizationDetail }) {
+  const revalidator = useRevalidator();
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const [recordOverride, setRecordOverride] = useState(null);
+  const organizationUUID =
+    typeof organizationDetail?.uuid === "string" && organizationDetail.uuid.trim()
+      ? organizationDetail.uuid.trim()
+      : typeof organizationDetail?.record?.uuid === "string" && organizationDetail.record.uuid.trim()
+        ? organizationDetail.record.uuid.trim()
+        : "";
+  const effectiveRecord = recordOverride || organizationDetail?.record || null;
+
+  useEffect(() => {
+    setRecordOverride(null);
+  }, [organizationUUID]);
+
   const overview = buildOrganizationOverviewViewModel({
-    record: organizationDetail?.record || null,
+    record: effectiveRecord,
     schema: organizationDetail?.schema || null,
     locations: Array.isArray(organizationDetail?.locations) ? organizationDetail.locations : []
   });
@@ -416,9 +433,18 @@ export function OrganizationOverviewPanel({ organizationDetail }) {
           </SurfaceCard>
 
           <SurfaceCard>
-            <Heading size="md" mb={5}>
-              Industry &amp; Expertise
-            </Heading>
+            <Flex justify="space-between" align="center" gap={3} mb={5}>
+              <Heading size="md">Industry &amp; Expertise</Heading>
+              <Button
+                variant="link"
+                colorScheme="blue"
+                size="sm"
+                onClick={onOpen}
+                isDisabled={!organizationUUID}
+              >
+                explain
+              </Button>
+            </Flex>
             <Flex wrap="wrap" gap={3}>
               {overview.expertiseTags.map((tag) => (
                 <Badge
@@ -436,6 +462,22 @@ export function OrganizationOverviewPanel({ organizationDetail }) {
               ))}
             </Flex>
           </SurfaceCard>
+
+          <OrganizationResegmentationFlyout
+            isOpen={isOpen}
+            onClose={onClose}
+            organizationUUID={organizationUUID}
+            organizationName={
+              typeof effectiveRecord?.name === "string" && effectiveRecord.name.trim()
+                ? effectiveRecord.name.trim()
+                : "Organization"
+            }
+            record={effectiveRecord}
+            onApplied={async ({ record: nextRecord }) => {
+              setRecordOverride(nextRecord || null);
+              revalidator.revalidate();
+            }}
+          />
         </Stack>
       </GridItem>
     </Grid>

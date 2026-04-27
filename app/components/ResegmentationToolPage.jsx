@@ -2,11 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   AlertIcon,
-  Badge,
   Box,
   Button,
-  Checkbox,
-  Divider,
   Drawer,
   DrawerBody,
   DrawerCloseButton,
@@ -23,16 +20,8 @@ import {
   InputLeftElement,
   List,
   ListItem,
-  Modal,
-  ModalBody,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
   Select,
-  SimpleGrid,
   Skeleton,
-  Stack,
   Tab,
   TabList,
   TabPanel,
@@ -51,9 +40,6 @@ import {
   Tr,
   useColorModeValue,
   useDisclosure,
-  VStack,
-  Wrap,
-  WrapItem,
 } from "@chakra-ui/react";
 import {
   MdAutorenew,
@@ -65,48 +51,27 @@ import {
   MdVisibility,
 } from "react-icons/md";
 import { buildOrganizationSegmentationViewModel } from "../models/organization-segmentation.mjs";
+import { postResegmentationAction } from "../models/resegmentation-client.mjs";
+import {
+  applyResegmentationToRecord,
+  buildAppliedResult,
+  hasVisibleSegmentationSummary,
+  normalizeSegmentationVisualSummary,
+  readPrimaryValue,
+  readTrimmedString
+} from "../models/resegmentation-ui.mjs";
 import {
   buildSelectedListRows,
-  countRenderableListMembers,
+  countRenderableListMembers
 } from "../models/resegmentation-list-detail.mjs";
+import {
+  ApplyModal,
+  ExplanationTable,
+  SegmentCompare
+} from "./ResegmentationReviewContent.jsx";
 import ResegmentationImportDrawer from "./ResegmentationImportDrawer.jsx";
 
 const ORGANIZATION_SEARCH_DEBOUNCE_MS = 2000;
-
-/**
- * Read one trimmed string.
- * @param {unknown} value
- * @returns {string}
- */
-function readTrimmedString(value) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-/**
- * Normalize one segmentation summary for resegmentation visuals.
- * Sector is intentionally excluded from this page for now.
- * @param {object|null|undefined} summary
- * @returns {{industry: string[], focus: string[]}}
- */
-function normalizeSegmentationVisualSummary(summary) {
-  return {
-    industry: Array.isArray(summary?.industry)
-      ? summary.industry.filter((value) => readTrimmedString(value))
-      : [],
-    focus: Array.isArray(summary?.focus)
-      ? summary.focus.filter((value) => readTrimmedString(value))
-      : [],
-  };
-}
-
-/**
- * Returns whether one normalized segmentation summary has any visible values.
- * @param {{industry?: string[], focus?: string[]}|null|undefined} summary
- * @returns {boolean}
- */
-function hasVisibleSegmentationSummary(summary) {
-  return Boolean(summary?.industry?.length || summary?.focus?.length);
-}
 
 /**
  * Build the comparison-friendly summary from one exported organization record.
@@ -117,52 +82,8 @@ function buildRecordSegmentationSummary(record) {
   const segmentation = buildOrganizationSegmentationViewModel(record);
   return normalizeSegmentationVisualSummary({
     industry: segmentation?.industries,
-    focus: segmentation?.focuses,
+    focus: segmentation?.focuses
   });
-}
-
-/**
- * Build one display-friendly label for a segment array.
- * @param {string[]} values
- * @param {string} fallback
- * @returns {string}
- */
-function readPrimaryValue(values, fallback = "Not set") {
-  return Array.isArray(values) && values.length ? values[0] : fallback;
-}
-
-/**
- * Returns the display-ready explanation rows for this page.
- * Sector rows are intentionally hidden until the backend sector issue is fixed.
- * @param {object[]|null|undefined} explanations
- * @returns {object[]}
- */
-function readDisplayedExplanations(explanations) {
-  return (Array.isArray(explanations) ? explanations : []).filter(
-    (row) => readTrimmedString(row?.dimension).toLowerCase() !== "sector"
-  );
-}
-
-/**
- * Read one explanation score for display.
- * @param {unknown} value
- * @returns {number}
- */
-function readDisplayedExplanationScore(value) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 3;
-}
-
-/**
- * Build one compact explanation segmentation label.
- * @param {object|null|undefined} row
- * @returns {string}
- */
-function buildExplanationSegmentationLabel(row) {
-  const dimension = readTrimmedString(row?.dimension) || "Not set";
-  const value = readTrimmedString(row?.value) || "Not set";
-  const score = readDisplayedExplanationScore(row?.score);
-  return `${dimension}: ${value} (${score})`;
 }
 
 /**
@@ -173,384 +94,6 @@ function buildExplanationSegmentationLabel(row) {
  */
 function readListRowCurrentSummary(org, result) {
   return normalizeSegmentationVisualSummary(result?.current || org?.currentSegmentation || null);
-}
-
-/**
- * Reads one route-action response without hiding HTML/auth/404 failures behind JSON parse errors.
- * @param {Response} response
- * @returns {Promise<object>}
- */
-async function readActionResponse(response) {
-  const contentType = response.headers.get("content-type") || "";
-  const bodyText = await response.text();
-
-  if (contentType.includes("application/json")) {
-    try {
-      return bodyText ? JSON.parse(bodyText) : {};
-    } catch (error) {
-      throw new Error("The resegmentation action returned invalid JSON.");
-    }
-  }
-
-  const titleMatch = bodyText.match(/<title>([^<]+)<\/title>/i);
-  const title = titleMatch ? titleMatch[1].trim() : "";
-  const message = title || bodyText.trim() || response.statusText || "Unexpected non-JSON response.";
-  throw new Error(
-    response.redirected || bodyText.includes("<!DOCTYPE")
-      ? `${message}. The request returned an HTML page instead of JSON; refresh the page and sign in again if needed.`
-      : message
-  );
-}
-
-/**
- * Returns one updated organization record after a successful apply.
- * @param {object|null} record
- * @param {object|null} resegmentation
- * @returns {object}
- */
-function applyResegmentationToRecord(record, resegmentation) {
-  const nextRecord =
-    record && typeof record === "object"
-      ? JSON.parse(JSON.stringify(record))
-      : {};
-  nextRecord.metadata ||= {};
-  nextRecord.metadata.segmentation = {
-    sector: resegmentation?.proposed?.sector || null,
-    industry: Array.isArray(resegmentation?.proposed?.industry)
-      ? resegmentation.proposed.industry.slice()
-      : [],
-    focus: Array.isArray(resegmentation?.proposed?.focus)
-      ? resegmentation.proposed.focus.slice()
-      : [],
-    reasons: [],
-  };
-  nextRecord.entityDimensionProjection = {
-    industry: (resegmentation?.proposed?.industry || []).map((name) => ({
-      name,
-      score: 1,
-      reasons: [],
-    })),
-    focus: (resegmentation?.proposed?.focus || []).map((name) => ({
-      name,
-      score: 1,
-      reasons: [],
-    })),
-  };
-  return nextRecord;
-}
-
-/**
- * Returns one client-side applied result so the current panel reflects the saved state.
- * @param {object|null} resegmentation
- * @returns {object|null}
- */
-function buildAppliedResult(resegmentation) {
-  if (!resegmentation || typeof resegmentation !== "object") {
-    return null;
-  }
-
-  return {
-    ...resegmentation,
-    current: resegmentation.proposed || resegmentation.current || null,
-  };
-}
-
-/**
- * Renders one segmentation chip list.
- * @param {{items?: string[]|null, colorScheme?: string}} props
- * @returns {JSX.Element}
- */
-function SegmentTagList({ items, colorScheme = "blue" }) {
-  if (!Array.isArray(items) || !items.length) {
-    return (
-      <Text color="gray.400" fontSize="sm">
-        Not set
-      </Text>
-    );
-  }
-
-  return (
-    <Wrap spacing={1}>
-      {items.map((item) => (
-        <WrapItem key={item}>
-          <Tag size="sm" colorScheme={colorScheme} borderRadius="full">
-            <TagLabel>{item}</TagLabel>
-          </Tag>
-        </WrapItem>
-      ))}
-    </Wrap>
-  );
-}
-
-/**
- * Renders one current-vs-proposed comparison panel.
- * @param {{
- *   current?: {industry?: string[], focus?: string[]}|null,
- *   proposed?: {industry?: string[], focus?: string[]}|null,
- *   loading?: boolean
- * }} props
- * @returns {JSX.Element|null}
- */
-function SegmentCompare({ current, proposed, loading = false }) {
-  const panelBg = useColorModeValue("gray.50", "gray.700");
-  const newBg = useColorModeValue("green.50", "green.900");
-  const currentSummary = normalizeSegmentationVisualSummary(current);
-  const proposedSummary = normalizeSegmentationVisualSummary(proposed);
-
-  if (loading) {
-    return (
-      <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={4} mt={4}>
-        {[0, 1].map((index) => (
-          <Box
-            key={index}
-            p={4}
-            borderRadius="md"
-            border="1px solid"
-            borderColor="gray.200"
-            bg={panelBg}
-          >
-            <Skeleton height="18px" mb={3} width="40%" />
-            <Skeleton height="16px" mb={2} />
-            <Skeleton height="16px" mb={2} />
-            <Skeleton height="16px" />
-          </Box>
-        ))}
-      </SimpleGrid>
-    );
-  }
-
-  if (
-    !currentSummary.industry.length &&
-    !currentSummary.focus.length &&
-    !proposedSummary.industry.length &&
-    !proposedSummary.focus.length
-  ) {
-    return null;
-  }
-
-  return (
-    <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={4} mt={4}>
-      <Box p={4} borderRadius="md" border="1px solid" borderColor="gray.200" bg={panelBg}>
-        <Text
-          fontSize="xs"
-          fontWeight="bold"
-          color="gray.500"
-          textTransform="uppercase"
-          letterSpacing="wide"
-          mb={3}
-        >
-          Current Segments
-        </Text>
-        <Stack spacing={3}>
-          <Box>
-            <Text fontSize="xs" color="gray.500" mb={1}>
-              Industry
-            </Text>
-            <SegmentTagList items={currentSummary.industry} colorScheme="gray" />
-          </Box>
-          <Box>
-            <Text fontSize="xs" color="gray.500" mb={1}>
-              Focus
-            </Text>
-            <SegmentTagList items={currentSummary.focus} colorScheme="gray" />
-          </Box>
-        </Stack>
-      </Box>
-
-      <Box p={4} borderRadius="md" border="1px solid" borderColor="green.200" bg={newBg}>
-        <HStack mb={3} justify="space-between">
-          <Text
-            fontSize="xs"
-            fontWeight="bold"
-            color="green.600"
-            textTransform="uppercase"
-            letterSpacing="wide"
-          >
-            Proposed Segments
-          </Text>
-          {proposed ? (
-            <Badge colorScheme="green" fontSize="xs">
-              Preview
-            </Badge>
-          ) : null}
-        </HStack>
-        {proposedSummary.industry.length || proposedSummary.focus.length ? (
-          <Stack spacing={3}>
-            <Box>
-              <Text fontSize="xs" color="gray.500" mb={1}>
-                Industry
-              </Text>
-              <SegmentTagList items={proposedSummary.industry} colorScheme="green" />
-            </Box>
-            <Box>
-              <Text fontSize="xs" color="gray.500" mb={1}>
-                Focus
-              </Text>
-              <SegmentTagList items={proposedSummary.focus} colorScheme="green" />
-            </Box>
-          </Stack>
-        ) : (
-          <Text fontSize="sm" color="gray.500">
-            Run segmentation to preview the proposed updates.
-          </Text>
-        )}
-      </Box>
-    </SimpleGrid>
-  );
-}
-
-/**
- * Renders one explanation table.
- * @param {{explanations?: object[]|null, loading?: boolean}} props
- * @returns {JSX.Element|null}
- */
-function ExplanationTable({ explanations, loading = false }) {
-  const theadBg = useColorModeValue("gray.50", "gray.700");
-  const visibleExplanations = readDisplayedExplanations(explanations);
-
-  if (loading) {
-    return (
-      <Box mt={6}>
-        <Skeleton height="16px" width="30%" mb={3} />
-        <Skeleton height="16px" mb={2} />
-        <Skeleton height="16px" mb={2} />
-        <Skeleton height="16px" />
-      </Box>
-    );
-  }
-
-  if (!visibleExplanations.length) {
-    return null;
-  }
-
-  return (
-    <Box mt={6}>
-      <Text fontSize="sm" fontWeight="semibold" color="gray.700" mb={3}>
-        Segmentation Reasoning
-      </Text>
-      <TableContainer border="1px solid" borderColor="gray.200" borderRadius="md">
-        <Table size="sm" variant="simple">
-          <Thead bg={theadBg}>
-            <Tr>
-              <Th>Segmentation</Th>
-              <Th>Source</Th>
-              <Th>Crosswalk</Th>
-              <Th>How Derived</Th>
-            </Tr>
-          </Thead>
-          <Tbody>
-            {visibleExplanations.map((row, index) => (
-              <Tr key={`${row.source || "source"}-${index}`}>
-                <Td fontSize="xs" fontWeight="medium">
-                  {buildExplanationSegmentationLabel(row)}
-                </Td>
-                <Td fontSize="xs">{row.source || "Not set"}</Td>
-                <Td fontSize="xs">{row.crosswalkDocumentName || "Not set"}</Td>
-                <Td fontSize="xs" maxW="340px" whiteSpace="normal" lineHeight="1.5">
-                  <Box
-                    sx={{
-                      mark: {
-                        bg: "yellow.100",
-                        px: 1,
-                        borderRadius: "sm",
-                      },
-                    }}
-                    dangerouslySetInnerHTML={{
-                      __html: row.reasonHtml || "Not provided",
-                    }}
-                  />
-                </Td>
-              </Tr>
-            ))}
-          </Tbody>
-        </Table>
-      </TableContainer>
-    </Box>
-  );
-}
-
-/**
- * Shared apply modal for single-org and list flows.
- * @param {{
- *   isOpen: boolean,
- *   onClose: Function,
- *   onApply: ({saveSalesforce: boolean}) => Promise<void>,
- *   orgName: string
- * }} props
- * @returns {JSX.Element}
- */
-function ApplyModal({ isOpen, onClose, onApply, orgName }) {
-  const [saveSalesforce, setSaveSalesforce] = useState(false);
-  const [applying, setApplying] = useState(false);
-  const [error, setError] = useState("");
-
-  async function handleApply() {
-    setApplying(true);
-    setError("");
-    try {
-      await onApply({ saveSalesforce });
-      setSaveSalesforce(false);
-      onClose();
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Unable to apply resegmentation.");
-    } finally {
-      setApplying(false);
-    }
-  }
-
-  function handleClose() {
-    setSaveSalesforce(false);
-    setApplying(false);
-    setError("");
-    onClose();
-  }
-
-  return (
-    <Modal isOpen={isOpen} onClose={handleClose} size="sm" isCentered>
-      <ModalOverlay />
-      <ModalContent>
-        <ModalHeader fontSize="md">Apply Segmentation</ModalHeader>
-        <Divider />
-        <ModalBody py={5}>
-          <Text fontSize="sm" color="gray.600" mb={4}>
-            Apply the proposed segments to{" "}
-            <Text as="span" fontWeight="semibold">
-              {orgName}
-            </Text>
-            ?
-          </Text>
-          <Checkbox
-            isChecked={saveSalesforce}
-            onChange={(event) => setSaveSalesforce(event.target.checked)}
-            colorScheme="blue"
-            mb={error ? 4 : 0}
-          >
-            <Text fontSize="sm">Stage Salesforce account updates</Text>
-          </Checkbox>
-          {error ? (
-            <Alert status="error" borderRadius="md" mt={4}>
-              <AlertIcon />
-              {error}
-            </Alert>
-          ) : null}
-        </ModalBody>
-        <ModalFooter gap={2}>
-          <Button size="sm" variant="ghost" onClick={handleClose} isDisabled={applying}>
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            colorScheme="blue"
-            onClick={handleApply}
-            isLoading={applying}
-            loadingText="Applying..."
-          >
-            Apply
-          </Button>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
-  );
 }
 
 /**
@@ -679,82 +222,6 @@ export function ResegmentationToolPage({
   const headerBg = useColorModeValue("gray.50", "gray.700");
   const appliedRowBg = useColorModeValue("green.50", "green.900");
 
-  /**
-   * Calls one same-origin 2020RM-backend proxy endpoint for an interactive tool action.
-   * @param {string} intent
-   * @param {Record<string, unknown>} fields
-   * @returns {Promise<object>}
-   */
-  async function postAction(intent, fields = {}) {
-    const uuid = readTrimmedString(fields.uuid);
-    let requestPath = "";
-    const requestOptions = {
-      method: "GET",
-      credentials: "same-origin",
-    };
-
-    if (intent === "searchOrganizations") {
-      const params = new URLSearchParams({
-        name: readTrimmedString(fields.query),
-      });
-      requestPath = `/api/rest/resegmentation/organizations?${params.toString()}`;
-    } else if (intent === "loadOrganization") {
-      requestPath = `/api/rest/resegmentation/organizations/${encodeURIComponent(uuid)}`;
-    } else if (intent === "loadListDetail") {
-      requestPath = `/api/rest/resegmentation/lists/${encodeURIComponent(uuid)}`;
-    } else if (intent === "segmentOrganization") {
-      requestPath = `/api/rest/resegmentation/organizations/${encodeURIComponent(uuid)}/segment`;
-      requestOptions.method = "POST";
-      requestOptions.headers = {
-        "content-type": "application/json",
-      };
-      requestOptions.body = JSON.stringify({
-        dryRun: fields.dryRun !== false,
-        saveSalesforce: fields.saveSalesforce === true,
-        includeExplanation: fields.includeExplanation !== false,
-      });
-    } else {
-      throw new Error("Unknown resegmentation action.");
-    }
-
-    const response = await fetch(requestPath, requestOptions);
-    const payload = await readActionResponse(response);
-    if (!response.ok) {
-      throw new Error(payload?.message || payload?.error || "Resegmentation request failed.");
-    }
-
-    if (intent === "searchOrganizations") {
-      return {
-        organizations: Array.isArray(payload.organizations) ? payload.organizations : [],
-        status: payload.status,
-        statusExplained: payload.statusExplained,
-      };
-    }
-    if (intent === "loadOrganization") {
-      return {
-        organization: payload.organization || null,
-        status: payload.status,
-        statusExplained: payload.statusExplained,
-      };
-    }
-    if (intent === "loadListDetail") {
-      return {
-        listDetail: payload.listDetail || null,
-        status: payload.status,
-        statusExplained: payload.statusExplained,
-      };
-    }
-    if (intent === "segmentOrganization") {
-      return {
-        resegmentation: payload.resegmentation || null,
-        status: payload.status,
-        statusExplained: payload.statusExplained,
-      };
-    }
-
-    return payload;
-  }
-
   useEffect(() => {
     const trimmedQuery = readTrimmedString(singleQuery);
     const selectedName = readTrimmedString(selectedOrganization?.summary?.name);
@@ -772,8 +239,8 @@ export function ResegmentationToolPage({
     const timeout = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const payload = await postAction("searchOrganizations", {
-          query: trimmedQuery,
+        const payload = await postResegmentationAction("searchOrganizations", {
+          query: trimmedQuery
         });
         if (searchRequestRef.current !== requestNumber) {
           return;
@@ -822,8 +289,8 @@ export function ResegmentationToolPage({
     setIsLoadingOrganization(true);
 
     try {
-      const payload = await postAction("loadOrganization", {
-        uuid: candidate.uuid,
+      const payload = await postResegmentationAction("loadOrganization", {
+        uuid: candidate.uuid
       });
       setSelectedOrganization({
         summary: candidate,
@@ -851,10 +318,10 @@ export function ResegmentationToolPage({
     setSelectedOrganizationError("");
 
     try {
-      const payload = await postAction("segmentOrganization", {
+      const payload = await postResegmentationAction("segmentOrganization", {
         uuid: selectedOrganization.summary.uuid,
         dryRun: true,
-        includeExplanation: true,
+        includeExplanation: true
       });
       setSingleResult(payload.resegmentation || null);
       setSingleResultMessage(payload.statusExplained || "");
@@ -872,11 +339,11 @@ export function ResegmentationToolPage({
       return;
     }
 
-    const payload = await postAction("segmentOrganization", {
+    const payload = await postResegmentationAction("segmentOrganization", {
       uuid: selectedOrganization.summary.uuid,
       dryRun: false,
       saveSalesforce,
-      includeExplanation: true,
+      includeExplanation: true
     });
     setSingleResult(buildAppliedResult(payload.resegmentation));
     setSingleApplied(true);
@@ -904,8 +371,8 @@ export function ResegmentationToolPage({
 
     setIsLoadingList(true);
     try {
-      const payload = await postAction("loadListDetail", {
-        uuid: nextListId,
+      const payload = await postResegmentationAction("loadListDetail", {
+        uuid: nextListId
       });
       setSelectedListDetail(payload.listDetail || null);
     } catch (error) {
@@ -973,10 +440,10 @@ export function ResegmentationToolPage({
     });
 
     try {
-      const payload = await postAction("segmentOrganization", {
+      const payload = await postResegmentationAction("segmentOrganization", {
         uuid: org.uuid,
         dryRun: true,
-        includeExplanation: true,
+        includeExplanation: true
       });
       setRowResults((currentValue) => ({
         ...currentValue,
@@ -1022,11 +489,11 @@ export function ResegmentationToolPage({
   }
 
   async function handleApplyListRow(org, options) {
-    const payload = await postAction("segmentOrganization", {
+    const payload = await postResegmentationAction("segmentOrganization", {
       uuid: org.uuid,
       dryRun: false,
       saveSalesforce: options.saveSalesforce,
-      includeExplanation: true,
+      includeExplanation: true
     });
     setRowResults((currentValue) => ({
       ...currentValue,
