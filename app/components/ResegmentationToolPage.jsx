@@ -65,6 +65,11 @@ import {
   MdVisibility,
 } from "react-icons/md";
 import { buildOrganizationSegmentationViewModel } from "../models/organization-segmentation.mjs";
+import {
+  buildSelectedListRows,
+  countRenderableListMembers,
+} from "../models/resegmentation-list-detail.mjs";
+import ResegmentationImportDrawer from "./ResegmentationImportDrawer.jsx";
 
 const ORGANIZATION_SEARCH_DEBOUNCE_MS = 2000;
 
@@ -648,7 +653,7 @@ export function ResegmentationToolPage({
   const [singleApplied, setSingleApplied] = useState(false);
   const [singleAppliedMessage, setSingleAppliedMessage] = useState("");
 
-  const [lists] = useState(Array.isArray(initialLists) ? initialLists : []);
+  const [lists, setLists] = useState(Array.isArray(initialLists) ? initialLists : []);
   const [listError, setListError] = useState(initialError || "");
   const [selectedListId, setSelectedListId] = useState("");
   const [selectedListDetail, setSelectedListDetail] = useState(null);
@@ -660,6 +665,7 @@ export function ResegmentationToolPage({
   const [reviewOrg, setReviewOrg] = useState(null);
   const [pendingApplyOrg, setPendingApplyOrg] = useState(null);
   const [segmentAllMessage, setSegmentAllMessage] = useState("");
+  const [listImportMessage, setListImportMessage] = useState("");
 
   const searchRequestRef = useRef(0);
   const { isOpen: isSingleApplyOpen, onOpen: openSingleApply, onClose: closeSingleApply } =
@@ -667,6 +673,7 @@ export function ResegmentationToolPage({
   const { isOpen: isListApplyOpen, onOpen: openListApply, onClose: closeListApply } =
     useDisclosure();
   const { isOpen: isReviewOpen, onOpen: openReview, onClose: closeReview } = useDisclosure();
+  const { isOpen: isImportOpen, onOpen: openImport, onClose: closeImport } = useDisclosure();
 
   const dropdownBg = useColorModeValue("white", "gray.800");
   const headerBg = useColorModeValue("gray.50", "gray.700");
@@ -796,18 +803,7 @@ export function ResegmentationToolPage({
       ? resultCurrentSummary
       : buildRecordSegmentationSummary(selectedOrganization?.record || null);
 
-  const selectedListRows = Array.isArray(selectedListDetail?.members)
-    ? selectedListDetail.members
-        .filter((row) => row?.member?.uuid)
-        .map((row) => ({
-          membershipUUID: row.uuid,
-          uuid: row.member.uuid,
-          name: row.member.name || "Unnamed organization",
-          currentSegmentation: normalizeSegmentationVisualSummary(
-            row.member.currentSegmentation || null
-          ),
-        }))
-    : [];
+  const selectedListRows = buildSelectedListRows(selectedListDetail);
 
   async function handleSelectOrganization(candidate) {
     setSelectedOrganization({
@@ -900,6 +896,7 @@ export function ResegmentationToolPage({
     setReviewOrg(null);
     setPendingApplyOrg(null);
     setSegmentAllMessage("");
+    setListImportMessage("");
 
     if (!nextListId) {
       return;
@@ -916,6 +913,56 @@ export function ResegmentationToolPage({
     } finally {
       setIsLoadingList(false);
     }
+  }
+
+  /**
+   * Selects the newly imported list and refreshes the picker options.
+   * @param {object|null} list
+   * @param {{statusExplained?: string, listDetail?: object|null}} [details]
+   * @returns {Promise<void>}
+   */
+  async function handleImportedList(list, details = {}) {
+    if (!list?.uuid) {
+      return;
+    }
+
+    const importedRenderableCount = countRenderableListMembers(details.listDetail || null);
+    const importedMemberCount = Number(details.listDetail?.list?.memberCount || 0);
+    if (details.listDetail && importedMemberCount > 0 && importedRenderableCount === 0) {
+      setListError(
+        "The imported list was created, but its members could not be loaded yet. Your previous list selection was kept."
+      );
+      setListImportMessage(details.statusExplained || `Imported list ${list.name || list.uuid}.`);
+      return;
+    }
+
+    setLists((currentValue) => {
+      const nextLists = Array.isArray(currentValue) ? currentValue.slice() : [];
+      const existingIndex = nextLists.findIndex((entry) => entry?.uuid === list.uuid);
+      if (existingIndex >= 0) {
+        nextLists[existingIndex] = {
+          ...nextLists[existingIndex],
+          ...list,
+        };
+        return nextLists;
+      }
+
+      return [list, ...nextLists];
+    });
+    setListImportMessage(details.statusExplained || `Imported list ${list.name || list.uuid}.`);
+    if (details.listDetail) {
+      setSelectedListId(list.uuid);
+      setSelectedListDetail(details.listDetail);
+      setListError("");
+      setRowResults({});
+      setRowAppliedIds(new Set());
+      setReviewOrg(null);
+      setPendingApplyOrg(null);
+      setSegmentAllMessage("");
+      return;
+    }
+
+    await handleSelectList(list.uuid);
   }
 
   async function segmentListRow(org) {
@@ -1226,23 +1273,27 @@ export function ResegmentationToolPage({
                     ))}
                   </Select>
                 </Box>
-                <Tooltip label="Phase 1 uses seeded backend lists. CSV/XLSX import lands in phase 2.">
-                  <Button
-                    size="sm"
-                    leftIcon={<Icon as={MdUpload} />}
-                    variant="outline"
-                    colorScheme="gray"
-                    isDisabled
-                  >
-                    Import List (Phase 2)
-                  </Button>
-                </Tooltip>
+                <Button
+                  size="sm"
+                  leftIcon={<Icon as={MdUpload} />}
+                  variant="outline"
+                  colorScheme="blue"
+                  onClick={openImport}
+                >
+                  Import List
+                </Button>
               </Flex>
 
               {listError ? (
                 <Alert status="error" borderRadius="md" mb={4}>
                   <AlertIcon />
                   {listError}
+                </Alert>
+              ) : null}
+              {listImportMessage ? (
+                <Alert status="success" borderRadius="md" mb={4}>
+                  <AlertIcon />
+                  {listImportMessage}
                 </Alert>
               ) : null}
               {segmentAllMessage ? (
@@ -1420,6 +1471,12 @@ export function ResegmentationToolPage({
           </TabPanel>
         </TabPanels>
       </Tabs>
+
+      <ResegmentationImportDrawer
+        isOpen={isImportOpen}
+        onClose={closeImport}
+        onImportedList={handleImportedList}
+      />
 
       <ApplyModal
         isOpen={isSingleApplyOpen}
