@@ -31,7 +31,7 @@ function tokenPattern(token) {
   return "";
 }
 
-function buildRegex(tokens, flags, wordBoundary) {
+function buildRegex(tokens, flags, boundaryBefore, boundaryAfter) {
   const parts = tokens
     .map((t) => {
       const base = tokenPattern(t);
@@ -42,8 +42,10 @@ function buildRegex(tokens, flags, wordBoundary) {
 
   if (!parts.length) return { pattern: "", regex: null };
 
-  let pattern = parts.join("\\s+");
-  if (wordBoundary) pattern = `\\b${pattern}\\b`;
+  // Spaces, forward slashes, and hyphens are all treated as equivalent separators
+  let pattern = parts.join("[\\s\\/\\-]+");
+  if (boundaryBefore) pattern = `\\b${pattern}`;
+  if (boundaryAfter) pattern = `${pattern}\\b`;
 
   try {
     return { pattern, regex: new RegExp(pattern, flags) };
@@ -83,34 +85,34 @@ function splitByMatches(text, regex) {
 
 function TokenPill({ token, isSelected, onClick }) {
   const isAlt = token.type === "alternation";
+  const options = isAlt ? (token.options || []).filter(Boolean) : [];
 
-  let bg, borderColor, color;
+  let bg, borderColor, color, dividerColor;
   if (isSelected) {
     bg = "purple.50";
     borderColor = "purple.400";
     color = "purple.700";
+    dividerColor = "purple.200";
   } else if (isAlt) {
     bg = "blue.50";
     borderColor = "blue.300";
     color = "blue.700";
+    dividerColor = "blue.200";
   } else {
     bg = "white";
     borderColor = "gray.300";
     color = "gray.700";
+    dividerColor = "gray.200";
   }
 
-  const displayLabel = isAlt
-    ? (token.options || []).filter(Boolean).join(" / ")
-    : token.value || "";
-
   return (
-    <Box position="relative" display="inline-flex">
+    <Box position="relative" display="inline-flex" alignItems="flex-start">
       <Box
         as="button"
         onClick={onClick}
         px={3}
-        py="5px"
-        borderRadius="full"
+        py={isAlt ? 1 : "5px"}
+        borderRadius={isAlt ? "lg" : "full"}
         border="2px solid"
         borderColor={borderColor}
         bg={bg}
@@ -120,16 +122,40 @@ function TokenPill({ token, isSelected, onClick }) {
         _hover={{ borderColor: "purple.300", shadow: "sm" }}
         fontFamily="mono"
         fontSize="sm"
-        maxW="240px"
-        overflow="hidden"
-        textOverflow="ellipsis"
-        whiteSpace="nowrap"
-        title={displayLabel}
+        textAlign="left"
         boxShadow="sm"
+        minW="60px"
+        maxW="200px"
+        title={isAlt ? options.join(" / ") : token.value}
       >
-        {displayLabel || (
-          <Box as="span" opacity={0.4}>
-            empty
+        {isAlt ? (
+          // OR block: each option on its own line with dividers
+          options.map((opt, i) => (
+            <React.Fragment key={i}>
+              {i > 0 && (
+                <Box
+                  h="1px"
+                  bg={dividerColor}
+                  mx={-3}
+                  my={1}
+                />
+              )}
+              <Text fontSize="xs" fontFamily="mono" lineHeight="short">
+                {opt}
+              </Text>
+            </React.Fragment>
+          ))
+        ) : (
+          <Box
+            overflow="hidden"
+            textOverflow="ellipsis"
+            whiteSpace="nowrap"
+          >
+            {token.value || (
+              <Box as="span" opacity={0.4}>
+                empty
+              </Box>
+            )}
           </Box>
         )}
       </Box>
@@ -165,6 +191,29 @@ function TokenPill({ token, isSelected, onClick }) {
           OR
         </Badge>
       )}
+    </Box>
+  );
+}
+
+// ─── BoundaryMarker ───────────────────────────────────────────────────────────
+
+function BoundaryMarker() {
+  return (
+    <Box
+      px={2}
+      py="3px"
+      border="2px dashed"
+      borderColor="gray.300"
+      borderRadius="md"
+      bg="gray.50"
+      fontFamily="mono"
+      fontSize="xs"
+      color="gray.500"
+      userSelect="none"
+      title="Word boundary (\b)"
+      lineHeight="short"
+    >
+      \b
     </Box>
   );
 }
@@ -335,13 +384,7 @@ function RegexTester({ regex }) {
         >
           {parts.map((part, i) =>
             part.matched ? (
-              <Box
-                key={i}
-                as="mark"
-                bg="yellow.200"
-                borderRadius="sm"
-                px="1px"
-              >
+              <Box key={i} as="mark" bg="yellow.200" borderRadius="sm" px="1px">
                 {part.text}
               </Box>
             ) : (
@@ -391,12 +434,16 @@ export function RegexBuilder({ initialPhrase = "", initialTokens = null }) {
     () => initialTokens ?? (initialPhrase ? phraseToTokens(initialPhrase) : [])
   );
   const [selectedId, setSelectedId] = useState(null);
-  const [flags, setFlags] = useState("gi");
-  const [wordBoundary, setWordBoundary] = useState(false);
+  const [caseInsensitive, setCaseInsensitive] = useState(true);
+  const [globalMatch, setGlobalMatch] = useState(true);
+  const [boundaryBefore, setBoundaryBefore] = useState(false);
+  const [boundaryAfter, setBoundaryAfter] = useState(false);
+
+  const flags = [globalMatch ? "g" : "", caseInsensitive ? "i" : ""].filter(Boolean).join("");
 
   const { pattern, regex } = useMemo(
-    () => buildRegex(tokens, flags, wordBoundary),
-    [tokens, flags, wordBoundary]
+    () => buildRegex(tokens, flags, boundaryBefore, boundaryAfter),
+    [tokens, flags, boundaryBefore, boundaryAfter]
   );
 
   const selectedToken = useMemo(
@@ -467,6 +514,9 @@ export function RegexBuilder({ initialPhrase = "", initialTokens = null }) {
         <Box {...cardProps}>
           <SectionLabel>Pattern Blocks</SectionLabel>
           <Flex align="center" flexWrap="wrap" gap={1} rowGap={4}>
+            {/* Hard stop before */}
+            {boundaryBefore && <BoundaryMarker />}
+
             <IconButton
               icon={<AddIcon boxSize={2} />}
               size="xs"
@@ -478,6 +528,7 @@ export function RegexBuilder({ initialPhrase = "", initialTokens = null }) {
               opacity={0.4}
               _hover={{ opacity: 1 }}
             />
+
             {tokens.map((token, i) => (
               <React.Fragment key={token.id}>
                 {i > 0 && (
@@ -486,7 +537,7 @@ export function RegexBuilder({ initialPhrase = "", initialTokens = null }) {
                     color="gray.300"
                     fontFamily="mono"
                     userSelect="none"
-                    title="\s+ (flexible whitespace)"
+                    title="[\s\/\-]+ (space, slash, or hyphen)"
                   >
                     ·
                   </Text>
@@ -509,6 +560,9 @@ export function RegexBuilder({ initialPhrase = "", initialTokens = null }) {
                 />
               </React.Fragment>
             ))}
+
+            {/* Hard stop after */}
+            {boundaryAfter && <BoundaryMarker />}
           </Flex>
 
           {selectedToken && (
@@ -527,7 +581,7 @@ export function RegexBuilder({ initialPhrase = "", initialTokens = null }) {
       {tokens.length > 0 && (
         <Box {...cardProps}>
           <SectionLabel>Generated Regex</SectionLabel>
-          <VStack align="stretch" spacing={2}>
+          <VStack align="stretch" spacing={3}>
             <Code
               p={3}
               borderRadius="md"
@@ -539,35 +593,55 @@ export function RegexBuilder({ initialPhrase = "", initialTokens = null }) {
             >
               /{pattern}/{flags}
             </Code>
+
+            {/* Case sensitivity */}
             <HStack justify="space-between">
-              <Checkbox
-                isChecked={wordBoundary}
-                onChange={(e) => setWordBoundary(e.target.checked)}
-                size="sm"
-              >
-                <Text fontSize="xs">Word boundaries (\b)</Text>
-              </Checkbox>
+              <Text fontSize="xs" color="gray.500" fontWeight="medium">Case</Text>
               <ButtonGroup size="xs" isAttached>
-                {["g", "i", "m"].map((f) => (
-                  <Button
-                    key={f}
-                    variant={flags.includes(f) ? "solid" : "outline"}
-                    colorScheme={flags.includes(f) ? "purple" : "gray"}
-                    fontFamily="mono"
-                    onClick={() =>
-                      setFlags((prev) => {
-                        const next = prev.includes(f)
-                          ? prev.replace(f, "")
-                          : prev + f;
-                        return next.split("").sort().join("");
-                      })
-                    }
-                  >
-                    {f}
-                  </Button>
-                ))}
+                <Button
+                  variant={!caseInsensitive ? "solid" : "outline"}
+                  colorScheme={!caseInsensitive ? "orange" : "gray"}
+                  onClick={() => setCaseInsensitive(false)}
+                >
+                  Aa Sensitive
+                </Button>
+                <Button
+                  variant={caseInsensitive ? "solid" : "outline"}
+                  colorScheme={caseInsensitive ? "purple" : "gray"}
+                  onClick={() => setCaseInsensitive(true)}
+                >
+                  aa Insensitive
+                </Button>
               </ButtonGroup>
             </HStack>
+
+            {/* Word boundaries and global flag */}
+            <HStack justify="space-between">
+              <HStack spacing={4}>
+                <Checkbox
+                  isChecked={boundaryBefore}
+                  onChange={(e) => setBoundaryBefore(e.target.checked)}
+                  size="sm"
+                >
+                  <Text fontSize="xs">\b before</Text>
+                </Checkbox>
+                <Checkbox
+                  isChecked={boundaryAfter}
+                  onChange={(e) => setBoundaryAfter(e.target.checked)}
+                  size="sm"
+                >
+                  <Text fontSize="xs">\b after</Text>
+                </Checkbox>
+              </HStack>
+              <Checkbox
+                isChecked={globalMatch}
+                onChange={(e) => setGlobalMatch(e.target.checked)}
+                size="sm"
+              >
+                <Text fontSize="xs">Global (g)</Text>
+              </Checkbox>
+            </HStack>
+
             {!regex && pattern && (
               <Text fontSize="xs" color="red.500">
                 Invalid pattern — check for empty alternations or unbalanced groups
