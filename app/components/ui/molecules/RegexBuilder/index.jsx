@@ -25,7 +25,7 @@ const uid = () => Math.random().toString(36).slice(2, 8);
 
 // Replace unescaped * with [A-Za-z]+.
 function applyWildcard(s) {
-  return (s || "").split("*").map(esc).join("[A-Za-z]+");
+  return (s || "").split("*").map(esc).join("[A-Za-z]*");
 }
 
 // Expand alpha chars in an already-escaped string to [aA] form so a single
