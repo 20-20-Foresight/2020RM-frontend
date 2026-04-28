@@ -195,6 +195,7 @@ export function ResegmentationToolPage({
   const [isSegmentingSingle, setIsSegmentingSingle] = useState(false);
   const [singleApplied, setSingleApplied] = useState(false);
   const [singleAppliedMessage, setSingleAppliedMessage] = useState("");
+  const [hasSinglePreviewed, setHasSinglePreviewed] = useState(false);
 
   const [lists, setLists] = useState(Array.isArray(initialLists) ? initialLists : []);
   const [listError, setListError] = useState(initialError || "");
@@ -264,11 +265,23 @@ export function ResegmentationToolPage({
   }, [singleQuery, selectedOrganization?.summary?.name]);
 
   const resultCurrentSummary = normalizeSegmentationVisualSummary(singleResult?.current);
+  const singleProposedSummary = normalizeSegmentationVisualSummary(singleResult?.proposed);
+  const hasSingleProposedSummary = hasVisibleSegmentationSummary(singleProposedSummary);
   const selectedCurrentSummary = singleApplied
     ? buildRecordSegmentationSummary(selectedOrganization?.record || null)
     : hasVisibleSegmentationSummary(resultCurrentSummary)
       ? resultCurrentSummary
       : buildRecordSegmentationSummary(selectedOrganization?.record || null);
+  const singleEmptyPreviewWarning = hasSinglePreviewed && !hasSingleProposedSummary
+    ? "Not enough data exists to segment this organization."
+    : "";
+  const singleApplyTooltipLabel = !selectedOrganization?.summary?.uuid
+    ? "Select an organization first"
+    : !hasSinglePreviewed
+      ? "Run segmentation first"
+      : !hasSingleProposedSummary
+        ? "No segmentation is available to apply."
+        : "";
 
   const selectedListRows = buildSelectedListRows(selectedListDetail);
 
@@ -286,6 +299,7 @@ export function ResegmentationToolPage({
     setSingleApplied(false);
     setSingleAppliedMessage("");
     setSingleResultMessage("");
+    setHasSinglePreviewed(false);
     setIsLoadingOrganization(true);
 
     try {
@@ -316,6 +330,7 @@ export function ResegmentationToolPage({
     setSingleAppliedMessage("");
     setSingleResultMessage("");
     setSelectedOrganizationError("");
+    setHasSinglePreviewed(false);
 
     try {
       const payload = await postResegmentationAction("segmentOrganization", {
@@ -325,6 +340,7 @@ export function ResegmentationToolPage({
       });
       setSingleResult(payload.resegmentation || null);
       setSingleResultMessage(payload.statusExplained || "");
+      setHasSinglePreviewed(true);
     } catch (error) {
       setSelectedOrganizationError(
         error instanceof Error ? error.message : "Unable to preview resegmentation."
@@ -560,6 +576,7 @@ export function ResegmentationToolPage({
                       setSingleApplied(false);
                       setSingleAppliedMessage("");
                       setSingleResultMessage("");
+                      setHasSinglePreviewed(false);
                       setSelectedOrganizationError("");
                     }
                   }}
@@ -671,15 +688,12 @@ export function ResegmentationToolPage({
                     >
                       Segment Now
                     </Button>
-                    <Tooltip
-                      label={!singleResult ? "Run segmentation first" : ""}
-                      isDisabled={!!singleResult}
-                    >
+                    <Tooltip label={singleApplyTooltipLabel} isDisabled={!singleApplyTooltipLabel}>
                       <Button
                         size="sm"
                         colorScheme={singleApplied ? "green" : "blue"}
                         leftIcon={singleApplied ? <MdCheck /> : undefined}
-                        isDisabled={!singleResult}
+                        isDisabled={!hasSingleProposedSummary}
                         onClick={openSingleApply}
                       >
                         {singleApplied ? "Applied" : "Apply"}
@@ -694,13 +708,19 @@ export function ResegmentationToolPage({
                     {selectedOrganizationError}
                   </Alert>
                 ) : null}
+                {!selectedOrganizationError && singleEmptyPreviewWarning ? (
+                  <Alert status="warning" borderRadius="md" mb={4}>
+                    <AlertIcon />
+                    {singleEmptyPreviewWarning}
+                  </Alert>
+                ) : null}
                 {singleAppliedMessage ? (
                   <Alert status="success" borderRadius="md" mb={4}>
                     <AlertIcon />
                     {singleAppliedMessage}
                   </Alert>
                 ) : null}
-                {!singleAppliedMessage && singleResultMessage ? (
+                {!singleAppliedMessage && !singleEmptyPreviewWarning && singleResultMessage ? (
                   <Alert status="info" borderRadius="md" mb={4}>
                     <AlertIcon />
                     {singleResultMessage}
@@ -711,6 +731,12 @@ export function ResegmentationToolPage({
                   current={selectedCurrentSummary}
                   proposed={singleResult?.proposed || null}
                   loading={isLoadingOrganization || isSegmentingSingle}
+                  alwaysShow
+                  emptyProposedMessage={
+                    hasSinglePreviewed
+                      ? "No segmentation was generated for this organization."
+                      : "Run segmentation to preview the proposed updates."
+                  }
                 />
                 <ExplanationTable
                   explanations={singleResult?.explanations}

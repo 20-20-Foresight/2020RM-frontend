@@ -50,25 +50,29 @@ function SegmentationChip({ value }) {
 /**
  * Renders one labeled segmentation group.
  * @param {{label: string, values: string[]}} props
- * @returns {JSX.Element|null}
+ * @returns {JSX.Element}
  */
 function SegmentationGroup({ label, values }) {
-  if (!Array.isArray(values) || !values.length) {
-    return null;
-  }
+  const hasValues = Array.isArray(values) && values.length;
 
   return (
     <Box>
       <Text fontWeight="semibold" color="gray.800">
         {label}
       </Text>
-      <Wrap spacing={2} mt={2}>
-        {values.map((value) => (
-          <WrapItem key={`${label}-${value}`}>
-            <SegmentationChip value={value} />
-          </WrapItem>
-        ))}
-      </Wrap>
+      {hasValues ? (
+        <Wrap spacing={2} mt={2}>
+          {values.map((value) => (
+            <WrapItem key={`${label}-${value}`}>
+              <SegmentationChip value={value} />
+            </WrapItem>
+          ))}
+        </Wrap>
+      ) : (
+        <Text color="gray.500" fontSize="sm" mt={2}>
+          No entries
+        </Text>
+      )}
     </Box>
   );
 }
@@ -85,15 +89,15 @@ function formatExplanationCell(value) {
 /**
  * Renders one organization segmentation section and explanation modal.
  * @param {{record: object|null}} props
- * @returns {JSX.Element|null}
+ * @returns {JSX.Element}
  */
 export function OrganizationSegmentationSection({ record }) {
-  const segmentation = buildOrganizationSegmentationViewModel(record);
+  const segmentation = buildOrganizationSegmentationViewModel(record) || {
+    industries: [],
+    focuses: [],
+    explanations: []
+  };
   const { isOpen, onOpen, onClose } = useDisclosure();
-
-  if (!segmentation) {
-    return null;
-  }
 
   return (
     <Box borderWidth="1px" borderColor="gray.200" borderRadius="md" p={5}>
@@ -106,9 +110,11 @@ export function OrganizationSegmentationSection({ record }) {
           <SegmentationGroup label="Industries" values={segmentation.industries} />
           <SegmentationGroup label="Focuses" values={segmentation.focuses} />
         </SimpleGrid>
-        <Button variant="link" alignSelf="flex-start" colorScheme="blue" size="sm" onClick={onOpen}>
-          explain
-        </Button>
+        {segmentation.explanations.length ? (
+          <Button variant="link" alignSelf="flex-start" colorScheme="blue" size="sm" onClick={onOpen}>
+            explain
+          </Button>
+        ) : null}
       </VStack>
 
       <Modal isOpen={isOpen} onClose={onClose} size="6xl" scrollBehavior="inside">

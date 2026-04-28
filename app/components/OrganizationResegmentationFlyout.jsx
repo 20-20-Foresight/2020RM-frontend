@@ -67,6 +67,7 @@ export function OrganizationResegmentationFlyout({
   const [isSegmenting, setIsSegmenting] = useState(false);
   const [isApplied, setIsApplied] = useState(false);
   const [appliedMessage, setAppliedMessage] = useState("");
+  const [hasPreviewed, setHasPreviewed] = useState(false);
   const { isOpen: isApplyOpen, onOpen: openApply, onClose: closeApply } = useDisclosure();
 
   useEffect(() => {
@@ -76,15 +77,28 @@ export function OrganizationResegmentationFlyout({
     setIsSegmenting(false);
     setIsApplied(false);
     setAppliedMessage("");
+    setHasPreviewed(false);
   }, [organizationUUID]);
 
   const resultCurrentSummary = normalizeSegmentationVisualSummary(result?.current);
+  const proposedSummary = normalizeSegmentationVisualSummary(result?.proposed);
+  const hasProposedSummary = hasVisibleSegmentationSummary(proposedSummary);
   const currentSummary = isApplied
     ? buildRecordSegmentationSummary(record)
     : hasVisibleSegmentationSummary(resultCurrentSummary)
       ? resultCurrentSummary
       : buildRecordSegmentationSummary(record);
   const isReady = Boolean(organizationUUID);
+  const emptyPreviewWarning = hasPreviewed && !hasProposedSummary
+    ? "Not enough data exists to segment this organization."
+    : "";
+  const applyTooltipLabel = !isReady
+    ? "Organization details are incomplete."
+    : !hasPreviewed
+      ? "Run segmentation first"
+      : !hasProposedSummary
+        ? "No segmentation is available to apply."
+        : "";
 
   async function handleSegment() {
     if (!isReady) {
@@ -97,6 +111,7 @@ export function OrganizationResegmentationFlyout({
     setAppliedMessage("");
     setResultMessage("");
     setError("");
+    setHasPreviewed(false);
 
     try {
       const payload = await postResegmentationAction("segmentOrganization", {
@@ -106,6 +121,7 @@ export function OrganizationResegmentationFlyout({
       });
       setResult(payload.resegmentation || null);
       setResultMessage(payload.statusExplained || "");
+      setHasPreviewed(true);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Unable to preview resegmentation.");
     } finally {
@@ -174,13 +190,19 @@ export function OrganizationResegmentationFlyout({
                 {error}
               </Alert>
             ) : null}
+            {!error && emptyPreviewWarning ? (
+              <Alert status="warning" borderRadius="md" mb={5}>
+                <AlertIcon />
+                {emptyPreviewWarning}
+              </Alert>
+            ) : null}
             {appliedMessage ? (
               <Alert status="success" borderRadius="md" mb={5}>
                 <AlertIcon />
                 {appliedMessage}
               </Alert>
             ) : null}
-            {!appliedMessage && resultMessage ? (
+            {!appliedMessage && !emptyPreviewWarning && resultMessage ? (
               <Alert status="info" borderRadius="md" mb={5}>
                 <AlertIcon />
                 {resultMessage}
@@ -191,6 +213,12 @@ export function OrganizationResegmentationFlyout({
               current={currentSummary}
               proposed={result?.proposed || null}
               loading={isSegmenting}
+              alwaysShow
+              emptyProposedMessage={
+                hasPreviewed
+                  ? "No segmentation was generated for this organization."
+                  : "Run segmentation to preview the proposed updates."
+              }
             />
             <ExplanationTable explanations={result?.explanations} loading={isSegmenting} />
           </DrawerBody>
@@ -207,12 +235,12 @@ export function OrganizationResegmentationFlyout({
             >
               Segment Now
             </Button>
-            <Tooltip label={!result ? "Run segmentation first" : ""} isDisabled={!!result}>
+            <Tooltip label={applyTooltipLabel} isDisabled={!applyTooltipLabel}>
               <Button
                 size="sm"
                 colorScheme={isApplied ? "green" : "blue"}
                 leftIcon={isApplied ? <MdCheck /> : undefined}
-                isDisabled={!result || !isReady}
+                isDisabled={!isReady || !hasProposedSummary}
                 onClick={openApply}
               >
                 {isApplied ? "Applied" : "Apply"}
