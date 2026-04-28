@@ -546,13 +546,12 @@ function ImportRowsTable({
       <Table size="sm">
         <Thead>
           <Tr>
-            <Th position="sticky" top={0} zIndex={1} bg={headerBackground}>Row</Th>
+            <Th position="sticky" top={0} zIndex={1} bg={headerBackground}>Status</Th>
             {visibleDefinitions.map((definition) => (
               <Th key={definition.key} position="sticky" top={0} zIndex={1} bg={headerBackground}>
                 {definition.label}
               </Th>
             ))}
-            <Th position="sticky" top={0} zIndex={1} bg={headerBackground}>Status</Th>
             <Th position="sticky" top={0} zIndex={1} bg={headerBackground}>Extras</Th>
           </Tr>
         </Thead>
@@ -569,14 +568,6 @@ function ImportRowsTable({
 
             return (
               <Tr key={row.rowNumber}>
-                <Td>{row.rowNumber}</Td>
-                {visibleDefinitions.map((definition) => (
-                  <Td key={`${row.rowNumber}-${definition.key}`}>
-                    <Text fontSize="sm">
-                      {row.values?.[definition.key] ? String(row.values[definition.key]) : "—"}
-                    </Text>
-                  </Td>
-                ))}
                 <Td>
                   <Stack spacing={1}>
                     <StatusTag status={status} />
@@ -587,6 +578,13 @@ function ImportRowsTable({
                     ))}
                   </Stack>
                 </Td>
+                {visibleDefinitions.map((definition) => (
+                  <Td key={`${row.rowNumber}-${definition.key}`}>
+                    <Text fontSize="sm">
+                      {row.values?.[definition.key] ? String(row.values[definition.key]) : "—"}
+                    </Text>
+                  </Td>
+                ))}
                 <Td>
                   {Object.keys(row.extraValues || {}).length ? (
                     <Tooltip
