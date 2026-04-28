@@ -36,7 +36,7 @@ import {
 } from "@chakra-ui/react";
 import { EditIcon, SearchIcon } from "@chakra-ui/icons";
 import { useLocation } from "@remix-run/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MdDescription } from "react-icons/md";
 import {
   applyBulkRemap,
@@ -377,6 +377,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
   const [editingRowIndex, setEditingRowIndex] = useState(null);
   const [draftRow, setDraftRow] = useState(() => buildEmptySegmentationRow(categoryDepth, defaultBranchFieldNames));
   const [bulkRemapDraft, setBulkRemapDraft] = useState(() => buildEmptyBulkRemapDraft());
+  const documentIdRef = useRef(readTrimmedString(data.id));
   const {
     isOpen: isRowModalOpen,
     onOpen: openRowModal,
@@ -428,6 +429,12 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
   const warningRowBg = "orange.50";
 
   useEffect(() => {
+    const nextDocumentId = readTrimmedString(data.id);
+    if (documentIdRef.current === nextDocumentId) {
+      return;
+    }
+
+    documentIdRef.current = nextDocumentId;
     setMetadata(isPlainObject(data.metadata) ? { ...data.metadata } : {});
     setDescription(data.description || "");
     setEditorConfig(
@@ -444,7 +451,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
     setDraftFilters({});
     setOpenFilterKeys({});
     setBulkRemapDraft(buildEmptyBulkRemapDraft());
-  }, [categoryDepth, data.description, data.editorType, data.id, data.version]);
+  }, [categoryDepth, data.description, data.editorType, data.id]);
 
   const taxonomyOptions = buildTaxonomyOptions(data.categoryCatalog, rows);
   const filteredRows = rows.filter((row) => rowMatchesFilters(row, filters, taxonomyOptions));

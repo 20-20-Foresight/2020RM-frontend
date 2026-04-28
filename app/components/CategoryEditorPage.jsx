@@ -23,6 +23,7 @@ import { InlineSaveStatus } from "./InlineSaveStatus";
 import { useQueuedDocumentSave } from "../hooks/useQueuedDocumentSave";
 import { useRowSaveHighlight } from "../hooks/useRowSaveHighlight";
 import { CategoryEditorCard } from "./ui/organisms/CategoryEditorCard";
+import { applyLockedDimensionId, resolveLockedDimensionId } from "../models/category-editor-page.mjs";
 
 /**
  * Reads a trimmed string.
@@ -152,7 +153,17 @@ export function CategoryEditorPage({ data, actionData }) {
   const [editingRowKey, setEditingRowKey] = useState("");
   const [draftRow, setDraftRow] = useState(null);
   const [isDraftNew, setIsDraftNew] = useState(false);
-  const defaultDimensionIdRef = useRef(readTrimmedString(data.dimensionCatalog?.[0]?.id));
+  const documentIdRef = useRef(readTrimmedString(data.id));
+  const lockedDimensionId = useMemo(
+    () =>
+      resolveLockedDimensionId({
+        documentName: data.name,
+        metadataName: data.metadata?.name,
+        dimensionCatalog: data.dimensionCatalog
+      }),
+    [data.dimensionCatalog, data.metadata?.name, data.name]
+  );
+  const defaultDimensionIdRef = useRef(lockedDimensionId || readTrimmedString(data.dimensionCatalog?.[0]?.id));
   const {
     saveSummary,
     isSaving: isQueuedSaving,
@@ -182,13 +193,23 @@ export function CategoryEditorPage({ data, actionData }) {
   });
 
   useEffect(() => {
+    defaultDimensionIdRef.current = lockedDimensionId || readTrimmedString(data.dimensionCatalog?.[0]?.id);
+  }, [data.dimensionCatalog, lockedDimensionId]);
+
+  useEffect(() => {
+    const nextDocumentId = readTrimmedString(data.id);
+    if (documentIdRef.current === nextDocumentId) {
+      return;
+    }
+
+    documentIdRef.current = nextDocumentId;
     setMetadata(data.metadata && typeof data.metadata === "object" ? { ...data.metadata } : {});
     setDescription(data.description || "");
     setRows(cloneRows(data.categoryEditor?.rows));
     setEditingRowKey("");
     setDraftRow(null);
     setIsDraftNew(false);
-  }, [data.categoryEditor?.rows, data.description, data.id, data.metadata, data.version]);
+  }, [data.categoryEditor?.rows, data.description, data.id, data.metadata]);
 
   const dimensionOptions = useMemo(
     () =>
@@ -240,7 +261,7 @@ export function CategoryEditorPage({ data, actionData }) {
     }
 
     setEditingRowKey(rowKey);
-    setDraftRow(cloneRows([matchedRow])[0] || buildEmptyRow(defaultDimensionIdRef.current));
+    setDraftRow(applyLockedDimensionId(cloneRows([matchedRow])[0] || buildEmptyRow(defaultDimensionIdRef.current), lockedDimensionId));
     setIsDraftNew(false);
   }
 
@@ -248,7 +269,7 @@ export function CategoryEditorPage({ data, actionData }) {
    * Opens one unsaved row at the top of the list.
    */
   function startAddingRow() {
-    const nextDraft = buildEmptyRow(defaultDimensionIdRef.current);
+    const nextDraft = applyLockedDimensionId(buildEmptyRow(defaultDimensionIdRef.current), lockedDimensionId);
     setEditingRowKey(nextDraft.__clientKey);
     setDraftRow(nextDraft);
     setIsDraftNew(true);
@@ -280,7 +301,7 @@ export function CategoryEditorPage({ data, actionData }) {
       return;
     }
 
-    const nextRow = cloneRows([draftRow])[0];
+    const nextRow = applyLockedDimensionId(cloneRows([draftRow])[0], lockedDimensionId);
     const nextRows = isDraftNew
       ? [nextRow, ...rows]
       : rows.map((row) => (row.__clientKey === editingRowKey ? nextRow : row));
@@ -377,6 +398,7 @@ export function CategoryEditorPage({ data, actionData }) {
                 isEditing
                 supportsPreference={Boolean(data.categoryEditor?.supportsPreference)}
                 dimensionOptions={dimensionOptions}
+                showDimensionField={!lockedDimensionId}
                 onDraftChange={updateDraftField}
                 onSave={saveDraftRow}
                 onCancel={cancelEditing}
@@ -396,6 +418,7 @@ export function CategoryEditorPage({ data, actionData }) {
                     descriptionHtml={row.description}
                     examplesText={row.examplesText}
                     dimensionOptions={dimensionOptions}
+                    showDimensionField={!lockedDimensionId}
                     highlightState={rowHighlightStateByKey[row.__clientKey]}
                     isEditing={Boolean(isEditing)}
                     supportsPreference={Boolean(data.categoryEditor?.supportsPreference)}
