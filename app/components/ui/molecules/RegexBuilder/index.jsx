@@ -14,6 +14,7 @@ import {
   Checkbox,
   ButtonGroup,
   Collapse,
+  Tooltip,
 } from "@chakra-ui/react";
 import { AddIcon, DeleteIcon, ChevronDownIcon, ChevronUpIcon } from "@chakra-ui/icons";
 
@@ -22,25 +23,22 @@ import { AddIcon, DeleteIcon, ChevronDownIcon, ChevronUpIcon } from "@chakra-ui/
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const uid = () => Math.random().toString(36).slice(2, 8);
 
-// Replace unescaped * (user wildcard) with [A-Za-z]+.
-// Split on *, escape each literal segment, rejoin with the character class.
+// Replace unescaped * with [A-Za-z]+.
 function applyWildcard(s) {
   return (s || "").split("*").map(esc).join("[A-Za-z]+");
 }
 
-// Expand alpha chars in an already-escaped string to [aA] form so individual
-// tokens can be case-insensitive without applying the global /i flag.
+// Expand alpha chars in an already-escaped string to [aA] form so a single
+// token can be case-insensitive when the global /i flag isn't available.
 function expandCaseInsensitive(escaped) {
   let result = "";
   let i = 0;
   while (i < escaped.length) {
     const c = escaped[i];
     if (c === "\\") {
-      // Escaped sequence — pass both chars through unchanged
       result += escaped[i] + (escaped[i + 1] || "");
       i += 2;
     } else if (c === "[") {
-      // Character class — pass through to its closing ]
       const end = escaped.indexOf("]", i);
       if (end === -1) { result += escaped.slice(i); break; }
       result += escaped.slice(i, end + 1);
@@ -56,18 +54,45 @@ function expandCaseInsensitive(escaped) {
   return result;
 }
 
-// Process a single string value: handle wildcard, then optionally expand case.
-function processValue(v, needsCaseExpansion) {
-  const escaped = applyWildcard(v);
-  return needsCaseExpansion ? expandCaseInsensitive(escaped) : escaped;
+// Parse user input for (optional) groups.
+// "Fish(es)" → [{optional:false, value:"Fish"}, {optional:true, value:"es"}]
+function parseUserInput(s) {
+  const segments = [];
+  let i = 0;
+  let current = "";
+  while (i < s.length) {
+    if (s[i] === "(") {
+      if (current) segments.push({ optional: false, value: current });
+      current = "";
+      i++;
+      let inner = "";
+      while (i < s.length && s[i] !== ")") { inner += s[i]; i++; }
+      if (i < s.length) i++; // consume closing )
+      segments.push({ optional: true, value: inner });
+    } else {
+      current += s[i];
+      i++;
+    }
+  }
+  if (current) segments.push({ optional: false, value: current });
+  return segments;
 }
 
-// Build the regex fragment for one token, including optional wrapping and
-// per-token word boundaries.
+// Process a single string value: parse (optional) groups, handle * wildcard,
+// escape, then optionally expand for case-insensitive matching.
+function processValue(v, needsCaseExpansion) {
+  const segments = parseUserInput(v || "");
+  return segments
+    .map(({ optional, value }) => {
+      const escaped = applyWildcard(value);
+      const pattern = needsCaseExpansion ? expandCaseInsensitive(escaped) : escaped;
+      return optional ? `(?:${pattern})?` : pattern;
+    })
+    .join("");
+}
+
+// Build the regex fragment for one token.
 function buildTokenEntry(token, useGlobalI) {
-  // A token needs per-char case expansion when it wants case-insensitive
-  // matching but the global /i flag is not being used (i.e. another token
-  // in the pattern is case-sensitive).
   const needsCaseExpansion = !useGlobalI && token.caseInsensitive !== false;
 
   let base;
@@ -85,16 +110,12 @@ function buildTokenEntry(token, useGlobalI) {
 
   if (!base) return "";
   if (token.optional) base = `(?:${base})?`;
-  if (token.boundaryBefore) base = `\\b${base}`;
-  if (token.boundaryAfter) base = `${base}\\b`;
   return base;
 }
 
-function buildRegex(tokens) {
+function buildRegex(tokens, anchorStart, anchorEnd) {
   if (!tokens.length) return { pattern: "", regex: null, flags: "g" };
 
-  // Use global /i only when every token is case-insensitive — otherwise each
-  // case-insensitive token gets expanded inline to [aA] form.
   const allCaseInsensitive = tokens.every((t) => t.caseInsensitive !== false);
   const flags = allCaseInsensitive ? "gi" : "g";
 
@@ -104,7 +125,9 @@ function buildRegex(tokens) {
 
   if (!parts.length) return { pattern: "", regex: null, flags };
 
-  const pattern = parts.join("[\\s\\/\\-]+");
+  let pattern = parts.join("[\\s\\/\\-]+");
+  if (anchorStart) pattern = `^${pattern}`;
+  if (anchorEnd) pattern = `${pattern}$`;
 
   try {
     return { pattern, regex: new RegExp(pattern, flags), flags };
@@ -120,8 +143,6 @@ function makeToken(value = "") {
     value,
     optional: false,
     caseInsensitive: true,
-    boundaryBefore: false,
-    boundaryAfter: false,
   };
 }
 
@@ -148,25 +169,33 @@ function splitByMatches(text, regex) {
   return parts.length ? parts : [{ text, matched: false }];
 }
 
-// ─── BoundaryStop ─────────────────────────────────────────────────────────────
+// ─── AnchorToggle ─────────────────────────────────────────────────────────────
 
-function BoundaryStop() {
+function AnchorToggle({ symbol, active, label, onClick }) {
   return (
-    <Box
-      w="14px"
-      h="14px"
-      borderRadius="full"
-      bg="red.500"
-      flexShrink={0}
-      display="flex"
-      alignItems="center"
-      justifyContent="center"
-      title="Word boundary (hard stop)"
-    >
-      <Text as="span" fontSize="8px" color="white" fontWeight="black" lineHeight={1}>
-        ✕
-      </Text>
-    </Box>
+    <Tooltip label={label} placement="top" hasArrow openDelay={300}>
+      <Box
+        as="button"
+        onClick={onClick}
+        px={2}
+        py="4px"
+        fontFamily="mono"
+        fontSize="sm"
+        fontWeight="bold"
+        color={active ? "teal.700" : "gray.300"}
+        border="1px dashed"
+        borderColor={active ? "teal.400" : "gray.200"}
+        bg={active ? "teal.50" : "transparent"}
+        borderRadius="md"
+        cursor="pointer"
+        transition="all 0.12s"
+        _hover={{ borderColor: "teal.300", color: "teal.500" }}
+        lineHeight={1}
+        flexShrink={0}
+      >
+        {symbol}
+      </Box>
+    </Tooltip>
   );
 }
 
@@ -223,7 +252,6 @@ function TokenPill({ token, isSelected, onClick }) {
         )}
       </Box>
 
-      {/* Case-sensitive badge — only shown when deviating from the default */}
       {isCaseSensitive && (
         <Badge
           position="absolute" top="-9px" left="50%" transform="translateX(-50%)"
@@ -265,8 +293,6 @@ function TokenEditor({ token, onUpdate, onDelete, onClose }) {
   );
   const [optional, setOptional] = useState(token.optional || false);
   const [caseInsensitive, setCaseInsensitive] = useState(token.caseInsensitive !== false);
-  const [boundaryBefore, setBoundaryBefore] = useState(token.boundaryBefore || false);
-  const [boundaryAfter, setBoundaryAfter] = useState(token.boundaryAfter || false);
   const taRef = useRef(null);
 
   useEffect(() => {
@@ -284,7 +310,7 @@ function TokenEditor({ token, onUpdate, onDelete, onClose }) {
   const save = () => {
     const rawLines = text.split("\n").map((l) => l.trim()).filter(Boolean);
     if (rawLines.length === 0) { onDelete(); return; }
-    const base = { ...token, optional, caseInsensitive, boundaryBefore, boundaryAfter };
+    const base = { ...token, optional, caseInsensitive };
     if (rawLines.length === 1) {
       onUpdate({ ...base, type: "literal", value: rawLines[0], options: undefined });
     } else {
@@ -322,7 +348,7 @@ function TokenEditor({ token, onUpdate, onDelete, onClose }) {
           fontSize="sm"
           rows={Math.min(Math.max(linesArr.length, 1), 8)}
           resize="none"
-          placeholder="type text… (use * as a wildcard)"
+          placeholder="type text… · use * as wildcard · wrap optional part in (parens)"
           bg="white"
           borderColor={isMulti ? "blue.300" : "gray.200"}
           _focus={{ borderColor: isMulti ? "blue.400" : "purple.400", boxShadow: "none" }}
@@ -336,7 +362,6 @@ function TokenEditor({ token, onUpdate, onDelete, onClose }) {
           </HStack>
         )}
 
-        {/* Case sensitivity */}
         <HStack justify="space-between" align="center">
           <Text fontSize="xs" color="gray.500" fontWeight="medium">Case</Text>
           <ButtonGroup size="xs" isAttached>
@@ -357,19 +382,10 @@ function TokenEditor({ token, onUpdate, onDelete, onClose }) {
           </ButtonGroup>
         </HStack>
 
-        {/* Optional + stops */}
         <HStack justify="space-between">
-          <HStack spacing={4} flexWrap="wrap">
-            <Checkbox isChecked={optional} onChange={(e) => setOptional(e.target.checked)} size="sm" colorScheme="green">
-              <Text fontSize="xs">Optional</Text>
-            </Checkbox>
-            <Checkbox isChecked={boundaryBefore} onChange={(e) => setBoundaryBefore(e.target.checked)} size="sm" colorScheme="red">
-              <Text fontSize="xs">Stop before</Text>
-            </Checkbox>
-            <Checkbox isChecked={boundaryAfter} onChange={(e) => setBoundaryAfter(e.target.checked)} size="sm" colorScheme="red">
-              <Text fontSize="xs">Stop after</Text>
-            </Checkbox>
-          </HStack>
+          <Checkbox isChecked={optional} onChange={(e) => setOptional(e.target.checked)} size="sm" colorScheme="green">
+            <Text fontSize="xs">Optional</Text>
+          </Checkbox>
           <HStack>
             <IconButton icon={<DeleteIcon />} size="xs" colorScheme="red" variant="ghost" onClick={onDelete} aria-label="Delete" />
             <Button size="xs" colorScheme="purple" onClick={save}>Save</Button>
@@ -394,9 +410,7 @@ function RegexTester({ regex }) {
           value={testText}
           onChange={(e) => setTestText(e.target.value)}
           placeholder="Type a test sentence..."
-          fontFamily="mono"
-          fontSize="sm"
-          size="sm"
+          fontFamily="mono" fontSize="sm" size="sm"
         />
         {testText && (
           <Badge flexShrink={0} colorScheme={matchCount > 0 ? "green" : "red"} fontSize="xs">
@@ -404,7 +418,6 @@ function RegexTester({ regex }) {
           </Badge>
         )}
       </HStack>
-
       {testText && (
         <Box
           bg="gray.50" border="1px solid" borderColor="gray.200" borderRadius="md"
@@ -441,7 +454,7 @@ function SectionLabel({ children }) {
  * Interactive regex visualizer and builder.
  * @param {{
  *   initialPhrase?: string,
- *   initialTokens?: Array<{id:string, type:"literal"|"alternation", value?:string, options?:string[], optional:boolean, caseInsensitive?:boolean, boundaryBefore?:boolean, boundaryAfter?:boolean}>
+ *   initialTokens?: Array<{id:string, type:"literal"|"alternation", value?:string, options?:string[], optional:boolean, caseInsensitive?:boolean}>
  * }} props
  */
 export function RegexBuilder({ initialPhrase = "", initialTokens = null }) {
@@ -450,9 +463,14 @@ export function RegexBuilder({ initialPhrase = "", initialTokens = null }) {
     () => initialTokens ?? (initialPhrase ? phraseToTokens(initialPhrase) : [])
   );
   const [selectedId, setSelectedId] = useState(null);
+  const [anchorStart, setAnchorStart] = useState(false);
+  const [anchorEnd, setAnchorEnd] = useState(false);
   const [showRegex, setShowRegex] = useState(false);
 
-  const { pattern, regex, flags } = useMemo(() => buildRegex(tokens), [tokens]);
+  const { pattern, regex, flags } = useMemo(
+    () => buildRegex(tokens, anchorStart, anchorEnd),
+    [tokens, anchorStart, anchorEnd]
+  );
 
   const selectedToken = useMemo(
     () => tokens.find((t) => t.id === selectedId) ?? null,
@@ -513,27 +531,32 @@ export function RegexBuilder({ initialPhrase = "", initialTokens = null }) {
         <Box {...cardProps}>
           <SectionLabel>Pattern Blocks</SectionLabel>
           <Flex align="center" flexWrap="wrap" gap={1} rowGap={5}>
+
+            {/* Start anchor toggle — left edge of the pattern */}
+            <AnchorToggle
+              symbol="^"
+              active={anchorStart}
+              label={anchorStart ? "Must start with — click to remove" : "Must start with"}
+              onClick={() => setAnchorStart((v) => !v)}
+            />
+
             <IconButton
               icon={<AddIcon boxSize={2} />} size="xs" variant="ghost" colorScheme="purple"
               borderRadius="full" aria-label="Prepend block" onClick={() => handleAddToken(-1)}
               opacity={0.4} _hover={{ opacity: 1 }}
             />
+
             {tokens.map((token, i) => (
               <React.Fragment key={token.id}>
                 {i > 0 && (
                   <Text fontSize="xs" color="gray.300" fontFamily="mono" userSelect="none"
                     title="[\s\/\-]+ (space, slash, or hyphen)">·</Text>
                 )}
-                {/* Boundary stop markers flank the pill */}
-                <HStack spacing="3px" align="center">
-                  {token.boundaryBefore && <BoundaryStop />}
-                  <TokenPill
-                    token={token}
-                    isSelected={token.id === selectedId}
-                    onClick={() => setSelectedId((p) => (p === token.id ? null : token.id))}
-                  />
-                  {token.boundaryAfter && <BoundaryStop />}
-                </HStack>
+                <TokenPill
+                  token={token}
+                  isSelected={token.id === selectedId}
+                  onClick={() => setSelectedId((p) => (p === token.id ? null : token.id))}
+                />
                 <IconButton
                   icon={<AddIcon boxSize={2} />} size="xs" variant="ghost" colorScheme="purple"
                   borderRadius="full" aria-label="Add block after" onClick={() => handleAddToken(i)}
@@ -541,6 +564,15 @@ export function RegexBuilder({ initialPhrase = "", initialTokens = null }) {
                 />
               </React.Fragment>
             ))}
+
+            {/* End anchor toggle — right edge of the pattern */}
+            <AnchorToggle
+              symbol="$"
+              active={anchorEnd}
+              label={anchorEnd ? "Must end with — click to remove" : "Must end with"}
+              onClick={() => setAnchorEnd((v) => !v)}
+            />
+
           </Flex>
 
           {selectedToken && (
