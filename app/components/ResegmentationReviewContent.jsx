@@ -70,11 +70,19 @@ export function SegmentTagList({ items, colorScheme = "blue" }) {
  * @param {{
  *   current?: {industry?: string[], focus?: string[]}|null,
  *   proposed?: {industry?: string[], focus?: string[]}|null,
- *   loading?: boolean
+ *   loading?: boolean,
+ *   alwaysShow?: boolean,
+ *   emptyProposedMessage?: string
  * }} props
  * @returns {JSX.Element|null}
  */
-export function SegmentCompare({ current, proposed, loading = false }) {
+export function SegmentCompare({
+  current,
+  proposed,
+  loading = false,
+  alwaysShow = false,
+  emptyProposedMessage = "Run segmentation to preview the proposed updates."
+}) {
   const panelBg = useColorModeValue("gray.50", "gray.700");
   const newBg = useColorModeValue("green.50", "green.900");
   const currentSummary = normalizeSegmentationVisualSummary(current);
@@ -103,6 +111,7 @@ export function SegmentCompare({ current, proposed, loading = false }) {
   }
 
   if (
+    !alwaysShow &&
     !currentSummary.industry.length &&
     !currentSummary.focus.length &&
     !proposedSummary.industry.length &&
@@ -174,7 +183,7 @@ export function SegmentCompare({ current, proposed, loading = false }) {
           </Stack>
         ) : (
           <Text fontSize="sm" color="gray.500">
-            Run segmentation to preview the proposed updates.
+            {emptyProposedMessage}
           </Text>
         )}
       </Box>
