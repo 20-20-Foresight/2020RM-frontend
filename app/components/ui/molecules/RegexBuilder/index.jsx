@@ -23,13 +23,10 @@ import { AddIcon, DeleteIcon, ChevronDownIcon, ChevronUpIcon } from "@chakra-ui/
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const uid = () => Math.random().toString(36).slice(2, 8);
 
-// Replace unescaped * with [A-Za-z]+.
 function applyWildcard(s) {
   return (s || "").split("*").map(esc).join("[A-Za-z]*");
 }
 
-// Expand alpha chars in an already-escaped string to [aA] form so a single
-// token can be case-insensitive when the global /i flag isn't available.
 function expandCaseInsensitive(escaped) {
   let result = "";
   let i = 0;
@@ -54,8 +51,7 @@ function expandCaseInsensitive(escaped) {
   return result;
 }
 
-// Parse user input for (optional) groups.
-// "Fish(es)" → [{optional:false, value:"Fish"}, {optional:true, value:"es"}]
+// Parse (optional) groups in user input: "Fish(es)" → [{optional:false,value:"Fish"},{optional:true,value:"es"}]
 function parseUserInput(s) {
   const segments = [];
   let i = 0;
@@ -67,7 +63,7 @@ function parseUserInput(s) {
       i++;
       let inner = "";
       while (i < s.length && s[i] !== ")") { inner += s[i]; i++; }
-      if (i < s.length) i++; // consume closing )
+      if (i < s.length) i++;
       segments.push({ optional: true, value: inner });
     } else {
       current += s[i];
@@ -78,8 +74,6 @@ function parseUserInput(s) {
   return segments;
 }
 
-// Process a single string value: parse (optional) groups, handle * wildcard,
-// escape, then optionally expand for case-insensitive matching.
 function processValue(v, needsCaseExpansion) {
   const segments = parseUserInput(v || "");
   return segments
@@ -91,10 +85,8 @@ function processValue(v, needsCaseExpansion) {
     .join("");
 }
 
-// Build the regex fragment for one token.
 function buildTokenEntry(token, useGlobalI) {
   const needsCaseExpansion = !useGlobalI && token.caseInsensitive !== false;
-
   let base;
   if (token.type === "literal") {
     base = processValue(token.value, needsCaseExpansion);
@@ -107,7 +99,6 @@ function buildTokenEntry(token, useGlobalI) {
   } else {
     base = "";
   }
-
   if (!base) return "";
   if (token.optional) base = `(?:${base})?`;
   return base;
@@ -115,20 +106,13 @@ function buildTokenEntry(token, useGlobalI) {
 
 function buildRegex(tokens, anchorStart, anchorEnd) {
   if (!tokens.length) return { pattern: "", regex: null, flags: "g" };
-
   const allCaseInsensitive = tokens.every((t) => t.caseInsensitive !== false);
   const flags = allCaseInsensitive ? "gi" : "g";
-
-  const parts = tokens
-    .map((t) => buildTokenEntry(t, allCaseInsensitive))
-    .filter(Boolean);
-
+  const parts = tokens.map((t) => buildTokenEntry(t, allCaseInsensitive)).filter(Boolean);
   if (!parts.length) return { pattern: "", regex: null, flags };
-
   let pattern = parts.join("[\\s\\/\\-]+");
   if (anchorStart) pattern = `^${pattern}`;
   if (anchorEnd) pattern = `${pattern}$`;
-
   try {
     return { pattern, regex: new RegExp(pattern, flags), flags };
   } catch {
@@ -137,13 +121,7 @@ function buildRegex(tokens, anchorStart, anchorEnd) {
 }
 
 function makeToken(value = "") {
-  return {
-    id: uid(),
-    type: "literal",
-    value,
-    optional: false,
-    caseInsensitive: true,
-  };
+  return { id: uid(), type: "literal", value, optional: false, caseInsensitive: true };
 }
 
 function phraseToTokens(phrase) {
@@ -169,39 +147,124 @@ function splitByMatches(text, regex) {
   return parts.length ? parts : [{ text, matched: false }];
 }
 
+// ─── parseRegexToTokens ───────────────────────────────────────────────────────
+// Attempts to reverse-engineer a stored regex pattern string into the token
+// model. Returns { tokens, anchorStart, anchorEnd } or null if the pattern
+// uses constructs that can't be cleanly represented in our model.
+
+const SEPARATOR = "[\\s\\/\\-]+";
+
+function unescapeSimpleLiteral(s) {
+  // Replace our wildcard form back to *
+  let w = s.replace(/\[A-Za-z\]\*/g, "*");
+  // Convert optional groups (?:inner)? → (inner)
+  w = w.replace(/\(\?:((?:[^()\\]|\\.)*)\)\?/g, "($1)");
+  // Reject remaining complex regex constructs
+  if (/\[|\(\?|[+{|]/.test(w)) return null;
+  // Unescape \x → x
+  return w.replace(/\\(.)/g, "$1");
+}
+
+function splitAlternation(s) {
+  const parts = [];
+  let depth = 0;
+  let cur = "";
+  for (const c of s) {
+    if (c === "(" || c === "[") depth++;
+    else if (c === ")" || c === "]") depth--;
+    else if (c === "|" && depth === 0) { parts.push(cur); cur = ""; continue; }
+    cur += c;
+  }
+  parts.push(cur);
+  return parts.length ? parts : null;
+}
+
+function parseSegment(seg) {
+  if (!seg) return null;
+  let optional = false;
+  let inner = seg;
+
+  // Peel off outer (?:...)?
+  const optM = /^\(\?:([\s\S]+)\)\?$/.exec(seg);
+  if (optM) { optional = true; inner = optM[1]; }
+
+  // Alternation group (?:A|B|C)
+  const altM = /^\(\?:([\s\S]+)\)$/.exec(inner);
+  if (altM) {
+    const rawAlts = splitAlternation(altM[1]);
+    if (!rawAlts) return null;
+    const options = rawAlts.map(unescapeSimpleLiteral);
+    if (options.some((o) => o === null)) return null;
+    return { id: uid(), type: "alternation", options, optional, caseInsensitive: true };
+  }
+
+  // Plain literal (possibly with wildcards / optional suffix groups)
+  const value = unescapeSimpleLiteral(inner);
+  if (value !== null) {
+    return { id: uid(), type: "literal", value, optional, caseInsensitive: true };
+  }
+
+  return null;
+}
+
+export function parseRegexToTokens(patternStr) {
+  if (!patternStr || !patternStr.trim()) {
+    return { tokens: [], anchorStart: false, anchorEnd: false };
+  }
+  let s = patternStr.trim();
+  let anchorStart = false;
+  let anchorEnd = false;
+  if (s.startsWith("^")) { anchorStart = true; s = s.slice(1); }
+  if (s.endsWith("$")) { anchorEnd = true; s = s.slice(0, -1); }
+  if (!s) return { tokens: [], anchorStart, anchorEnd };
+
+  const segments = s.split(SEPARATOR);
+  const tokens = [];
+  for (const seg of segments) {
+    const token = parseSegment(seg);
+    if (token === null) return null;
+    tokens.push(token);
+  }
+  return { tokens, anchorStart, anchorEnd };
+}
+
 // ─── AnchorToggle ─────────────────────────────────────────────────────────────
 
-function AnchorToggle({ symbol, active, label, onClick }) {
+function AnchorToggle({ symbol, active, label, onClick, readOnly }) {
+  const el = (
+    <Box
+      as={readOnly ? "span" : "button"}
+      onClick={readOnly ? undefined : onClick}
+      px={2}
+      py="4px"
+      fontFamily="mono"
+      fontSize="sm"
+      fontWeight="bold"
+      color={active ? "teal.700" : "gray.300"}
+      border="1px dashed"
+      borderColor={active ? "teal.400" : "gray.200"}
+      bg={active ? "teal.50" : "transparent"}
+      borderRadius="md"
+      cursor={readOnly ? "default" : "pointer"}
+      transition="all 0.12s"
+      _hover={readOnly ? {} : { borderColor: "teal.300", color: "teal.500" }}
+      lineHeight={1}
+      flexShrink={0}
+    >
+      {symbol}
+    </Box>
+  );
+  if (readOnly || !label) return el;
   return (
     <Tooltip label={label} placement="top" hasArrow openDelay={300}>
-      <Box
-        as="button"
-        onClick={onClick}
-        px={2}
-        py="4px"
-        fontFamily="mono"
-        fontSize="sm"
-        fontWeight="bold"
-        color={active ? "teal.700" : "gray.300"}
-        border="1px dashed"
-        borderColor={active ? "teal.400" : "gray.200"}
-        bg={active ? "teal.50" : "transparent"}
-        borderRadius="md"
-        cursor="pointer"
-        transition="all 0.12s"
-        _hover={{ borderColor: "teal.300", color: "teal.500" }}
-        lineHeight={1}
-        flexShrink={0}
-      >
-        {symbol}
-      </Box>
+      {el}
     </Tooltip>
   );
 }
 
 // ─── TokenPill ────────────────────────────────────────────────────────────────
 
-function TokenPill({ token, isSelected, onClick }) {
+function TokenPill({ token, isSelected, onClick, readOnly }) {
   const isAlt = token.type === "alternation";
   const options = isAlt ? (token.options || []).filter(Boolean) : [];
   const isCaseSensitive = token.caseInsensitive === false;
@@ -218,8 +281,8 @@ function TokenPill({ token, isSelected, onClick }) {
   return (
     <Box position="relative" display="inline-flex" alignItems="flex-start">
       <Box
-        as="button"
-        onClick={onClick}
+        as={readOnly ? "span" : "button"}
+        onClick={readOnly ? undefined : onClick}
         px={3}
         py={isAlt ? 1 : "5px"}
         borderRadius={isAlt ? "lg" : "full"}
@@ -227,9 +290,9 @@ function TokenPill({ token, isSelected, onClick }) {
         borderColor={borderColor}
         bg={bg}
         color={color}
-        cursor="pointer"
+        cursor={readOnly ? "default" : "pointer"}
         transition="all 0.12s"
-        _hover={{ borderColor: "purple.300", shadow: "sm" }}
+        _hover={readOnly ? {} : { borderColor: "purple.300", shadow: "sm" }}
         fontFamily="mono"
         fontSize="sm"
         textAlign="left"
@@ -251,37 +314,68 @@ function TokenPill({ token, isSelected, onClick }) {
           </Box>
         )}
       </Box>
-
       {isCaseSensitive && (
-        <Badge
-          position="absolute" top="-9px" left="50%" transform="translateX(-50%)"
+        <Badge position="absolute" top="-9px" left="50%" transform="translateX(-50%)"
           colorScheme="orange" fontSize="9px" px={1} borderRadius="full"
-          pointerEvents="none" lineHeight="14px" whiteSpace="nowrap"
-        >
-          Aa
-        </Badge>
+          pointerEvents="none" lineHeight="14px" whiteSpace="nowrap">Aa</Badge>
       )}
-
       {token.optional && (
-        <Badge
-          position="absolute" top="-9px" right="2px"
+        <Badge position="absolute" top="-9px" right="2px"
           colorScheme="green" fontSize="9px" px={1} borderRadius="full"
-          pointerEvents="none" lineHeight="14px"
-        >
-          ?
-        </Badge>
+          pointerEvents="none" lineHeight="14px">?</Badge>
       )}
-
       {isAlt && (
-        <Badge
-          position="absolute" top="-9px" left="2px"
+        <Badge position="absolute" top="-9px" left="2px"
           colorScheme="blue" fontSize="9px" px={1} borderRadius="full"
-          pointerEvents="none" lineHeight="14px"
-        >
-          OR
-        </Badge>
+          pointerEvents="none" lineHeight="14px">OR</Badge>
       )}
     </Box>
+  );
+}
+
+// ─── RegexTokenDisplay ────────────────────────────────────────────────────────
+// Read-only visualization of a stored regex pattern string.
+// Shows an error badge for patterns that can't be parsed into the token model.
+
+export function RegexTokenDisplay({ pattern }) {
+  const parsed = useMemo(() => {
+    if (!pattern) return { tokens: [], anchorStart: false, anchorEnd: false };
+    try { return parseRegexToTokens(pattern); }
+    catch { return null; }
+  }, [pattern]);
+
+  if (parsed === null) {
+    return (
+      <HStack spacing={2} align="center">
+        <Badge colorScheme="red" fontSize="10px" flexShrink={0}>unrecognized</Badge>
+        <Text fontFamily="mono" fontSize="xs" color="gray.500" noOfLines={1} title={pattern}>
+          {pattern}
+        </Text>
+      </HStack>
+    );
+  }
+
+  if (!parsed.tokens.length) {
+    return <Text color="gray.300" fontSize="xs">—</Text>;
+  }
+
+  return (
+    <Flex align="center" flexWrap="wrap" gap={1} rowGap={3}>
+      {parsed.anchorStart && (
+        <AnchorToggle symbol="^" active readOnly />
+      )}
+      {parsed.tokens.map((token, i) => (
+        <React.Fragment key={token.id}>
+          {i > 0 && (
+            <Text fontSize="xs" color="gray.300" fontFamily="mono" userSelect="none">·</Text>
+          )}
+          <TokenPill token={token} isSelected={false} onClick={() => {}} readOnly />
+        </React.Fragment>
+      ))}
+      {parsed.anchorEnd && (
+        <AnchorToggle symbol="$" active readOnly />
+      )}
+    </Flex>
   );
 }
 
@@ -325,12 +419,9 @@ function TokenEditor({ token, onUpdate, onDelete, onClose }) {
 
   return (
     <Box
-      bg="gray.50"
-      border="1px solid"
+      bg="gray.50" border="1px solid"
       borderColor={isMulti ? "blue.200" : "gray.200"}
-      borderRadius="lg"
-      p={3}
-      mt={3}
+      borderRadius="lg" p={3} mt={3}
     >
       <VStack align="stretch" spacing={3}>
         <Text fontSize="xs" color="gray.500">
@@ -338,7 +429,6 @@ function TokenEditor({ token, onUpdate, onDelete, onClose }) {
             ? `${validLines.length} options · Shift+Enter to add more · Enter to save`
             : "Shift+Enter to add alternates · Enter to save · Esc to cancel"}
         </Text>
-
         <Textarea
           ref={taRef}
           value={text}
@@ -353,7 +443,6 @@ function TokenEditor({ token, onUpdate, onDelete, onClose }) {
           borderColor={isMulti ? "blue.300" : "gray.200"}
           _focus={{ borderColor: isMulti ? "blue.400" : "purple.400", boxShadow: "none" }}
         />
-
         {isMulti && (
           <HStack flexWrap="wrap" spacing={1}>
             {validLines.map((opt, i) => (
@@ -361,7 +450,6 @@ function TokenEditor({ token, onUpdate, onDelete, onClose }) {
             ))}
           </HStack>
         )}
-
         <HStack justify="space-between" align="center">
           <Text fontSize="xs" color="gray.500" fontWeight="medium">Case</Text>
           <ButtonGroup size="xs" isAttached>
@@ -369,19 +457,14 @@ function TokenEditor({ token, onUpdate, onDelete, onClose }) {
               variant={!caseInsensitive ? "solid" : "outline"}
               colorScheme={!caseInsensitive ? "orange" : "gray"}
               onClick={() => setCaseInsensitive(false)}
-            >
-              Aa Sensitive
-            </Button>
+            >Aa Sensitive</Button>
             <Button
               variant={caseInsensitive ? "solid" : "outline"}
               colorScheme={caseInsensitive ? "purple" : "gray"}
               onClick={() => setCaseInsensitive(true)}
-            >
-              aa Insensitive
-            </Button>
+            >aa Insensitive</Button>
           </ButtonGroup>
         </HStack>
-
         <HStack justify="space-between">
           <Checkbox isChecked={optional} onChange={(e) => setOptional(e.target.checked)} size="sm" colorScheme="green">
             <Text fontSize="xs">Optional</Text>
@@ -419,11 +502,9 @@ function RegexTester({ regex }) {
         )}
       </HStack>
       {testText && (
-        <Box
-          bg="gray.50" border="1px solid" borderColor="gray.200" borderRadius="md"
+        <Box bg="gray.50" border="1px solid" borderColor="gray.200" borderRadius="md"
           px={3} py={2} fontFamily="mono" fontSize="sm" lineHeight="tall"
-          whiteSpace="pre-wrap" wordBreak="break-word" minH="36px"
-        >
+          whiteSpace="pre-wrap" wordBreak="break-word" minH="36px">
           {parts.map((part, i) =>
             part.matched ? (
               <Box key={i} as="mark" bg="yellow.200" borderRadius="sm" px="1px">{part.text}</Box>
@@ -452,25 +533,42 @@ function SectionLabel({ children }) {
 
 /**
  * Interactive regex visualizer and builder.
+ *
  * @param {{
  *   initialPhrase?: string,
- *   initialTokens?: Array<{id:string, type:"literal"|"alternation", value?:string, options?:string[], optional:boolean, caseInsensitive?:boolean}>
+ *   initialTokens?: Array<{id:string, type:"literal"|"alternation", value?:string, options?:string[], optional:boolean, caseInsensitive?:boolean}>,
+ *   initialAnchorStart?: boolean,
+ *   initialAnchorEnd?: boolean,
+ *   onPatternChange?: (pattern: string) => void,
+ *   compact?: boolean   — hides phrase input and test box; flat card styling
  * }} props
  */
-export function RegexBuilder({ initialPhrase = "", initialTokens = null }) {
+export function RegexBuilder({
+  initialPhrase = "",
+  initialTokens = null,
+  initialAnchorStart = false,
+  initialAnchorEnd = false,
+  onPatternChange,
+  compact = false,
+}) {
   const [phraseInput, setPhraseInput] = useState(initialPhrase);
   const [tokens, setTokens] = useState(
     () => initialTokens ?? (initialPhrase ? phraseToTokens(initialPhrase) : [])
   );
   const [selectedId, setSelectedId] = useState(null);
-  const [anchorStart, setAnchorStart] = useState(false);
-  const [anchorEnd, setAnchorEnd] = useState(false);
+  const [anchorStart, setAnchorStart] = useState(initialAnchorStart);
+  const [anchorEnd, setAnchorEnd] = useState(initialAnchorEnd);
   const [showRegex, setShowRegex] = useState(false);
 
   const { pattern, regex, flags } = useMemo(
     () => buildRegex(tokens, anchorStart, anchorEnd),
     [tokens, anchorStart, anchorEnd]
   );
+
+  // Stable ref for onPatternChange so the effect doesn't re-fire on every render
+  const onPatternChangeRef = useRef(onPatternChange);
+  useEffect(() => { onPatternChangeRef.current = onPatternChange; });
+  useEffect(() => { onPatternChangeRef.current?.(pattern); }, [pattern]);
 
   const selectedToken = useMemo(
     () => tokens.find((t) => t.id === selectedId) ?? null,
@@ -503,49 +601,49 @@ export function RegexBuilder({ initialPhrase = "", initialTokens = null }) {
     setSelectedId(null);
   };
 
-  const cardProps = {
-    bg: "white", border: "1px solid", borderColor: "gray.200",
-    borderRadius: "xl", p: 4, boxShadow: "sm",
-  };
+  // Card wrapper changes between full and compact modes
+  const card = compact
+    ? { borderBottom: "1px solid", borderColor: "gray.100", pb: 3, mb: 2 }
+    : { bg: "white", border: "1px solid", borderColor: "gray.200", borderRadius: "xl", p: 4, boxShadow: "sm" };
+
+  const maxW = compact ? "100%" : "760px";
 
   return (
-    <VStack align="stretch" spacing={3} maxW="760px">
+    <VStack align="stretch" spacing={compact ? 2 : 3} maxW={maxW}>
 
-      {/* ── Phrase Input ── */}
-      <Box {...cardProps}>
-        <SectionLabel>Phrase</SectionLabel>
-        <HStack>
-          <Input
-            value={phraseInput}
-            onChange={(e) => setPhraseInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleParse()}
-            placeholder="Type a phrase, then press Enter or Build…"
-            fontFamily="mono" fontSize="sm"
-          />
-          <Button colorScheme="purple" onClick={handleParse} flexShrink={0}>Build</Button>
-        </HStack>
-      </Box>
+      {/* ── Phrase Input (hidden in compact mode) ── */}
+      {!compact && (
+        <Box {...card}>
+          <SectionLabel>Phrase</SectionLabel>
+          <HStack>
+            <Input
+              value={phraseInput}
+              onChange={(e) => setPhraseInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleParse()}
+              placeholder="Type a phrase, then press Enter or Build…"
+              fontFamily="mono" fontSize="sm"
+            />
+            <Button colorScheme="purple" onClick={handleParse} flexShrink={0}>Build</Button>
+          </HStack>
+        </Box>
+      )}
 
       {/* ── Pattern Blocks ── */}
-      {tokens.length > 0 && (
-        <Box {...cardProps}>
-          <SectionLabel>Pattern Blocks</SectionLabel>
+      {(tokens.length > 0 || compact) && (
+        <Box {...card}>
+          {!compact && <SectionLabel>Pattern Blocks</SectionLabel>}
           <Flex align="center" flexWrap="wrap" gap={1} rowGap={5}>
-
-            {/* Start anchor toggle — left edge of the pattern */}
             <AnchorToggle
               symbol="^"
               active={anchorStart}
               label={anchorStart ? "Must start with — click to remove" : "Must start with"}
               onClick={() => setAnchorStart((v) => !v)}
             />
-
             <IconButton
               icon={<AddIcon boxSize={2} />} size="xs" variant="ghost" colorScheme="purple"
               borderRadius="full" aria-label="Prepend block" onClick={() => handleAddToken(-1)}
               opacity={0.4} _hover={{ opacity: 1 }}
             />
-
             {tokens.map((token, i) => (
               <React.Fragment key={token.id}>
                 {i > 0 && (
@@ -564,17 +662,13 @@ export function RegexBuilder({ initialPhrase = "", initialTokens = null }) {
                 />
               </React.Fragment>
             ))}
-
-            {/* End anchor toggle — right edge of the pattern */}
             <AnchorToggle
               symbol="$"
               active={anchorEnd}
               label={anchorEnd ? "Must end with — click to remove" : "Must end with"}
               onClick={() => setAnchorEnd((v) => !v)}
             />
-
           </Flex>
-
           {selectedToken && (
             <TokenEditor
               key={selectedToken.id}
@@ -587,9 +681,9 @@ export function RegexBuilder({ initialPhrase = "", initialTokens = null }) {
         </Box>
       )}
 
-      {/* ── Test ── */}
-      {tokens.length > 0 && (
-        <Box {...cardProps}>
+      {/* ── Test (hidden in compact mode) ── */}
+      {!compact && tokens.length > 0 && (
+        <Box {...card}>
           <SectionLabel>Test</SectionLabel>
           <RegexTester regex={regex} />
         </Box>

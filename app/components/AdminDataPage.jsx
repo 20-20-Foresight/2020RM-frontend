@@ -1,3 +1,4 @@
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   AlertDescription,
@@ -26,12 +27,12 @@ import {
 } from "@chakra-ui/react";
 import { SearchIcon } from "@chakra-ui/icons";
 import { Form, Link } from "@remix-run/react";
-import { useEffect, useState } from "react";
 import {
   filterAdminDataItems,
   listAdminDataTypes,
   sortAdminDataItems
 } from "../models/admin-data-list.mjs";
+import { RegexBuilder, RegexTokenDisplay, parseRegexToTokens } from "./ui/molecules/RegexBuilder";
 
 /**
  * Builds the route pathname for one admin data record.
@@ -83,6 +84,26 @@ function cloneRows(rows) {
         ...row
       }))
     : [];
+}
+
+/**
+ * Returns true if the column should be treated as a regex pattern column.
+ * Detects by column name or by sampling the values.
+ * @param {string} columnName
+ * @param {Record<string, string>[]} rows
+ * @returns {boolean}
+ */
+function isRegexColumn(columnName, rows) {
+  const lcName = columnName.toLowerCase();
+  if (lcName.includes("regex") || lcName.includes("pattern") || lcName.includes("regexp")) {
+    return true;
+  }
+  const nonEmpty = rows.map((r) => r[columnName]).filter(Boolean);
+  if (!nonEmpty.length) return false;
+  const regexLike = nonEmpty.filter(
+    (v) => v.startsWith("^") || v.endsWith("$") || /\(\?:|\\[sdbwS]|\[[A-Za-z]/.test(v)
+  );
+  return regexLike.length / nonEmpty.length >= 0.5;
 }
 
 /**
@@ -339,45 +360,67 @@ function AdminDataEditorFallback({ data }) {
 export function AdminDataDetailEditor({ data, actionData, isSaving = false }) {
   const [description, setDescription] = useState(data.description || "");
   const [rows, setRows] = useState(() => cloneRows(data.editor.rows));
+  const [editingRowIndex, setEditingRowIndex] = useState(null);
+  const [editingRow, setEditingRow] = useState(null);
+  const [pendingRegex, setPendingRegex] = useState({});
+
+  const regexColumns = useMemo(
+    () => new Set(data.editor.columns.filter((c) => isRegexColumn(c, data.editor.rows))),
+    [data.editor.columns, data.editor.rows]
+  );
 
   useEffect(() => {
     setDescription(data.description || "");
     setRows(cloneRows(data.editor.rows));
+    setEditingRowIndex(null);
+    setEditingRow(null);
+    setPendingRegex({});
   }, [data.description, data.editor.rows, data.id, data.version]);
 
-  /**
-   * Updates one cell inside the editor table.
-   * @param {number} rowIndex
-   * @param {string} column
-   * @param {string} value
-   */
-  function handleRowChange(rowIndex, column, value) {
-    setRows((currentRows) =>
-      currentRows.map((row, index) =>
-        index === rowIndex
-          ? {
-              ...row,
-              [column]: value
-            }
-          : row
-      )
-    );
+  function handleStartEdit(rowIndex) {
+    const editRow = { ...rows[rowIndex] };
+    const pending = {};
+    for (const col of regexColumns) {
+      pending[col] = editRow[col] || "";
+    }
+    setEditingRowIndex(rowIndex);
+    setEditingRow(editRow);
+    setPendingRegex(pending);
   }
 
-  /**
-   * Appends an empty table row.
-   */
+  function handleCancelEdit() {
+    setEditingRowIndex(null);
+    setEditingRow(null);
+    setPendingRegex({});
+  }
+
+  function handleEditRowChange(column, value) {
+    setEditingRow((r) => ({ ...r, [column]: value }));
+  }
+
+  function handleEditDone() {
+    setRows((currentRows) =>
+      currentRows.map((row, index) =>
+        index === editingRowIndex ? { ...editingRow, ...pendingRegex } : row
+      )
+    );
+    setEditingRowIndex(null);
+    setEditingRow(null);
+    setPendingRegex({});
+  }
+
   function handleAddRow() {
     setRows((currentRows) => [...currentRows, buildEmptyRow(data.editor.columns)]);
   }
 
-  /**
-   * Removes one row from the editor.
-   * @param {number} rowIndex
-   */
   function handleRemoveRow(rowIndex) {
     setRows((currentRows) => currentRows.filter((_, index) => index !== rowIndex));
   }
+
+  const isEditing = editingRowIndex !== null;
+  const colCount = data.editor.columns.length + 1;
+  const nonRegexColumns = data.editor.columns.filter((c) => !regexColumns.has(c));
+  const regexColumnsArr = [...regexColumns];
 
   return (
     <Box bg="white" h="100%" minH="0" display="flex" flexDirection="column">
@@ -448,10 +491,16 @@ export function AdminDataDetailEditor({ data, actionData, isSaving = false }) {
                 </FormControl>
 
                 <HStack spacing={3} align="center" flexWrap="wrap">
-                  <Button type="button" variant="outline" onClick={handleAddRow}>
+                  <Button type="button" variant="outline" onClick={handleAddRow} isDisabled={isEditing}>
                     Add Row
                   </Button>
-                  <Button type="submit" colorScheme="blue" isLoading={isSaving} loadingText="Saving">
+                  <Button
+                    type="submit"
+                    colorScheme="blue"
+                    isLoading={isSaving}
+                    loadingText="Saving"
+                    isDisabled={isEditing}
+                  >
                     Save Changes
                   </Button>
                 </HStack>
@@ -474,34 +523,163 @@ export function AdminDataDetailEditor({ data, actionData, isSaving = false }) {
                     </Thead>
                     <Tbody>
                       {rows.length ? (
-                        rows.map((row, rowIndex) => (
-                          <Tr key={`${data.id || "row"}-${rowIndex}`}>
-                            {data.editor.columns.map((column) => (
-                              <Td key={`${rowIndex}-${column}`}>
-                                <Input
-                                  size="sm"
-                                  value={row[column] || ""}
-                                  onChange={(event) => handleRowChange(rowIndex, column, event.target.value)}
-                                  bg="white"
-                                />
-                              </Td>
-                            ))}
-                            <Td textAlign="right" whiteSpace="nowrap">
-                              <Button
-                                type="button"
-                                size="xs"
-                                variant="ghost"
-                                colorScheme="red"
-                                onClick={() => handleRemoveRow(rowIndex)}
-                              >
-                                Remove
-                              </Button>
-                            </Td>
-                          </Tr>
-                        ))
+                        rows.map((row, rowIndex) => {
+                          const isThisRowEditing = editingRowIndex === rowIndex;
+                          return (
+                            <React.Fragment key={`${data.id || "row"}-${rowIndex}`}>
+                              {/* View row */}
+                              <Tr bg={isThisRowEditing ? "blue.50" : undefined}>
+                                {data.editor.columns.map((column) => (
+                                  <Td key={`${rowIndex}-${column}`} verticalAlign="middle" py={isThisRowEditing ? 2 : undefined}>
+                                    {regexColumns.has(column) ? (
+                                      <RegexTokenDisplay
+                                        pattern={
+                                          isThisRowEditing
+                                            ? (pendingRegex[column] ?? row[column])
+                                            : row[column]
+                                        }
+                                      />
+                                    ) : (
+                                      <Text
+                                        fontSize="sm"
+                                        color={
+                                          (isThisRowEditing ? editingRow[column] : row[column])
+                                            ? "gray.800"
+                                            : "gray.400"
+                                        }
+                                      >
+                                        {(isThisRowEditing ? editingRow[column] : row[column]) || "—"}
+                                      </Text>
+                                    )}
+                                  </Td>
+                                ))}
+                                <Td textAlign="right" whiteSpace="nowrap" verticalAlign="middle">
+                                  {isThisRowEditing ? (
+                                    <HStack spacing={1} justify="flex-end">
+                                      <Button
+                                        type="button"
+                                        size="xs"
+                                        variant="ghost"
+                                        onClick={handleCancelEdit}
+                                      >
+                                        Cancel
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        size="xs"
+                                        colorScheme="blue"
+                                        onClick={handleEditDone}
+                                      >
+                                        Done
+                                      </Button>
+                                    </HStack>
+                                  ) : (
+                                    <HStack spacing={1} justify="flex-end">
+                                      <Button
+                                        type="button"
+                                        size="xs"
+                                        variant="ghost"
+                                        colorScheme="blue"
+                                        onClick={() => handleStartEdit(rowIndex)}
+                                        isDisabled={isEditing}
+                                      >
+                                        Edit
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        size="xs"
+                                        variant="ghost"
+                                        colorScheme="red"
+                                        onClick={() => handleRemoveRow(rowIndex)}
+                                        isDisabled={isEditing}
+                                      >
+                                        Remove
+                                      </Button>
+                                    </HStack>
+                                  )}
+                                </Td>
+                              </Tr>
+
+                              {/* Edit expansion row */}
+                              {isThisRowEditing && (
+                                <Tr>
+                                  <Td colSpan={colCount} py={3} px={4} bg="blue.50" borderTop="none">
+                                    <Box
+                                      bg="white"
+                                      border="1px solid"
+                                      borderColor="blue.100"
+                                      borderRadius="lg"
+                                      p={4}
+                                    >
+                                      <VStack align="stretch" spacing={4}>
+                                        {/* Non-regex columns */}
+                                        {nonRegexColumns.length > 0 && (
+                                          <HStack align="flex-start" spacing={4} flexWrap="wrap">
+                                            {nonRegexColumns.map((column) => (
+                                              <FormControl key={column} flex="1" minW="160px" maxW="320px">
+                                                <FormLabel fontSize="xs" mb={1}>{column}</FormLabel>
+                                                <Input
+                                                  size="sm"
+                                                  value={editingRow[column] || ""}
+                                                  onChange={(e) => handleEditRowChange(column, e.target.value)}
+                                                  bg="white"
+                                                />
+                                              </FormControl>
+                                            ))}
+                                          </HStack>
+                                        )}
+
+                                        {/* Regex columns */}
+                                        {regexColumnsArr.map((column) => {
+                                          const currentPattern = pendingRegex[column] || "";
+                                          const parsed = (() => {
+                                            try { return parseRegexToTokens(currentPattern); }
+                                            catch { return null; }
+                                          })();
+                                          return (
+                                            <Box key={column}>
+                                              <Text
+                                                fontSize="xs"
+                                                fontWeight="semibold"
+                                                color="gray.500"
+                                                mb={2}
+                                                textTransform="uppercase"
+                                                letterSpacing="wide"
+                                              >
+                                                {column}
+                                              </Text>
+                                              {parsed === null && currentPattern && (
+                                                <Alert status="warning" borderRadius="md" mb={3} py={2}>
+                                                  <AlertIcon boxSize={4} />
+                                                  <AlertDescription fontSize="xs">
+                                                    Pattern uses constructs that can't be shown visually. Editing will replace it.
+                                                  </AlertDescription>
+                                                </Alert>
+                                              )}
+                                              <RegexBuilder
+                                                key={`edit-${rowIndex}-${column}`}
+                                                compact
+                                                initialTokens={parsed?.tokens ?? []}
+                                                initialAnchorStart={parsed?.anchorStart ?? false}
+                                                initialAnchorEnd={parsed?.anchorEnd ?? false}
+                                                onPatternChange={(p) =>
+                                                  setPendingRegex((prev) => ({ ...prev, [column]: p }))
+                                                }
+                                              />
+                                            </Box>
+                                          );
+                                        })}
+                                      </VStack>
+                                    </Box>
+                                  </Td>
+                                </Tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })
                       ) : (
                         <Tr>
-                          <Td colSpan={data.editor.columns.length + 1}>
+                          <Td colSpan={colCount}>
                             <Text color="gray.500">No rows yet. Add the first row above.</Text>
                           </Td>
                         </Tr>
