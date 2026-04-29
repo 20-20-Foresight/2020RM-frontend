@@ -196,7 +196,11 @@ export function SegmentCompare({
  * @param {{explanations?: object[]|null, loading?: boolean}} props
  * @returns {JSX.Element|null}
  */
-export function ExplanationTable({ explanations, loading = false }) {
+export function ExplanationTable({
+  explanations,
+  loading = false,
+  heading = "Segmentation Reasoning"
+}) {
   const theadBg = useColorModeValue("gray.50", "gray.700");
   const visibleExplanations = readDisplayedExplanations(explanations);
 
@@ -218,7 +222,7 @@ export function ExplanationTable({ explanations, loading = false }) {
   return (
     <Box mt={6}>
       <Text fontSize="sm" fontWeight="semibold" color="gray.700" mb={3}>
-        Segmentation Reasoning
+        {heading}
       </Text>
       <TableContainer border="1px solid" borderColor="gray.200" borderRadius="md">
         <Table size="sm" variant="simple">

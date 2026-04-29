@@ -57,6 +57,8 @@ import {
   buildAppliedResult,
   hasVisibleSegmentationSummary,
   normalizeSegmentationVisualSummary,
+  readDisplayedSegmentationExplanationHeading,
+  readDisplayedSegmentationExplanations,
   readPrimaryValue,
   readTrimmedString
 } from "../models/resegmentation-ui.mjs";
@@ -272,6 +274,14 @@ export function ResegmentationToolPage({
     : hasVisibleSegmentationSummary(resultCurrentSummary)
       ? resultCurrentSummary
       : buildRecordSegmentationSummary(selectedOrganization?.record || null);
+  const singleDisplayedExplanations = readDisplayedSegmentationExplanations(
+    selectedOrganization?.record || null,
+    singleResult
+  );
+  const singleExplanationHeading = readDisplayedSegmentationExplanationHeading(
+    selectedOrganization?.record || null,
+    singleResult
+  );
   const singleEmptyPreviewWarning = hasSinglePreviewed && !hasSingleProposedSummary
     ? "Not enough data exists to segment this organization."
     : "";
@@ -739,7 +749,8 @@ export function ResegmentationToolPage({
                   }
                 />
                 <ExplanationTable
-                  explanations={singleResult?.explanations}
+                  explanations={singleDisplayedExplanations}
+                  heading={singleExplanationHeading}
                   loading={isSegmentingSingle}
                 />
               </Box>

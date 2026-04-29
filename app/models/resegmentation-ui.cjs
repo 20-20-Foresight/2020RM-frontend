@@ -1,3 +1,7 @@
+const {
+  buildOrganizationSegmentationViewModel
+} = require("./organization-segmentation.cjs");
+
 /**
  * Read one trimmed string.
  * @param {unknown} value
@@ -78,6 +82,48 @@ function buildExplanationSegmentationLabel(row) {
 }
 
 /**
+ * Reads the current segmentation explanation rows from one organization record.
+ * @param {object|null|undefined} record
+ * @returns {object[]}
+ */
+function readRecordSegmentationExplanations(record) {
+  const viewModel = buildOrganizationSegmentationViewModel(record);
+  return Array.isArray(viewModel?.explanations) ? viewModel.explanations : [];
+}
+
+/**
+ * Returns the explanation rows that should be displayed for one resegmentation review.
+ * Before preview, show the current persisted reasoning. After preview, replace it with
+ * the new resegmentation reasoning even when the new set is empty.
+ * @param {object|null|undefined} record
+ * @param {object|null|undefined} resegmentation
+ * @returns {object[]}
+ */
+function readDisplayedSegmentationExplanations(record, resegmentation) {
+  if (resegmentation && typeof resegmentation === "object") {
+    return Array.isArray(resegmentation.explanations) ? resegmentation.explanations : [];
+  }
+
+  return readRecordSegmentationExplanations(record);
+}
+
+/**
+ * Returns the correct explanation section heading for one resegmentation review.
+ * @param {object|null|undefined} record
+ * @param {object|null|undefined} resegmentation
+ * @returns {string}
+ */
+function readDisplayedSegmentationExplanationHeading(record, resegmentation) {
+  if (resegmentation && typeof resegmentation === "object") {
+    return "Proposed Segmentation Reasoning";
+  }
+
+  return readRecordSegmentationExplanations(record).length
+    ? "Current Segmentation Reasoning"
+    : "Segmentation Reasoning";
+}
+
+/**
  * Returns one updated organization record after a successful apply.
  * @param {object|null} record
  * @param {object|null} resegmentation
@@ -136,8 +182,11 @@ module.exports = {
   buildExplanationSegmentationLabel,
   hasVisibleSegmentationSummary,
   normalizeSegmentationVisualSummary,
+  readDisplayedSegmentationExplanationHeading,
+  readDisplayedSegmentationExplanations,
   readDisplayedExplanations,
   readDisplayedExplanationScore,
+  readRecordSegmentationExplanations,
   readPrimaryValue,
   readTrimmedString
 };
