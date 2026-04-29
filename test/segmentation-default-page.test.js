@@ -121,16 +121,16 @@ test("readRowTaxonomyWarnings reports unresolved and mismatched taxonomy values"
   );
 });
 
-test("applyBulkRemap updates matching primary values and targets together", async () => {
-  const { applyBulkRemap } = await import("../app/models/segmentation-default-page.mjs");
+test("applyBulkSelectionUpdate updates the selected rows only", async () => {
+  const { applyBulkSelectionUpdate } = await import("../app/models/segmentation-default-page.mjs");
 
-  const result = applyBulkRemap(
+  const result = applyBulkSelectionUpdate(
     [
       {
         industry: "re-commercial",
         industryTargets: [{ name: "re-commercial", score: 3 }],
-        focus: "",
-        focusTargets: []
+        focus: "broker-dealer",
+        focusTargets: [{ name: "broker-dealer", score: 2 }]
       },
       {
         industry: "RE Commercial",
@@ -141,26 +141,36 @@ test("applyBulkRemap updates matching primary values and targets together", asyn
       {
         industry: "Corporate RE",
         industryTargets: [{ name: "corporate-re", score: 2 }],
-        focus: "",
-        focusTargets: []
+        focus: "old-focus",
+        focusTargets: [{ name: "old-focus", score: 5 }]
       }
     ],
     {
-      dimension: "industry",
-      findValue: "re-commercial",
-      replaceValue: "RE Commercial",
-      scope: "both"
-    }
+      industry: "RE Commercial",
+      focus: "Asset Management"
+    },
+    [0, 2]
   );
 
-  assert.equal(result.changedRowCount, 1);
-  assert.equal(result.changedValueCount, 2);
+  assert.equal(result.changedRowCount, 2);
+  assert.equal(result.changedValueCount, 8);
+  assert.deepEqual(result.changedRowIndexes, [0, 2]);
   assert.deepEqual(result.rows[0], {
     industry: "RE Commercial",
-    industryTargets: [{ name: "RE Commercial", score: 3 }],
+    industryTargets: [{ name: "RE Commercial", score: "3" }],
+    focus: "Asset Management",
+    focusTargets: [{ name: "Asset Management", score: "3" }]
+  });
+  assert.deepEqual(result.rows[1], {
+    industry: "RE Commercial",
+    industryTargets: [{ name: "RE Commercial", score: 4 }],
     focus: "",
     focusTargets: []
   });
-  assert.equal(result.rows[1].industryTargets[0].name, "RE Commercial");
-  assert.equal(result.rows[2].industryTargets[0].name, "corporate-re");
+  assert.deepEqual(result.rows[2], {
+    industry: "RE Commercial",
+    industryTargets: [{ name: "RE Commercial", score: "3" }],
+    focus: "Asset Management",
+    focusTargets: [{ name: "Asset Management", score: "3" }]
+  });
 });

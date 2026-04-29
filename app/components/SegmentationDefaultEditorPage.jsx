@@ -4,6 +4,7 @@ import {
   AlertIcon,
   Box,
   Button,
+  Checkbox,
   Flex,
   FormControl,
   FormLabel,
@@ -39,7 +40,7 @@ import { useLocation } from "@remix-run/react";
 import { useEffect, useRef, useState } from "react";
 import { MdDescription } from "react-icons/md";
 import {
-  applyBulkRemap,
+  applyBulkSelectionUpdate,
   buildTaxonomyOptions,
   readDisplayValue,
   readRowTaxonomyWarnings,
@@ -206,15 +207,13 @@ function buildEmptySegmentationRow(categoryDepth, branchFieldNames = []) {
 }
 
 /**
- * Builds one empty bulk-remap draft.
- * @returns {{dimension: "industry"|"focus", findValue: string, replaceValue: string, scope: "both"|"primary"|"targets"}}
+ * Builds one empty bulk-change draft.
+ * @returns {{industry: string, focus: string}}
  */
-function buildEmptyBulkRemapDraft() {
+function buildEmptyBulkChangeDraft() {
   return {
-    dimension: "industry",
-    findValue: "",
-    replaceValue: "",
-    scope: "both"
+    industry: "",
+    focus: ""
   };
 }
 
@@ -376,9 +375,10 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
   const [filters, setFilters] = useState({});
   const [draftFilters, setDraftFilters] = useState({});
   const [openFilterKeys, setOpenFilterKeys] = useState({});
+  const [selectedRowIndexes, setSelectedRowIndexes] = useState([]);
   const [editingRowIndex, setEditingRowIndex] = useState(null);
   const [draftRow, setDraftRow] = useState(() => buildEmptySegmentationRow(categoryDepth, defaultBranchFieldNames));
-  const [bulkRemapDraft, setBulkRemapDraft] = useState(() => buildEmptyBulkRemapDraft());
+  const [bulkChangeDraft, setBulkChangeDraft] = useState(() => buildEmptyBulkChangeDraft());
   const documentIdRef = useRef(readTrimmedString(data.id));
   const {
     isOpen: isRowModalOpen,
@@ -391,9 +391,9 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
     onClose: closeMetadataModal
   } = useDisclosure();
   const {
-    isOpen: isBulkRemapModalOpen,
-    onOpen: openBulkRemapModal,
-    onClose: closeBulkRemapModal
+    isOpen: isBulkChangeModalOpen,
+    onOpen: openBulkChangeModal,
+    onClose: closeBulkChangeModal
   } = useDisclosure();
   const {
     saveSummary,
@@ -452,12 +452,24 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
     setFilters({});
     setDraftFilters({});
     setOpenFilterKeys({});
-    setBulkRemapDraft(buildEmptyBulkRemapDraft());
+    setSelectedRowIndexes([]);
+    setBulkChangeDraft(buildEmptyBulkChangeDraft());
   }, [categoryDepth, data.description, data.editorType, data.id]);
 
   const taxonomyOptions = buildTaxonomyOptions(data.categoryCatalog, rows);
   const filteredRows = rows.filter((row) => rowMatchesFilters(row, filters, taxonomyOptions));
-  const bulkRemapPreview = applyBulkRemap(rows, bulkRemapDraft);
+  const selectedRowIndexSet = new Set(selectedRowIndexes);
+  const filteredSourceRowIndexes = filteredRows
+    .map((row) => rows.indexOf(row))
+    .filter((rowIndex) => rowIndex >= 0);
+  const selectedFilteredRowCount = filteredSourceRowIndexes.filter((rowIndex) => selectedRowIndexSet.has(rowIndex)).length;
+  const hasSelectedRows = selectedRowIndexes.length > 0;
+  const allFilteredRowsSelected =
+    filteredSourceRowIndexes.length > 0 &&
+    filteredSourceRowIndexes.every((rowIndex) => selectedRowIndexSet.has(rowIndex));
+  const someFilteredRowsSelected =
+    selectedFilteredRowCount > 0 && selectedFilteredRowCount < filteredSourceRowIndexes.length;
+  const canApplyBulkChange = hasSelectedRows && (readTrimmedString(bulkChangeDraft.industry) || readTrimmedString(bulkChangeDraft.focus));
 
   /**
    * Builds one queued-save payload for the current editor state.
@@ -532,6 +544,9 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
         : rows.map((row, index) => (index === editingRowIndex ? normalizedDraftRow : row));
 
     setRows(nextRows);
+    if (editingRowIndex == null) {
+      setSelectedRowIndexes([]);
+    }
     markRowsChanged([editingRowIndex == null ? nextRows.length - 1 : editingRowIndex]);
     closeRowEditor();
     requestSave((summary) =>
@@ -553,6 +568,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
 
     const nextRows = rows.filter((_, index) => index !== editingRowIndex);
     setRows(nextRows);
+    setSelectedRowIndexes([]);
     closeRowEditor();
     requestSave((summary) =>
       buildSaveFormData({
@@ -734,22 +750,73 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
   }
 
   /**
-   * Updates one bulk-remap field.
-   * @param {"dimension"|"findValue"|"replaceValue"|"scope"} key
+   * Toggles one row checkbox.
+   * @param {number} rowIndex
+   */
+  function toggleRowSelection(rowIndex) {
+    setSelectedRowIndexes((currentIndexes) =>
+      currentIndexes.includes(rowIndex)
+        ? currentIndexes.filter((value) => value !== rowIndex)
+        : [...currentIndexes, rowIndex].sort((left, right) => left - right)
+    );
+  }
+
+  /**
+   * Toggles all rows visible under the current filters.
+   */
+  function toggleSelectAllFilteredRows() {
+    if (!filteredSourceRowIndexes.length) {
+      return;
+    }
+
+    setSelectedRowIndexes((currentIndexes) => {
+      const nextIndexes = new Set(currentIndexes);
+      const shouldSelectAll = filteredSourceRowIndexes.some((rowIndex) => !nextIndexes.has(rowIndex));
+
+      filteredSourceRowIndexes.forEach((rowIndex) => {
+        if (shouldSelectAll) {
+          nextIndexes.add(rowIndex);
+        } else {
+          nextIndexes.delete(rowIndex);
+        }
+      });
+
+      return Array.from(nextIndexes).sort((left, right) => left - right);
+    });
+  }
+
+  /**
+   * Clears all selected rows.
+   */
+  function clearSelectedRows() {
+    setSelectedRowIndexes([]);
+  }
+
+  /**
+   * Updates one bulk-change field.
+   * @param {"industry"|"focus"} key
    * @param {string} value
    */
-  function updateBulkRemapDraft(key, value) {
-    setBulkRemapDraft((currentValue) => ({
+  function updateBulkChangeDraft(key, value) {
+    setBulkChangeDraft((currentValue) => ({
       ...currentValue,
       [key]: value
     }));
   }
 
   /**
-   * Applies the current bulk remap across the document and queues one save.
+   * Resets and closes the bulk-change modal.
    */
-  function saveBulkRemapChanges() {
-    const result = applyBulkRemap(rows, bulkRemapDraft);
+  function closeBulkChangeEditor() {
+    setBulkChangeDraft(buildEmptyBulkChangeDraft());
+    closeBulkChangeModal();
+  }
+
+  /**
+   * Applies the current bulk change across the selected rows and queues one save.
+   */
+  function saveBulkChangeChanges() {
+    const result = applyBulkSelectionUpdate(rows, bulkChangeDraft, selectedRowIndexes);
     if (!result.changedRowCount) {
       return;
     }
@@ -762,8 +829,8 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
         nextRows: result.rows
       })
     );
-    setBulkRemapDraft(buildEmptyBulkRemapDraft());
-    closeBulkRemapModal();
+    setSelectedRowIndexes([]);
+    closeBulkChangeEditor();
   }
 
   const displayDescription = readTrimmedString(description);
@@ -772,7 +839,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
 
   return (
     <Box bg="white" h="100%" minH="0" display="flex" flexDirection="column">
-      <Box px={{ base: 4, md: 6 }} py={{ base: 4, md: 5 }} borderBottomWidth="1px" bg="white">
+      <Box px={{ base: 4, md: 6 }} py={{ base: 4, md: 5 }} borderBottomWidth="1px" bg="white" position="sticky" top={0} zIndex={3}>
         <Flex justify="space-between" align={{ base: "start", md: "center" }} gap={4} wrap="wrap">
           <Box>
             <Heading size="md">{displayName}</Heading>
@@ -819,8 +886,18 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
             <Flex justify="space-between" align={{ base: "stretch", xl: "end" }} gap={4} wrap="wrap">
               <Box />
               <HStack spacing={3} align="center" flexWrap="wrap">
-                <Button type="button" variant="outline" onClick={openBulkRemapModal}>
-                  Bulk Remap
+                {hasSelectedRows ? (
+                  <>
+                    <Text fontSize="sm" color="gray.600">
+                      {selectedRowIndexes.length} selected
+                    </Text>
+                    <Button type="button" variant="link" size="sm" colorScheme="blue" onClick={clearSelectedRows}>
+                      clear selected
+                    </Button>
+                  </>
+                ) : null}
+                <Button type="button" variant="outline" onClick={openBulkChangeModal} isDisabled={!hasSelectedRows}>
+                  Bulk Change
                 </Button>
                 <Button type="button" variant="outline" onClick={() => openRowEditor(null)}>
                   Add Row
@@ -833,6 +910,15 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                 <Table size="sm" variant="simple">
                   <Thead bg="gray.50">
                     <Tr>
+                      <Th position="sticky" top={0} left={0} bg="gray.50" zIndex={2} width="52px">
+                        <Checkbox
+                          isChecked={allFilteredRowsSelected}
+                          isIndeterminate={someFilteredRowsSelected}
+                          isDisabled={!filteredSourceRowIndexes.length}
+                          onChange={toggleSelectAllFilteredRows}
+                          aria-label="Select all filtered rows"
+                        />
+                      </Th>
                       {data.segmentationDefault.categoryColumns.map((columnLabel, index) => {
                         const columnKey = buildCategoryFilterKey(index);
                         const isRegex = columnLabel.toLowerCase() === "regex";
@@ -917,23 +1003,30 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                         const sourceRowIndex = rows.indexOf(row);
                         const rowWarnings = readRowTaxonomyWarnings(row, taxonomyOptions);
                         const hasWarning = rowWarnings.length > 0;
+                        const rowBackground =
+                          rowHighlightStateByKey[String(sourceRowIndex)] === "saving"
+                            ? "blue.50"
+                            : rowHighlightStateByKey[String(sourceRowIndex)] === "saved"
+                              ? "green.50"
+                              : hasWarning
+                                ? warningRowBg
+                                : isIncompleteRow(row)
+                                  ? voidRowBg
+                                  : undefined;
 
                         return (
                           <Tr
                             key={row.rowId || `${data.id || "segmentation"}-${rowIndex}`}
-                            bg={
-                              rowHighlightStateByKey[String(sourceRowIndex)] === "saving"
-                                ? "blue.50"
-                                : rowHighlightStateByKey[String(sourceRowIndex)] === "saved"
-                                  ? "green.50"
-                                  : hasWarning
-                                    ? warningRowBg
-                                    : isIncompleteRow(row)
-                                      ? voidRowBg
-                                      : undefined
-                            }
+                            bg={rowBackground}
                             transition="background-color 0.35s ease"
                           >
+                            <Td position="sticky" left={0} bg={rowBackground || "white"} zIndex={1}>
+                              <Checkbox
+                                isChecked={selectedRowIndexSet.has(sourceRowIndex)}
+                                onChange={() => toggleRowSelection(sourceRowIndex)}
+                                aria-label={`Select row ${rowIndex + 1}`}
+                              />
+                            </Td>
                             {data.segmentationDefault.categoryColumns.map((columnLabel, categoryIndex) => (
                               <Td key={`${rowIndex}-category-${categoryIndex}`}>
                                 {columnLabel.toLowerCase() === "regex"
@@ -1150,88 +1243,71 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
         </ModalContent>
       </Modal>
 
-      <Modal isOpen={isBulkRemapModalOpen} onClose={closeBulkRemapModal} size="xl" isCentered>
+      <Modal isOpen={isBulkChangeModalOpen} onClose={closeBulkChangeEditor} size="xl" isCentered>
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>Bulk Remap Industry/Focus</ModalHeader>
+          <ModalHeader>Bulk Change Industry/Focus</ModalHeader>
           <ModalCloseButton />
           <ModalBody pb={6}>
             <VStack align="stretch" spacing={4}>
               <Alert status="info" borderRadius="md">
                 <AlertIcon />
                 <AlertDescription>
-                  Remap one Industry or Focus value across this document, then save once.
+                  Update the selected rows in one save. Active filters will stay in place.
                 </AlertDescription>
               </Alert>
 
+              <Text fontSize="sm" color="gray.600">
+                {selectedRowIndexes.length} row{selectedRowIndexes.length === 1 ? "" : "s"} selected
+              </Text>
+
               <FormControl>
-                <FormLabel>Column</FormLabel>
+                <FormLabel>Industry</FormLabel>
                 <Select
-                  value={bulkRemapDraft.dimension}
-                  onChange={(event) => updateBulkRemapDraft("dimension", event.target.value)}
+                  value={bulkChangeDraft.industry}
+                  onChange={(event) => updateBulkChangeDraft("industry", event.target.value)}
                   bg="white"
                 >
-                  <option value="industry">Industry</option>
-                  <option value="focus">Focus</option>
+                  <option value="">Do not change industry</option>
+                  {taxonomyOptions.industryOptions.map((option) => (
+                    <option key={`bulk-industry-${option}`} value={option}>
+                      {option}
+                    </option>
+                  ))}
                 </Select>
               </FormControl>
 
               <FormControl>
-                <FormLabel>Find</FormLabel>
-                <Input
-                  value={bulkRemapDraft.findValue}
-                  onChange={(event) => updateBulkRemapDraft("findValue", event.target.value)}
-                  bg="white"
-                  placeholder="e.g. re-commercial"
-                />
-              </FormControl>
-
-              <FormControl>
-                <FormLabel>Replace With</FormLabel>
-                <Input
-                  value={bulkRemapDraft.replaceValue}
-                  onChange={(event) => updateBulkRemapDraft("replaceValue", event.target.value)}
-                  bg="white"
-                  placeholder="e.g. RE Commercial"
-                />
-              </FormControl>
-
-              <FormControl>
-                <FormLabel>Scope</FormLabel>
+                <FormLabel>Focus</FormLabel>
                 <Select
-                  value={bulkRemapDraft.scope}
-                  onChange={(event) => updateBulkRemapDraft("scope", event.target.value)}
+                  value={bulkChangeDraft.focus}
+                  onChange={(event) => updateBulkChangeDraft("focus", event.target.value)}
                   bg="white"
                 >
-                  <option value="both">Primary value and targets</option>
-                  <option value="primary">Primary value only</option>
-                  <option value="targets">Targets only</option>
+                  <option value="">Do not change focus</option>
+                  {taxonomyOptions.focusOptions.map((option) => (
+                    <option key={`bulk-focus-${option}`} value={option}>
+                      {option}
+                    </option>
+                  ))}
                 </Select>
               </FormControl>
-
-              <Box borderWidth="1px" borderColor="gray.200" borderRadius="md" bg="gray.50" px={4} py={3}>
-                <Text fontSize="sm" color="gray.700">
-                  Preview: {bulkRemapPreview.changedRowCount} row
-                  {bulkRemapPreview.changedRowCount === 1 ? "" : "s"} and {bulkRemapPreview.changedValueCount} value
-                  {bulkRemapPreview.changedValueCount === 1 ? "" : "s"} will change.
-                </Text>
-              </Box>
             </VStack>
           </ModalBody>
           <ModalFooter>
             <HStack spacing={3}>
-              <Button type="button" variant="ghost" onClick={closeBulkRemapModal}>
+              <Button type="button" variant="ghost" onClick={closeBulkChangeEditor}>
                 Cancel
               </Button>
               <Button
                 type="button"
                 colorScheme="blue"
-                onClick={saveBulkRemapChanges}
-                isDisabled={!bulkRemapPreview.changedRowCount}
+                onClick={saveBulkChangeChanges}
+                isDisabled={!canApplyBulkChange}
                 isLoading={isSaving}
                 loadingText="Saving"
               >
-                Apply Remap
+                Save
               </Button>
             </HStack>
           </ModalFooter>

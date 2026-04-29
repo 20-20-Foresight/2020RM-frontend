@@ -325,23 +325,68 @@ function readRowTaxonomyWarnings(row, taxonomyOptions) {
 }
 
 /**
- * Applies one bulk remap request to the current rows.
+ * Builds one normalized target list for a bulk selection update.
+ * @param {string} value
+ * @returns {Array<{name: string, score: string}>}
+ */
+function buildBulkSelectionTargets(value) {
+  const normalizedValue = readTrimmedString(value);
+  if (!normalizedValue) {
+    return [];
+  }
+
+  return [
+    {
+      name: normalizedValue,
+      score: "3",
+    },
+  ];
+}
+
+/**
+ * Returns whether two target lists are equivalent.
+ * @param {Array<{name?: string, score?: string|number}>|null|undefined} left
+ * @param {Array<{name?: string, score?: string|number}>|null|undefined} right
+ * @returns {boolean}
+ */
+function targetListsMatch(left, right) {
+  const leftEntries = Array.isArray(left) ? left : [];
+  const rightEntries = Array.isArray(right) ? right : [];
+
+  if (leftEntries.length !== rightEntries.length) {
+    return false;
+  }
+
+  return leftEntries.every((entry, index) => {
+    const comparison = rightEntries[index];
+    return (
+      readTrimmedString(entry?.name) === readTrimmedString(comparison?.name) &&
+      readTrimmedString(entry?.score == null ? "" : String(entry.score)) ===
+        readTrimmedString(comparison?.score == null ? "" : String(comparison.score))
+    );
+  });
+}
+
+/**
+ * Applies one bulk selection update to the current rows.
  * @param {Array<object>} rows
  * @param {{
- *   dimension?: "industry"|"focus"|string,
- *   findValue?: string,
- *   replaceValue?: string,
- *   scope?: "primary"|"targets"|"both"|string
- * }} remap
+ *   industry?: string,
+ *   focus?: string
+ * }} selection
+ * @param {number[]} selectedRowIndexes
  * @returns {{rows: object[], changedRowCount: number, changedValueCount: number, changedRowIndexes: number[]}}
  */
-function applyBulkRemap(rows, remap) {
-  const dimension = remap?.dimension === "focus" ? "focus" : "industry";
-  const findValue = readTrimmedString(remap?.findValue);
-  const replaceValue = readTrimmedString(remap?.replaceValue);
-  const scope = remap?.scope === "primary" || remap?.scope === "targets" ? remap.scope : "both";
+function applyBulkSelectionUpdate(rows, selection, selectedRowIndexes) {
+  const nextIndustry = readTrimmedString(selection?.industry);
+  const nextFocus = readTrimmedString(selection?.focus);
+  const selectedIndexes = new Set(
+    (Array.isArray(selectedRowIndexes) ? selectedRowIndexes : []).filter(
+      (value) => Number.isInteger(value) && value >= 0
+    )
+  );
 
-  if (!findValue || !replaceValue) {
+  if (!selectedIndexes.size || (!nextIndustry && !nextFocus)) {
     return {
       rows: Array.isArray(rows) ? rows.slice() : [],
       changedRowCount: 0,
@@ -350,55 +395,47 @@ function applyBulkRemap(rows, remap) {
     };
   }
 
-  const field = dimension;
-  const targetsField = dimension === "industry" ? "industryTargets" : "focusTargets";
   let changedRowCount = 0;
   let changedValueCount = 0;
   const changedRowIndexes = [];
 
   const nextRows = (Array.isArray(rows) ? rows : []).map((row, rowIndex) => {
-    if (!row || typeof row !== "object") {
+    if (!row || typeof row !== "object" || !selectedIndexes.has(rowIndex)) {
       return row;
     }
 
     let rowChanged = false;
     let nextRow = row;
 
-    if (scope === "primary" || scope === "both") {
-      const currentValue = readTrimmedString(row[field]);
-      if (valuesMatchForRemap(currentValue, findValue) && currentValue !== replaceValue) {
+    if (nextIndustry) {
+      const nextTargets = buildBulkSelectionTargets(nextIndustry);
+      if (
+        readTrimmedString(row.industry) !== nextIndustry ||
+        !targetListsMatch(row.industryTargets, nextTargets)
+      ) {
         nextRow = {
           ...nextRow,
-          [field]: replaceValue,
+          industry: nextIndustry,
+          industryTargets: nextTargets,
         };
         rowChanged = true;
-        changedValueCount += 1;
+        changedValueCount += 2;
       }
     }
 
-    if (scope === "targets" || scope === "both") {
-      const currentTargets = Array.isArray(row[targetsField]) ? row[targetsField] : [];
-      let targetChanged = false;
-      const nextTargets = currentTargets.map((target) => {
-        const currentValue = readTrimmedString(target?.name);
-        if (!valuesMatchForRemap(currentValue, findValue) || currentValue === replaceValue) {
-          return target;
-        }
-
-        targetChanged = true;
-        changedValueCount += 1;
-        return {
-          ...target,
-          name: replaceValue,
-        };
-      });
-
-      if (targetChanged) {
+    if (nextFocus) {
+      const nextTargets = buildBulkSelectionTargets(nextFocus);
+      if (
+        readTrimmedString(row.focus) !== nextFocus ||
+        !targetListsMatch(row.focusTargets, nextTargets)
+      ) {
         nextRow = {
           ...nextRow,
-          [targetsField]: nextTargets,
+          focus: nextFocus,
+          focusTargets: nextTargets,
         };
         rowChanged = true;
+        changedValueCount += 2;
       }
     }
 
@@ -474,7 +511,7 @@ function rowMatchesFilters(row, filters, taxonomyOptions) {
 }
 
 export {
-  applyBulkRemap,
+  applyBulkSelectionUpdate,
   buildTaxonomyOptions,
   readDisplayValue,
   readRowTaxonomyWarnings,
