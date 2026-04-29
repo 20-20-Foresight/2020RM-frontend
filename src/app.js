@@ -1,8 +1,9 @@
 const express = require("express");
 const session = require("express-session");
 const fs = require("node:fs");
+const path = require("node:path");
 const Logger = require("@20-20-Foresight/base/log");
-const { buildAuthorizationUrl, handleCallback } = require("./auth/microsoft");
+const { buildAuthorizationUrl, handleCallback, refreshTokenSet } = require("./auth/microsoft");
 const {
   DEFAULT_RETURN_TO_PATH,
   buildSigninPath,
@@ -10,6 +11,7 @@ const {
 } = require("./auth/return-to");
 const { getSessionStore } = require("./session/store");
 const DEFAULT_FAVICON_PATH = "/assets/2020-ets-horiz-logo-rgb-color-lg.png";
+const pendingSessionRefreshes = new Map();
 
 /**
  * Returns whether the proxied request method can include a body.
@@ -129,6 +131,228 @@ function filterAdminDataFixtureList(fixture, query = {}) {
 }
 
 /**
+ * Clears all authentication state from one session object.
+ * @param {import("express-session").Session|null|undefined} sessionData
+ */
+function clearSessionAuthentication(sessionData) {
+  if (!sessionData || typeof sessionData !== "object") {
+    return;
+  }
+
+  delete sessionData.user;
+  delete sessionData.tokens;
+  delete sessionData.msAuth;
+}
+
+/**
+ * Returns one numeric token expiry (seconds since epoch) when available.
+ * @param {unknown} value
+ * @returns {number|null}
+ */
+function parseExpiresAt(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Returns whether the current access token is expired or about to expire.
+ * @param {{accessToken?: string|null, expiresAt?: number|string|null}|null|undefined} tokens
+ * @param {number} [nowSeconds]
+ * @param {number} [skewSeconds]
+ * @returns {boolean}
+ */
+function isAccessTokenExpired(tokens, nowSeconds = Math.floor(Date.now() / 1000), skewSeconds = 60) {
+  if (!tokens || !tokens.accessToken) {
+    return true;
+  }
+
+  const expiresAt = parseExpiresAt(tokens.expiresAt);
+  if (expiresAt == null) {
+    return false;
+  }
+
+  return expiresAt <= nowSeconds + skewSeconds;
+}
+
+/**
+ * Refreshes one expired session token set while coalescing concurrent refreshes
+ * for the same browser session.
+ * @param {{
+ *   sessionKey: string,
+ *   tokens: {refreshToken: string, expiresAt?: number|string|null, scope?: string|null},
+ *   userEmail: string,
+ *   config: AppConfig,
+ *   log: { info: Function },
+ *   refreshTokenSetImpl: typeof refreshTokenSet
+ * }} options
+ * @returns {Promise<{accessToken: string, refreshToken: string|null, expiresAt: number|string|null, scope: string}>}
+ */
+async function refreshExpiredSessionTokens(options) {
+  const {
+    sessionKey,
+    tokens,
+    userEmail,
+    config,
+    log,
+    refreshTokenSetImpl
+  } = options;
+
+  const existingRefresh = pendingSessionRefreshes.get(sessionKey);
+  if (existingRefresh) {
+    return existingRefresh;
+  }
+
+  const refreshPromise = (async () => {
+    const tokenSet = await refreshTokenSetImpl(
+      {
+        tenantId: config.msTenantId,
+        clientId: config.msClientId,
+        clientSecret: config.msClientSecret,
+        redirectUri: `${config.baseUrl}${config.redirectPath}`,
+        apiScope: config.msApiScope
+      },
+      tokens.refreshToken
+    );
+
+    const accessToken = tokenSet.access_token || null;
+    if (!accessToken) {
+      throw new Error("token_refresh_missing_access_token");
+    }
+
+    const nextTokens = {
+      accessToken,
+      refreshToken: tokenSet.refresh_token ?? tokens.refreshToken ?? null,
+      expiresAt: tokenSet.expires_at ?? tokens.expiresAt ?? null,
+      scope: tokenSet.scope ?? tokens.scope ?? ""
+    };
+
+    log.info("session access token refreshed", {
+      userEmail,
+      expiresAt: nextTokens.expiresAt ?? null
+    });
+
+    return nextTokens;
+  })().finally(() => {
+    if (pendingSessionRefreshes.get(sessionKey) === refreshPromise) {
+      pendingSessionRefreshes.delete(sessionKey);
+    }
+  });
+
+  pendingSessionRefreshes.set(sessionKey, refreshPromise);
+  return refreshPromise;
+}
+
+/**
+ * Ensures the request carries one valid authenticated session, refreshing the
+ * access token when it is expired and a refresh token is available.
+ * @param {import("express").Request} req
+ * @param {{
+ *   config: AppConfig,
+ *   log: { info: Function, warn: Function },
+ *   refreshTokenSetImpl?: typeof refreshTokenSet,
+ *   nowSeconds?: number
+ * }} options
+ * @returns {Promise<{authenticated: boolean, refreshed: boolean, reason?: string}>}
+ */
+async function authenticateRequestSession(req, options) {
+  const {
+    config,
+    log,
+    refreshTokenSetImpl = refreshTokenSet,
+    nowSeconds = Math.floor(Date.now() / 1000)
+  } = options;
+
+  if (!config.authEnabled) {
+    req.user = config.mockUser;
+    req.accessToken = null;
+    return { authenticated: true, refreshed: false };
+  }
+
+  const sessionData = req.session || {};
+  const user = sessionData.user || null;
+  const tokens = sessionData.tokens || null;
+  if (!user || !tokens || (!tokens.accessToken && !tokens.refreshToken)) {
+    log.warn("missing session user/tokens", {
+      hasSession: Boolean(req.session),
+      hasUser: Boolean(user),
+      hasTokens: Boolean(tokens),
+      hasAccessToken: Boolean(tokens && tokens.accessToken),
+      hasRefreshToken: Boolean(tokens && tokens.refreshToken)
+    });
+    return { authenticated: false, refreshed: false, reason: "missing_session" };
+  }
+
+  let refreshed = false;
+  if (isAccessTokenExpired(tokens, nowSeconds)) {
+    if (!tokens.refreshToken) {
+      log.warn("session access token expired without refresh token", {
+        userEmail: user && user.email ? user.email : "unknown",
+        expiresAt: tokens.expiresAt ?? null
+      });
+      clearSessionAuthentication(req.session);
+      return { authenticated: false, refreshed: false, reason: "expired_without_refresh_token" };
+    }
+
+    try {
+      const sessionKey =
+        typeof req.sessionID === "string" && req.sessionID
+          ? req.sessionID
+          : user && user.email
+            ? user.email
+            : tokens.refreshToken;
+      req.session.tokens = await refreshExpiredSessionTokens({
+        sessionKey,
+        tokens,
+        userEmail: user && user.email ? user.email : "unknown",
+        config,
+        log,
+        refreshTokenSetImpl
+      });
+      refreshed = true;
+    } catch (error) {
+      log.warn("session token refresh failed", {
+        userEmail: user && user.email ? user.email : "unknown",
+        message:
+          error instanceof Error
+            ? error.message === "token_refresh_missing_access_token"
+              ? "token refresh returned no access token"
+              : error.message
+            : "token_refresh_failed"
+      });
+      clearSessionAuthentication(req.session);
+      return {
+        authenticated: false,
+        refreshed: false,
+        reason:
+          error instanceof Error && error.message === "token_refresh_missing_access_token"
+            ? "refresh_missing_access_token"
+            : "refresh_failed"
+      };
+    }
+  }
+
+  const authenticatedSession = req.session || sessionData;
+  if (
+    !authenticatedSession.user ||
+    !authenticatedSession.tokens ||
+    !authenticatedSession.tokens.accessToken
+  ) {
+    return { authenticated: false, refreshed, reason: "missing_authenticated_session" };
+  }
+
+  req.user = authenticatedSession.user;
+  req.accessToken = authenticatedSession.tokens.accessToken;
+  log.info("session authenticated", {
+    userEmail:
+      authenticatedSession.user && authenticatedSession.user.email
+        ? authenticatedSession.user.email
+        : "unknown",
+    scope: authenticatedSession.tokens.scope || ""
+  });
+  return { authenticated: true, refreshed };
+}
+
+/**
  * @typedef {import("./config").AppConfig} AppConfig
  */
 
@@ -137,7 +361,8 @@ function filterAdminDataFixtureList(fixture, query = {}) {
  * @param {import("@remix-run/express").RequestHandler} [remixHandler]
  * @param {{
  *   buildAuthorizationUrl?: typeof buildAuthorizationUrl,
- *   handleCallback?: typeof handleCallback
+ *   handleCallback?: typeof handleCallback,
+ *   refreshTokenSet?: typeof refreshTokenSet
  * }} [deps]
  * @returns {import("express").Express}
  */
@@ -150,6 +375,8 @@ function createApp(config, remixHandler, deps = {}) {
       : buildAuthorizationUrl;
   const handleCallbackImpl =
     typeof deps.handleCallback === "function" ? deps.handleCallback : handleCallback;
+  const refreshTokenSetImpl =
+    typeof deps.refreshTokenSet === "function" ? deps.refreshTokenSet : refreshTokenSet;
   const faviconTarget = resolveFaviconTarget();
   const adminDataListFixture = readJsonFixture("ADMIN_DATA_LIST_FIXTURE_PATH");
   const adminDataDetailFixture = readJsonFixture("ADMIN_DATA_DETAIL_FIXTURE_PATH");
@@ -180,32 +407,28 @@ function createApp(config, remixHandler, deps = {}) {
    * In mock mode, sets mock user.
    * @type {import("express").RequestHandler}
    */
-  const requireSessionAuth = (req, res, next) => {
-    if (!config.authEnabled) {
-      req.user = config.mockUser;
-      req.accessToken = null;
-      log.info("mock auth enabled; bypassing token check");
-      return next();
-    }
+  const requireSessionAuth = async (req, res, next) => {
+    try {
+      if (!config.authEnabled) {
+        req.user = config.mockUser;
+        req.accessToken = null;
+        log.info("mock auth enabled; bypassing token check");
+        return next();
+      }
 
-    const sessionData = req.session || {};
-    if (!sessionData.user || !sessionData.tokens || !sessionData.tokens.accessToken) {
-      log.warn("missing session user/tokens", {
-        hasSession: Boolean(req.session),
-        hasUser: Boolean(sessionData.user),
-        hasTokens: Boolean(sessionData.tokens),
-        hasAccessToken: Boolean(sessionData.tokens && sessionData.tokens.accessToken)
+      const authResult = await authenticateRequestSession(req, {
+        config,
+        log,
+        refreshTokenSetImpl
       });
-      return res.status(401).json({ error: "not_authenticated" });
-    }
+      if (!authResult.authenticated) {
+        return res.status(401).json({ error: "not_authenticated" });
+      }
 
-    req.user = sessionData.user;
-    req.accessToken = sessionData.tokens.accessToken;
-    log.info("session authenticated", {
-      userEmail: sessionData.user && sessionData.user.email ? sessionData.user.email : "unknown",
-      scope: sessionData.tokens.scope || ""
-    });
-    return next();
+      return next();
+    } catch (error) {
+      return next(error);
+    }
   };
 
   app.get("/health", (_req, res) => {
@@ -405,6 +628,9 @@ function createApp(config, remixHandler, deps = {}) {
     });
   });
 
+  app.use("/build", express.static(path.join(config.publicDir, "build"), { immutable: true, maxAge: "1y" }));
+  app.use(express.static(config.publicDir, { maxAge: "1h" }));
+
   app.use("/api", requireSessionAuth, async (req, res) => {
     try {
       // Preserve the full API path when proxying to 2020RM-backend.
@@ -449,7 +675,7 @@ function createApp(config, remixHandler, deps = {}) {
   });
 
   // Page auth guard (Remix-rendered routes).
-  app.use((req, res, next) => {
+  app.use(async (req, res, next) => {
     const path = req.path.toLowerCase();
     const allowList = [
       "/signin",
@@ -459,6 +685,7 @@ function createApp(config, remixHandler, deps = {}) {
       "/auth/logout",
       "/health",
       "/assets",
+      "/build",
       "/favicon.ico"
     ];
     if (allowList.some((allowed) => path.startsWith(allowed))) return next();
@@ -468,14 +695,16 @@ function createApp(config, remixHandler, deps = {}) {
       req.accessToken = null;
       return next();
     }
-    const sessionData = req.session || {};
-    if (!sessionData.user || !sessionData.tokens || !sessionData.tokens.accessToken) {
+    const authResult = await authenticateRequestSession(req, {
+      config,
+      log,
+      refreshTokenSetImpl
+    });
+    if (!authResult.authenticated) {
       return res.redirect(buildSigninPath(req.originalUrl || req.url || DEFAULT_RETURN_TO_PATH));
     }
     return next();
   });
-
-  app.use(express.static(config.publicDir));
 
   if (remixHandler) {
     app.all("*", remixHandler);
@@ -495,8 +724,11 @@ function createApp(config, remixHandler, deps = {}) {
 }
 
 module.exports = {
+  authenticateRequestSession,
   buildBackendProxyRequestInit,
+  clearSessionAuthentication,
   createApp,
   filterAdminDataFixtureList,
+  isAccessTokenExpired,
   resolveFaviconTarget
 };

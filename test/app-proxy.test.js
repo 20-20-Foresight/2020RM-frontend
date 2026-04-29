@@ -1,12 +1,49 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const http = require("node:http");
+const os = require("node:os");
+const path = require("node:path");
 const { PassThrough } = require("node:stream");
 
 const {
+  authenticateRequestSession,
   buildBackendProxyRequestInit,
+  createApp,
   filterAdminDataFixtureList,
+  isAccessTokenExpired,
   resolveFaviconTarget
 } = require("../src/app");
+
+function createConfig(overrides = {}) {
+  return {
+    port: 3000,
+    baseUrl: "http://127.0.0.1:3000",
+    authEnabled: true,
+    sessionSecret: "test-session-secret",
+    backendBaseUrl: "http://127.0.0.1:3001",
+    msTenantId: "tenant-id",
+    msClientId: "client-id",
+    msClientSecret: "client-secret",
+    msApiScope: "api://crm/.default",
+    redirectPath: "/auth/callback",
+    mockUser: {
+      firstName: "Test",
+      lastName: "User",
+      email: "test.user@example.com"
+    },
+    publicDir: path.join(os.tmpdir(), "crm-frontend-public"),
+    ...overrides
+  };
+}
+
+function createTestLogger() {
+  return {
+    info() {},
+    warn() {},
+    error() {}
+  };
+}
 
 test("frontend proxy request builder forwards POST bodies and content headers", async () => {
   const requestStream = new PassThrough();
@@ -123,4 +160,149 @@ test("filterAdminDataFixtureList narrows the admin data fixture by type and sear
       ]
     }
   );
+});
+
+test("isAccessTokenExpired respects expiry timestamps with a refresh skew", () => {
+  assert.equal(
+    isAccessTokenExpired(
+      {
+        accessToken: "token-1",
+        expiresAt: 1600
+      },
+      1000
+    ),
+    false
+  );
+
+  assert.equal(
+    isAccessTokenExpired(
+      {
+        accessToken: "token-1",
+        expiresAt: 1059
+      },
+      1000
+    ),
+    true
+  );
+});
+
+test("authenticateRequestSession refreshes expired access tokens", async () => {
+  const req = {
+    session: {
+      user: {
+        email: "ada@example.com"
+      },
+      tokens: {
+        accessToken: "expired-access-token",
+        refreshToken: "refresh-token-1",
+        expiresAt: 1000,
+        scope: "scope-1"
+      }
+    }
+  };
+
+  const result = await authenticateRequestSession(req, {
+    config: createConfig(),
+    log: createTestLogger(),
+    nowSeconds: 2000,
+    refreshTokenSetImpl: async (cfg, refreshToken) => {
+      assert.equal(cfg.redirectUri, "http://127.0.0.1:3000/auth/callback");
+      assert.equal(refreshToken, "refresh-token-1");
+      return {
+        access_token: "fresh-access-token",
+        refresh_token: "refresh-token-2",
+        expires_at: 3600,
+        scope: "scope-2"
+      };
+    }
+  });
+
+  assert.deepEqual(result, {
+    authenticated: true,
+    refreshed: true
+  });
+  assert.equal(req.accessToken, "fresh-access-token");
+  assert.equal(req.session.tokens.accessToken, "fresh-access-token");
+  assert.equal(req.session.tokens.refreshToken, "refresh-token-2");
+  assert.equal(req.session.tokens.expiresAt, 3600);
+  assert.equal(req.session.tokens.scope, "scope-2");
+});
+
+test("authenticateRequestSession clears auth state when token refresh fails", async () => {
+  const req = {
+    session: {
+      user: {
+        email: "ada@example.com"
+      },
+      tokens: {
+        accessToken: "expired-access-token",
+        refreshToken: "refresh-token-1",
+        expiresAt: 1000,
+        scope: "scope-1"
+      },
+      msAuth: {
+        state: "stale"
+      }
+    }
+  };
+
+  const result = await authenticateRequestSession(req, {
+    config: createConfig(),
+    log: createTestLogger(),
+    nowSeconds: 2000,
+    refreshTokenSetImpl: async () => {
+      throw new Error("exp is expired");
+    }
+  });
+
+  assert.deepEqual(result, {
+    authenticated: false,
+    refreshed: false,
+    reason: "refresh_failed"
+  });
+  assert.equal(req.session.user, undefined);
+  assert.equal(req.session.tokens, undefined);
+  assert.equal(req.session.msAuth, undefined);
+});
+
+test("public build assets stay accessible without an authenticated session", async () => {
+  const publicDir = fs.mkdtempSync(path.join(os.tmpdir(), "crm-frontend-public-"));
+  const buildDir = path.join(publicDir, "build");
+  fs.mkdirSync(buildDir, { recursive: true });
+  fs.writeFileSync(path.join(buildDir, "app.css"), "body{color:red;}", "utf8");
+
+  const app = createApp(
+    createConfig({
+      publicDir
+    }),
+    (_req, res) => {
+      res.status(200).send("remix");
+    }
+  );
+
+  const server = http.createServer(app);
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+  try {
+    const address = server.address();
+    const origin = `http://127.0.0.1:${address.port}`;
+
+    const assetResponse = await fetch(`${origin}/build/app.css`, {
+      redirect: "manual"
+    });
+    assert.equal(assetResponse.status, 200);
+    assert.match(assetResponse.headers.get("content-type") || "", /text\/css/);
+    assert.equal(await assetResponse.text(), "body{color:red;}");
+
+    const dashboardResponse = await fetch(`${origin}/dashboard`, {
+      redirect: "manual"
+    });
+    assert.equal(dashboardResponse.status, 302);
+    assert.equal(dashboardResponse.headers.get("location"), "/signin");
+  } finally {
+    await new Promise((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+    fs.rmSync(publicDir, { recursive: true, force: true });
+  }
 });
