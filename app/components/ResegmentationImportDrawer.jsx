@@ -12,11 +12,12 @@ import { countRenderableListMembers } from "../models/resegmentation-list-detail
 import {
   applyResegmentationImportLookupResults,
   buildResegmentationImportCommitRequest,
-  buildResegmentationImportLookupRequest,
+  buildResegmentationImportLookupRequests,
   countImportedMemberships,
 } from "../models/resegmentation-import-session.mjs";
 
 const MAX_ROWS = 100;
+const LOOKUP_BATCH_SIZE = 5;
 const UNMATCHED_COLUMN_BEHAVIOR = "save_as_membership_metadata";
 const LIST_READY_POLL_INTERVAL_MS = 1500;
 const LIST_READY_TIMEOUT_MS = 30000;
@@ -114,14 +115,18 @@ function markRowsLookingUp(rows) {
 }
 
 /**
- * Marks valid rows with a lookup error message.
+ * Marks rows still waiting on lookup with an error message.
  * @param {object[]} rows
  * @param {string} message
  * @returns {object[]}
  */
 function markRowsLookupError(rows, message) {
   return (Array.isArray(rows) ? rows : []).map((row) => {
-    if (row?.validation?.status !== "valid") {
+    const isPendingLookup =
+      row?.lookup?.status === "looking_up" ||
+      (row?.validation?.status === "valid" && !row?.lookup);
+
+    if (!isPendingLookup) {
       return row;
     }
 
@@ -267,35 +272,40 @@ export default function ResegmentationImportDrawer({
   async function lookupRows(nextRows) {
     const requestId = lookupRequestRef.current + 1;
     lookupRequestRef.current = requestId;
-    setRows(markRowsLookingUp(nextRows));
+    let currentRows = markRowsLookingUp(nextRows);
+    setRows(currentRows);
     setPhase("lookup");
 
-    const lookupRequest = buildResegmentationImportLookupRequest(nextRows);
-    if (!lookupRequest.rows.length) {
+    const lookupRequests = buildResegmentationImportLookupRequests(nextRows, LOOKUP_BATCH_SIZE);
+    if (!lookupRequests.length) {
       setRows(nextRows);
       setPhase("review");
       return;
     }
 
     try {
-      const response = await fetch("/api/rest/resegmentation/import/lookup", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify(lookupRequest),
-      });
-      const payload = await readActionResponse(response);
-      if (!response.ok) {
-        throw new Error(payload?.message || payload?.error || "Import lookup failed.");
+      for (const lookupRequest of lookupRequests) {
+        const response = await fetch("/api/rest/resegmentation/import/lookup", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(lookupRequest),
+        });
+        const payload = await readActionResponse(response);
+        if (!response.ok) {
+          throw new Error(payload?.message || payload?.error || "Import lookup failed.");
+        }
+
+        if (lookupRequestRef.current !== requestId) {
+          return;
+        }
+
+        currentRows = applyResegmentationImportLookupResults(currentRows, payload.rows);
+        setRows(currentRows);
       }
 
-      if (lookupRequestRef.current !== requestId) {
-        return;
-      }
-
-      setRows(applyResegmentationImportLookupResults(nextRows, payload.rows));
       setErrorMessage("");
       setStatusNotice(null);
       setPhase("review");
@@ -306,7 +316,7 @@ export default function ResegmentationImportDrawer({
 
       const message =
         error instanceof Error ? error.message : "Unable to match imported organizations.";
-      setRows(markRowsLookupError(nextRows, message));
+      setRows(markRowsLookupError(currentRows, message));
       setErrorMessage(message);
       setPhase("review");
     }

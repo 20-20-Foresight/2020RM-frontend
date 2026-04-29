@@ -55,6 +55,35 @@ test("buildResegmentationImportLookupRequest includes only valid rows with looku
   });
 });
 
+test("buildResegmentationImportLookupRequests splits valid lookup rows into batches of five", async () => {
+  const {
+    buildResegmentationImportLookupRequests,
+  } = await import("../app/models/resegmentation-import-session.mjs");
+
+  const rows = Array.from({ length: 12 }, (_, index) => ({
+    rowNumber: index + 1,
+    values: {
+      organizationName: `Organization ${index + 1}`,
+      website: `example${index + 1}.com`,
+    },
+    validation: {
+      status: "valid",
+      messages: [],
+    },
+  }));
+
+  const requests = buildResegmentationImportLookupRequests(rows, 5);
+
+  assert.deepEqual(
+    requests.map((request) => request.rows.map((row) => row.rowNumber)),
+    [
+      [1, 2, 3, 4, 5],
+      [6, 7, 8, 9, 10],
+      [11, 12],
+    ]
+  );
+});
+
 test("applyResegmentationImportLookupResults merges lookup states by row number", async () => {
   const {
     applyResegmentationImportLookupResults,

@@ -40,6 +40,30 @@ export function buildResegmentationImportLookupRequest(rows) {
 }
 
 /**
+ * Build lookup request payloads in batches from mapped import rows.
+ * @param {object[]} rows
+ * @param {number} batchSize
+ * @returns {Array<{rows: object[]}>}
+ */
+export function buildResegmentationImportLookupRequests(rows, batchSize = 5) {
+  const request = buildResegmentationImportLookupRequest(rows);
+  const normalizedBatchSize = Math.max(1, Number(batchSize) || 1);
+
+  if (!request.rows.length) {
+    return [];
+  }
+
+  const requests = [];
+  for (let index = 0; index < request.rows.length; index += normalizedBatchSize) {
+    requests.push({
+      rows: request.rows.slice(index, index + normalizedBatchSize),
+    });
+  }
+
+  return requests;
+}
+
+/**
  * Merge backend lookup results into the current mapped-row state.
  * @param {object[]} rows
  * @param {object[]} lookupResults
