@@ -114,7 +114,7 @@ async function loadSegmentationDimensionCatalogModule() {
 
 export async function loader({ request, params }) {
   const id = typeof params.dataId === "string" ? params.dataId : "";
-  const { loadRawAdminDataDocument, loadAdminDataDocument } = await loadAdminDataServerModule();
+  const { loadRawAdminDataDocument, normalizeLoadedAdminDataDocument } = await loadAdminDataServerModule();
 
   try {
     const rawData = await loadRawAdminDataDocument({
@@ -181,13 +181,8 @@ export async function loader({ request, params }) {
       });
     }
 
-    const data = await loadAdminDataDocument({
-      request,
-      id
-    });
-
     return json({
-      data,
+      data: normalizeLoadedAdminDataDocument(rawData),
       error: null
     });
   } catch (error) {

@@ -846,17 +846,11 @@ async function loadAdminDataList(options) {
 }
 
 /**
- * Loads the full admin data document for `/admin/data/:id`.
- * @param {{request: Request, id: string, fetchImpl?: typeof fetch}} options
- * @returns {Promise<ReturnType<typeof normalizeSummary> & {document: unknown, editor: {columns: string[], rows: Record<string, string>[]}}>}
+ * Normalizes one loaded admin data payload into the generic detail editor shape.
+ * @param {unknown} result
+ * @returns {ReturnType<typeof normalizeSummary> & {document: unknown, editor: {columns: string[], rows: Record<string, string>[]}}}
  */
-async function loadAdminDataDocument(options) {
-  const payload = await requestAdminDataApi({
-    request: options.request,
-    pathname: `/api/rest/admin/data/${encodeURIComponent(options.id)}`,
-    fetchImpl: options.fetchImpl
-  });
-  const result = payload?.data;
+function normalizeLoadedAdminDataDocument(result) {
   const shape = inferShape(result?.document, result?.shape ?? result?.editor?.shape);
   const editor = applyDocumentEditorLabels(
     normalizeEditor(result?.editor, {
@@ -877,6 +871,20 @@ async function loadAdminDataDocument(options) {
     document: result?.document ?? null,
     editor
   };
+}
+
+/**
+ * Loads the full admin data document for `/admin/data/:id`.
+ * @param {{request: Request, id: string, fetchImpl?: typeof fetch}} options
+ * @returns {Promise<ReturnType<typeof normalizeSummary> & {document: unknown, editor: {columns: string[], rows: Record<string, string>[]}}>}
+ */
+async function loadAdminDataDocument(options) {
+  const payload = await requestAdminDataApi({
+    request: options.request,
+    pathname: `/api/rest/admin/data/${encodeURIComponent(options.id)}`,
+    fetchImpl: options.fetchImpl
+  });
+  return normalizeLoadedAdminDataDocument(payload?.data);
 }
 
 /**
@@ -985,6 +993,7 @@ module.exports = {
   loadAdminDataDocument,
   loadRawAdminDataDocument,
   loadAdminDataList,
+  normalizeLoadedAdminDataDocument,
   saveAdminDataDocument,
   saveRawAdminDataDocument
 };

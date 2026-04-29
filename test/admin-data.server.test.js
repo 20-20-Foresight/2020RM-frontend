@@ -4,7 +4,8 @@ const {
   buildDocumentFromEditor,
   loadAdminDataDocument,
   loadRawAdminDataDocument,
-  loadAdminDataList
+  loadAdminDataList,
+  normalizeLoadedAdminDataDocument
 } = require("../app/models/admin-data.server");
 
 test("admin data list loader calls the normalized admin data REST route", async () => {
@@ -159,6 +160,67 @@ test("admin data detail loader calls the normalized admin data detail route", as
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "http://localhost:3000/api/rest/admin/data/crm.data%3Anicknames");
   assert.equal(calls[0].options.method, undefined);
+  assert.deepEqual(detail, {
+    id: "crm.data:nicknames",
+    namespace: "crm.data",
+    key: "nicknames",
+    type: "crosswalk",
+    name: "Nicknames",
+    description: "Nickname crosswalk for person matching",
+    shape: "crosswalk",
+    version: 4,
+    lastmodifieddate: "2026-03-23T12:30:00.000Z",
+    lastmodifiedby: "admin@example.com",
+    status: null,
+    document: {
+      crosswalk: {
+        bob: {
+          values: ["robert"]
+        }
+      }
+    },
+    editor: {
+      columns: ["source", "target"],
+      rows: [
+        {
+          source: "bob",
+          target: "robert"
+        }
+      ]
+    }
+  });
+});
+
+test("admin data detail normalization can reuse a raw payload without refetching", () => {
+  const detail = normalizeLoadedAdminDataDocument({
+    id: "crm.data:nicknames",
+    namespace: "crm.data",
+    key: "nicknames",
+    type: "crosswalk",
+    name: "Nicknames",
+    description: "Nickname crosswalk for person matching",
+    shape: "crosswalk",
+    version: 4,
+    lastmodifieddate: "2026-03-23T12:30:00.000Z",
+    lastmodifiedby: "admin@example.com",
+    document: {
+      crosswalk: {
+        bob: {
+          values: ["robert"]
+        }
+      }
+    },
+    editor: {
+      columns: ["source", "target"],
+      rows: [
+        {
+          source: "bob",
+          target: "robert"
+        }
+      ]
+    }
+  });
+
   assert.deepEqual(detail, {
     id: "crm.data:nicknames",
     namespace: "crm.data",
