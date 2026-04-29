@@ -225,6 +225,8 @@ export function parseRegexToTokens(patternStr) {
     if (token === null) return null;
     tokens.push(token);
   }
+  // Use deterministic position-based IDs so SSR and client hydration match.
+  tokens.forEach((token, i) => { token.id = `p${i}`; });
   return { tokens, anchorStart, anchorEnd };
 }
 
