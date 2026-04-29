@@ -43,6 +43,7 @@ import {
   buildTaxonomyOptions,
   readDisplayValue,
   readRowTaxonomyWarnings,
+  resolveFriendlyTaxonomyLabel,
   rowMatchesFilters
 } from "../models/segmentation-default-page.mjs";
 import { buildSegmentationDefaultSubmitFormData } from "../models/segmentation-default-submit.mjs";
@@ -1060,7 +1061,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                   {(Array.isArray(draftRow.industryTargets) ? draftRow.industryTargets : []).map((target, index) => (
                     <HStack key={`industry-target-${index}`} align="start">
                       <Select
-                        value={target.name}
+                        value={resolveFriendlyTaxonomyLabel(target.name, taxonomyOptions.industryOptions) || target.name}
                         onChange={(event) => updateDraftTarget("industryTargets", index, "name", event.target.value)}
                         bg="white"
                       >
@@ -1095,7 +1096,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                   {(Array.isArray(draftRow.focusTargets) ? draftRow.focusTargets : []).map((target, index) => (
                     <HStack key={`focus-target-${index}`} align="start">
                       <Select
-                        value={target.name}
+                        value={resolveFriendlyTaxonomyLabel(target.name, taxonomyOptions.focusOptions) || target.name}
                         onChange={(event) => updateDraftTarget("focusTargets", index, "name", event.target.value)}
                         bg="white"
                       >
