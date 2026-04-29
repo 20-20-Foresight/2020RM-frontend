@@ -16,7 +16,7 @@ import {
 } from "@chakra-ui/react";
 import { EditIcon } from "@chakra-ui/icons";
 import { useLocation } from "@remix-run/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { InlineSaveStatus } from "./InlineSaveStatus";
 import { ToastRichTextEditor } from "./ToastRichTextEditor";
 import { useQueuedDocumentSave } from "../hooks/useQueuedDocumentSave";
@@ -191,6 +191,7 @@ export function DimensionDefinitionEditorPage({ data, actionData }) {
   const [editingRowKey, setEditingRowKey] = useState("");
   const [draftRow, setDraftRow] = useState(buildEmptyRow);
   const [isDraftNew, setIsDraftNew] = useState(false);
+  const documentIdRef = useRef(readTrimmedString(data.id));
   const {
     saveSummary,
     isSaving: isQueuedSaving,
@@ -219,13 +220,19 @@ export function DimensionDefinitionEditorPage({ data, actionData }) {
   });
 
   useEffect(() => {
+    const nextDocumentId = readTrimmedString(data.id);
+    if (documentIdRef.current === nextDocumentId) {
+      return;
+    }
+
+    documentIdRef.current = nextDocumentId;
     setMetadata(data.metadata && typeof data.metadata === "object" ? { ...data.metadata } : {});
     setDescription(data.description || "");
     setRows(cloneRows(data.dimensionDefinition.rows));
     setEditingRowKey("");
     setDraftRow(buildEmptyRow());
     setIsDraftNew(false);
-  }, [data.description, data.dimensionDefinition.rows, data.id, data.metadata, data.version]);
+  }, [data.description, data.dimensionDefinition.rows, data.id, data.metadata]);
 
   function startEditingRow(rowKey) {
     const matchedRow = rows.find((row) => row.__clientKey === rowKey);
