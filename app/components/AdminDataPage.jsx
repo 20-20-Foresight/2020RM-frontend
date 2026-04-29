@@ -517,7 +517,14 @@ export function AdminDataDetailEditor({ data, actionData, isSaving = false }) {
                     <Thead bg="gray.50">
                       <Tr>
                         {data.editor.columns.map((column) => (
-                          <Th key={column} position="sticky" top={0} bg="gray.50" zIndex={1}>
+                          <Th
+                            key={column}
+                            position="sticky"
+                            top={0}
+                            bg={regexColumns.has(column) ? "blue.50" : "gray.50"}
+                            color={regexColumns.has(column) ? "blue.700" : undefined}
+                            zIndex={1}
+                          >
                             {column}
                           </Th>
                         ))}

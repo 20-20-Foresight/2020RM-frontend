@@ -165,14 +165,16 @@ export async function loader({ request, params }) {
         request
       });
 
+      const segmentationDefault = buildSegmentationDefaultViewModel({
+        editorType,
+        document: rawData.document
+      });
+
       return json({
         data: {
           ...rawData,
           editorType,
-          segmentationDefault: buildSegmentationDefaultViewModel({
-            editorType,
-            document: rawData.document
-          }),
+          segmentationDefault,
           categoryCatalog
         },
         error: null

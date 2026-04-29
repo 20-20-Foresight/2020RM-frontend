@@ -47,6 +47,7 @@ import {
 } from "../models/segmentation-default-page.mjs";
 import { buildSegmentationDefaultSubmitFormData } from "../models/segmentation-default-submit.mjs";
 import { InlineSaveStatus } from "./InlineSaveStatus";
+import { RegexBuilder, RegexTokenDisplay, parseRegexToTokens } from "./ui/molecules/RegexBuilder";
 import { useQueuedDocumentSave } from "../hooks/useQueuedDocumentSave";
 import { useRowSaveHighlight } from "../hooks/useRowSaveHighlight";
 
@@ -833,9 +834,17 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                     <Tr>
                       {data.segmentationDefault.categoryColumns.map((columnLabel, index) => {
                         const columnKey = buildCategoryFilterKey(index);
+                        const isRegex = columnLabel.toLowerCase() === "regex";
 
                         return (
-                          <Th key={columnKey} position="sticky" top={0} bg="gray.50" zIndex={1}>
+                          <Th
+                            key={columnKey}
+                            position="sticky"
+                            top={0}
+                            bg={isRegex ? "blue.50" : "gray.50"}
+                            color={isRegex ? "blue.700" : undefined}
+                            zIndex={1}
+                          >
                             <SearchableHeader
                               columnKey={columnKey}
                               label={columnLabel}
@@ -924,8 +933,12 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                             }
                             transition="background-color 0.35s ease"
                           >
-                            {data.segmentationDefault.categoryColumns.map((_, categoryIndex) => (
-                              <Td key={`${rowIndex}-category-${categoryIndex}`}>{row.categories[categoryIndex] || ""}</Td>
+                            {data.segmentationDefault.categoryColumns.map((columnLabel, categoryIndex) => (
+                              <Td key={`${rowIndex}-category-${categoryIndex}`}>
+                                {columnLabel.toLowerCase() === "regex"
+                                  ? <RegexTokenDisplay pattern={row.categories[categoryIndex] || ""} />
+                                  : row.categories[categoryIndex] || ""}
+                              </Td>
                             ))}
                             {valueColumns.map((column) => (
                               <Td key={`${rowIndex}-${column.key}`}>{readTrimmedString(row[column.key])}</Td>
@@ -1005,16 +1018,30 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                   <AlertDescription>This row has no Industry or Focus output, so segmentation skips it until one is added.</AlertDescription>
                 </Alert>
               ) : null}
-              {data.segmentationDefault.categoryColumns.map((columnLabel, index) => (
-                <FormControl key={`draft-category-${index}`}>
-                  <FormLabel>{columnLabel}</FormLabel>
-                  <Input
-                    value={draftRow.categories[index] || ""}
-                    onChange={(event) => updateDraftCategory(index, event.target.value)}
-                    bg="white"
-                  />
-                </FormControl>
-              ))}
+              {data.segmentationDefault.categoryColumns.map((columnLabel, index) => {
+                const isRegex = columnLabel.toLowerCase() === "regex";
+                const parsed = isRegex ? parseRegexToTokens(draftRow.categories[index] || "") : null;
+                return (
+                  <FormControl key={`draft-category-${index}`}>
+                    <FormLabel>{columnLabel}</FormLabel>
+                    {isRegex ? (
+                      <RegexBuilder
+                        compact
+                        initialTokens={parsed?.tokens ?? null}
+                        initialAnchorStart={parsed?.anchorStart ?? false}
+                        initialAnchorEnd={parsed?.anchorEnd ?? false}
+                        onPatternChange={(pattern) => updateDraftCategory(index, pattern)}
+                      />
+                    ) : (
+                      <Input
+                        value={draftRow.categories[index] || ""}
+                        onChange={(event) => updateDraftCategory(index, event.target.value)}
+                        bg="white"
+                      />
+                    )}
+                  </FormControl>
+                );
+              })}
 
               {valueColumns.map((column) => (
                 <FormControl key={`draft-value-${column.key}`}>
