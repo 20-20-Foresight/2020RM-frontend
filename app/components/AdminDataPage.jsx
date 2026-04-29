@@ -93,17 +93,22 @@ function cloneRows(rows) {
  * @param {Record<string, string>[]} rows
  * @returns {boolean}
  */
-function isRegexColumn(columnName, rows) {
+function isRegexColumn(columnName, rows, shape, allColumns) {
   const lcName = columnName.toLowerCase();
   if (lcName.includes("regex") || lcName.includes("pattern") || lcName.includes("regexp")) {
     return true;
   }
+  // Crosswalk: detected by shape, or inferred from a ["source","target"] column pair
+  if (columnName === "source") {
+    if (shape === "crosswalk") return true;
+    const cols = allColumns || [];
+    if (cols.length === 2 && cols.includes("target")) return true;
+  }
+  // Heuristic: any value that looks like a regex pattern
   const nonEmpty = rows.map((r) => r[columnName]).filter(Boolean);
-  if (!nonEmpty.length) return false;
-  const regexLike = nonEmpty.filter(
+  return nonEmpty.some(
     (v) => v.startsWith("^") || v.endsWith("$") || /\(\?:|\\[sdbwS]|\[[A-Za-z]/.test(v)
   );
-  return regexLike.length / nonEmpty.length >= 0.5;
 }
 
 /**
@@ -365,8 +370,8 @@ export function AdminDataDetailEditor({ data, actionData, isSaving = false }) {
   const [pendingRegex, setPendingRegex] = useState({});
 
   const regexColumns = useMemo(
-    () => new Set(data.editor.columns.filter((c) => isRegexColumn(c, data.editor.rows))),
-    [data.editor.columns, data.editor.rows]
+    () => new Set(data.editor.columns.filter((c) => isRegexColumn(c, data.editor.rows, data.shape, data.editor.columns))),
+    [data.editor.columns, data.editor.rows, data.shape]
   );
 
   useEffect(() => {
