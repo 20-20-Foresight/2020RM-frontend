@@ -72,18 +72,20 @@ function buildCatalogSignature(industrySummary, focusSummary) {
 /**
  * Builds one normalized focus option from a category row.
  * @param {unknown} value
- * @returns {{id: string, label: string, description: string}|null}
+ * @returns {{id: string, slug: string, label: string, description: string}|null}
  */
 function normalizeFocusOption(value) {
   const id = readTrimmedString(value?.id);
+  const slug = readTrimmedString(value?.slug) || readTrimmedString(value?.__extraFields?.slug);
   const label = readTrimmedString(value?.label);
   const deletedOn = readTrimmedString(value?.deletedOn);
-  if (!id || !label || deletedOn) {
+  if (!slug || !label || deletedOn) {
     return null;
   }
 
   return {
-    id,
+    id: id || slug,
+    slug,
     label,
     description: readPlainTextDescription(value?.description) || "No description available."
   };
@@ -116,7 +118,7 @@ function collectIndustryOptions(rows) {
  *   loadCategoryDocuments?: typeof loadCategoryDocuments,
  *   loadRawAdminDataDocument?: typeof loadRawAdminDataDocument
  * }} options
- * @returns {Promise<{industryOptions: string[], focusOptions: Array<{id: string, label: string, description: string}>}>}
+ * @returns {Promise<{industryOptions: string[], focusOptions: Array<{id: string, slug: string, label: string, description: string}>}>}
  */
 async function loadFocusToIndustryCatalog(options) {
   const loadCategories = options.loadCategoryDocuments || loadCategoryDocuments;

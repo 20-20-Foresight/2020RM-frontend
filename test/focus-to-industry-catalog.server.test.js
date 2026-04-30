@@ -10,7 +10,7 @@ test.afterEach(() => {
   __testOnly.resetCache();
 });
 
-test("loadFocusToIndustryCatalog loads visible industry labels and focus ids", async () => {
+test("loadFocusToIndustryCatalog loads visible industry labels and focus slugs", async () => {
   const requestedIds = [];
   const catalog = await loadFocusToIndustryCatalog({
     request: new Request("http://localhost:3000/admin/data/crm.data%3Afocus_to_industry", {
@@ -45,9 +45,9 @@ test("loadFocusToIndustryCatalog loads visible industry labels and focus ids", a
       return {
         document: {
           values: [
-            { id: "focus-2", label: "Brokerage", description: "<p>Brokerage description</p>" },
-            { id: "focus-1", label: "REIT", description: "<p>REIT description</p>" },
-            { id: "focus-3", label: "Retired", deletedOn: "2026-01-01T00:00:00.000Z" }
+            { id: "focus-2", slug: "brokerage", label: "Brokerage", description: "<p>Brokerage description</p>" },
+            { id: "focus-1", slug: "reit", label: "REIT", description: "<p>REIT description</p>" },
+            { id: "focus-3", slug: "retired", label: "Retired", deletedOn: "2026-01-01T00:00:00.000Z" }
           ]
         }
       };
@@ -58,8 +58,8 @@ test("loadFocusToIndustryCatalog loads visible industry labels and focus ids", a
   assert.deepEqual(catalog, {
     industryOptions: ["Brokerage", "Real Estate"],
     focusOptions: [
-      { id: "focus-2", label: "Brokerage", description: "Brokerage description" },
-      { id: "focus-1", label: "REIT", description: "REIT description" }
+      { id: "focus-2", slug: "brokerage", label: "Brokerage", description: "Brokerage description" },
+      { id: "focus-1", slug: "reit", label: "REIT", description: "REIT description" }
     ]
   });
 });
@@ -98,7 +98,7 @@ test("loadFocusToIndustryCatalog reuses cached category rows until relevant vers
         return {
           document: {
             values: [
-              { id: `focus-${currentVersion}`, label: `Focus ${currentVersion}`, description: `<p>Description ${currentVersion}</p>` }
+              { id: `focus-${currentVersion}`, slug: `focus-${currentVersion}`, label: `Focus ${currentVersion}`, description: `<p>Description ${currentVersion}</p>` }
             ]
           }
         };

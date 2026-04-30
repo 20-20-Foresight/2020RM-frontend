@@ -6,12 +6,12 @@ const {
   buildFocusToIndustryViewModel
 } = require("../app/models/focus-to-industry-document");
 
-test("buildFocusToIndustryViewModel reads ordered focus ids and scored industry targets", () => {
+test("buildFocusToIndustryViewModel reads ordered focus slugs and scored industry targets", () => {
   const document = {
     rows: [
       {
         rowId: "row-focus-1",
-        focusIds: ["focus-1", "focus-2", "focus-3"],
+        focusSlugs: ["reit", "brokerage", "development"],
         industries: [
           { name: "Real Estate", score: 10 },
           { name: "Investment Firm", score: 4 }
@@ -29,7 +29,7 @@ test("buildFocusToIndustryViewModel reads ordered focus ids and scored industry 
   assert.deepEqual(viewModel.rows, [
     {
       rowId: "row-focus-1",
-      focusIds: ["focus-1", "focus-2", "focus-3"],
+      focusSlugs: ["reit", "brokerage", "development"],
       industryTargets: [
         { name: "Real Estate", score: 10 },
         { name: "Investment Firm", score: 4 }
@@ -47,7 +47,7 @@ test("buildFocusToIndustryDocument rebuilds the rows wrapper and preserves sibli
     rows: [
       {
         rowId: "row-existing-1",
-        focusIds: ["focus-existing"],
+        focusSlugs: ["focus-existing"],
         industries: [
           { name: "Brokerage", score: 5 }
         ]
@@ -63,7 +63,7 @@ test("buildFocusToIndustryDocument rebuilds the rows wrapper and preserves sibli
     rows: [
       {
         rowId: "row-existing-1",
-        focusIds: ["focus-a", "focus-b"],
+        focusSlugs: ["reit", "brokerage"],
         industryTargets: [
           { name: "Real Estate", score: 10 },
           { name: "Investment Firm", score: 4 }
@@ -74,7 +74,7 @@ test("buildFocusToIndustryDocument rebuilds the rows wrapper and preserves sibli
         }
       },
       {
-        focusIds: ["focus-c"],
+        focusSlugs: ["development"],
         industryTargets: [
           { name: "Brokerage", score: 3 }
         ],
@@ -82,7 +82,7 @@ test("buildFocusToIndustryDocument rebuilds the rows wrapper and preserves sibli
         __extraFields: {}
       },
       {
-        focusIds: [],
+        focusSlugs: [],
         industryTargets: [
           { name: "Skipped", score: 1 }
         ],
@@ -110,7 +110,7 @@ test("buildFocusToIndustryDocument rebuilds the rows wrapper and preserves sibli
       rows: [
         {
           rowId: "row-existing-1",
-          focusIds: ["focus-a", "focus-b"],
+          focusSlugs: ["reit", "brokerage"],
           industry: "Real Estate",
           industries: [
             { name: "Real Estate", score: 10 },
@@ -121,7 +121,7 @@ test("buildFocusToIndustryDocument rebuilds the rows wrapper and preserves sibli
         },
         {
           rowId: "<generated>",
-          focusIds: ["focus-c"],
+          focusSlugs: ["development"],
           industry: "Brokerage",
           industries: [
             { name: "Brokerage", score: 3 }

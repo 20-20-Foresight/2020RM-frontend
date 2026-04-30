@@ -85,16 +85,20 @@ function readIndustryTargets(value) {
 }
 
 /**
- * Reads one ordered focus ID array.
+ * Reads one ordered focus slug array.
  * @param {unknown} value
  * @returns {string[]}
  */
-function readFocusIds(value) {
-  const focusIds = Array.isArray(value?.focusIds) ? value.focusIds : [];
+function readFocusSlugs(value) {
+  const focusSlugs = Array.isArray(value?.focusSlugs)
+    ? value.focusSlugs
+    : Array.isArray(value?.focusIds)
+      ? value.focusIds
+      : [];
   /** @type {Set<string>} */
   const seen = new Set();
 
-  return focusIds
+  return focusSlugs
     .map((entry) => readTrimmedString(entry))
     .filter((entry) => {
       if (!entry || seen.has(entry)) {
@@ -127,7 +131,7 @@ function resolveDocumentRows(document) {
  * @param {unknown} value
  * @returns {{
  *   rowId: string,
- *   focusIds: string[],
+ *   focusSlugs: string[],
  *   industryTargets: Array<{name: string, score: number}>,
  *   notes: string,
  *   __extraFields: Record<string, unknown>
@@ -139,7 +143,7 @@ function buildFocusToIndustryRow(value) {
   const extraFields = {};
 
   for (const [key, entry] of Object.entries(normalizedValue)) {
-    if (["rowId", "focusIds", "industry", "industries", "notes"].includes(key)) {
+    if (["rowId", "focusIds", "focusSlugs", "industry", "industries", "notes"].includes(key)) {
       continue;
     }
     extraFields[key] = entry;
@@ -147,7 +151,7 @@ function buildFocusToIndustryRow(value) {
 
   return {
     rowId: ensureRowId(normalizedValue.rowId),
-    focusIds: readFocusIds(normalizedValue),
+    focusSlugs: readFocusSlugs(normalizedValue),
     industryTargets: readIndustryTargets(normalizedValue),
     notes: readTrimmedString(normalizedValue.notes),
     __extraFields: extraFields
@@ -173,10 +177,10 @@ function buildFocusToIndustryViewModel(options) {
  * @returns {Record<string, unknown>|null}
  */
 function buildPersistedRow(row) {
-  const focusIds = readFocusIds(row);
+  const focusSlugs = readFocusSlugs(row);
   const industryTargets = readIndustryTargets(row);
   const notes = readTrimmedString(row?.notes);
-  if (!focusIds.length || !industryTargets.length) {
+  if (!focusSlugs.length || !industryTargets.length) {
     return null;
   }
 
@@ -184,7 +188,7 @@ function buildPersistedRow(row) {
   const nextRow = {
     ...(isPlainObject(row?.__extraFields) ? row.__extraFields : {}),
     rowId: ensureRowId(row?.rowId),
-    focusIds,
+    focusSlugs,
     industry: industryTargets[0].name,
     industries: industryTargets
   };

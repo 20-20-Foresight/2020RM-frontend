@@ -100,7 +100,7 @@ function buildEmptyIndustryTarget() {
  * @param {unknown[]} rows
  * @returns {Array<{
  *   rowId: string,
- *   focusIds: string[],
+ *   focusSlugs: string[],
  *   industryTargets: Array<{name: string, score: string}>,
  *   notes: string,
  *   __extraFields: Record<string, unknown>,
@@ -111,7 +111,11 @@ function cloneRows(rows) {
   return Array.isArray(rows)
     ? rows.map((row) => ({
         rowId: readTrimmedString(row?.rowId),
-        focusIds: Array.isArray(row?.focusIds) ? row.focusIds.map((entry) => readTrimmedString(entry)).filter(Boolean) : [],
+        focusSlugs: Array.isArray(row?.focusSlugs)
+          ? row.focusSlugs.map((entry) => readTrimmedString(entry)).filter(Boolean)
+          : Array.isArray(row?.focusIds)
+            ? row.focusIds.map((entry) => readTrimmedString(entry)).filter(Boolean)
+            : [],
         industryTargets: cloneIndustryTargets(row?.industryTargets),
         notes: readTrimmedString(row?.notes),
         __extraFields: row && typeof row.__extraFields === "object" && !Array.isArray(row.__extraFields) ? { ...row.__extraFields } : {},
@@ -124,7 +128,7 @@ function cloneRows(rows) {
  * Builds one empty editor row.
  * @returns {{
  *   rowId: string,
- *   focusIds: string[],
+ *   focusSlugs: string[],
  *   industryTargets: Array<{name: string, score: string}>,
  *   notes: string,
  *   __extraFields: Record<string, unknown>,
@@ -134,7 +138,7 @@ function cloneRows(rows) {
 function buildEmptyRow() {
   return {
     rowId: "",
-    focusIds: [],
+    focusSlugs: [],
     industryTargets: [buildEmptyIndustryTarget()],
     notes: "",
     __extraFields: {},
@@ -156,14 +160,42 @@ function stripTransientFields(rows) {
 }
 
 /**
+ * Resolves one stored focus selector to its canonical slug.
+ * @param {string} value
+ * @param {Map<string, string>} focusSlugByToken
+ * @returns {string}
+ */
+function canonicalizeFocusSlug(value, focusSlugByToken) {
+  const trimmed = readTrimmedString(value);
+  return focusSlugByToken.get(trimmed) || trimmed;
+}
+
+/**
+ * Canonicalizes focus selectors to slugs before persistence.
+ * @param {Array<Record<string, unknown>>} rows
+ * @param {Map<string, string>} focusSlugByToken
+ * @returns {Array<Record<string, unknown>>}
+ */
+function canonicalizeRowsForSave(rows, focusSlugByToken) {
+  return stripTransientFields(rows).map((row) => ({
+    ...row,
+    focusSlugs: Array.isArray(row?.focusSlugs)
+      ? row.focusSlugs
+          .map((entry) => canonicalizeFocusSlug(entry, focusSlugByToken))
+          .filter(Boolean)
+      : [],
+  }));
+}
+
+/**
  * Returns whether one draft row is complete enough to save.
- * @param {{focusIds?: string[], industryTargets?: Array<{name?: string}>}|null|undefined} row
+ * @param {{focusSlugs?: string[], industryTargets?: Array<{name?: string}>}|null|undefined} row
  * @returns {boolean}
  */
 function isCompleteRow(row) {
-  const focusIds = Array.isArray(row?.focusIds) ? row.focusIds.map((entry) => readTrimmedString(entry)).filter(Boolean) : [];
+  const focusSlugs = Array.isArray(row?.focusSlugs) ? row.focusSlugs.map((entry) => readTrimmedString(entry)).filter(Boolean) : [];
   const hasIndustry = cloneIndustryTargets(row?.industryTargets).some((entry) => readTrimmedString(entry.name));
-  return focusIds.length > 0 && hasIndustry;
+  return focusSlugs.length > 0 && hasIndustry;
 }
 
 /**
@@ -206,22 +238,22 @@ function summarizeIndustryTargets(values) {
  * Renders one display card or inline draft editor.
  * @param {{
  *   row: {
- *     focusIds: string[],
+ *     focusSlugs: string[],
  *     industryTargets: Array<{name: string, score: string}>,
  *     notes: string,
  *     __clientKey: string
  *   },
- *   focusMetaById: Map<string, {label: string, description: string}>,
+ *   focusMetaByToken: Map<string, {label: string, description: string}>,
  *   industryOptions: string[],
- *   filteredFocusOptions: Array<{id: string, label: string}>,
-  *   selectedFocusId: string,
-  *   highlightState?: "saving"|"saved",
-  *   isEditing?: boolean,
-  *   onEdit?: () => void,
-  *   onDelete?: () => void,
-  *   onSelectedFocusChange?: (value: string) => void,
-  *   onAddFocus?: () => void,
- *   onRemoveFocus?: (focusId: string) => void,
+ *   filteredFocusOptions: Array<{slug: string, label: string}>,
+ *   selectedFocusSlug: string,
+ *   highlightState?: "saving"|"saved",
+ *   isEditing?: boolean,
+ *   onEdit?: () => void,
+ *   onDelete?: () => void,
+ *   onSelectedFocusChange?: (value: string) => void,
+ *   onAddFocus?: () => void,
+ *   onRemoveFocus?: (focusSlug: string) => void,
  *   onReorderFocus?: (fromIndex: number, toIndex: number) => void,
  *   onUpdateIndustryTarget?: (index: number, field: "name"|"score", value: string) => void,
  *   onAddIndustryTarget?: () => void,
@@ -235,10 +267,10 @@ function summarizeIndustryTargets(values) {
 function FocusToIndustryCard(props) {
   const {
     row,
-    focusMetaById,
+    focusMetaByToken,
     industryOptions,
     filteredFocusOptions,
-    selectedFocusId,
+    selectedFocusSlug,
     highlightState,
     isEditing = false,
     onEdit,
@@ -276,7 +308,7 @@ function FocusToIndustryCard(props) {
             <Box>
               <Heading size="sm">{readTrimmedString(row.rowId) ? "Edit Focus Pattern" : "New Focus Pattern"}</Heading>
               <Text color="gray.600" mt={1}>
-                Add ordered Focus IDs on the left and scored Industry outputs on the right.
+                Add ordered Focuses on the left and scored Industry outputs on the right.
               </Text>
             </Box>
           </Flex>
@@ -296,31 +328,31 @@ function FocusToIndustryCard(props) {
                     <FormControl minW={{ base: "100%", md: "320px" }}>
                       <FormLabel mb={1}>Add Focus</FormLabel>
                       <Select
-                        value={selectedFocusId}
+                        value={selectedFocusSlug}
                         onChange={(event) => onSelectedFocusChange?.(event.target.value)}
                         bg="white"
                       >
                         <option value="">Select one</option>
                         {filteredFocusOptions.map((option) => (
-                          <option key={option.id} value={option.id}>
+                          <option key={option.slug} value={option.slug}>
                             {option.label}
                           </option>
                         ))}
                       </Select>
                     </FormControl>
 
-                    <Button onClick={onAddFocus} colorScheme="blue" alignSelf={{ base: "stretch", md: "end" }} isDisabled={!selectedFocusId}>
+                    <Button onClick={onAddFocus} colorScheme="blue" alignSelf={{ base: "stretch", md: "end" }} isDisabled={!selectedFocusSlug}>
                       Add Focus
                     </Button>
                   </HStack>
 
-                  {row.focusIds.length ? (
+                  {row.focusSlugs.length ? (
                     <Wrap spacing={3}>
-                      {row.focusIds.map((focusId, index) => {
-                        const focusMeta = focusMetaById.get(focusId);
-                        const label = focusMeta?.label || focusId;
+                      {row.focusSlugs.map((focusSlug, index) => {
+                        const focusMeta = focusMetaByToken.get(focusSlug);
+                        const label = focusMeta?.label || focusSlug;
                         return (
-                          <WrapItem key={`${focusId}-${index}`}>
+                          <WrapItem key={`${focusSlug}-${index}`}>
                             <Tooltip label={focusMeta?.description || "No description available."} hasArrow>
                               <Tag
                                 size="lg"
@@ -340,7 +372,7 @@ function FocusToIndustryCard(props) {
                                 <TagCloseButton
                                   onClick={(event) => {
                                     event.preventDefault();
-                                    onRemoveFocus?.(focusId);
+                                    onRemoveFocus?.(focusSlug);
                                   }}
                                 />
                               </Tag>
@@ -453,7 +485,7 @@ function FocusToIndustryCard(props) {
             <Box>
               <Heading size="sm">Focus Pattern</Heading>
               <Text color="gray.600" mt={1}>
-                {row.focusIds.length} focus{row.focusIds.length === 1 ? "" : "es"} mapped to {industrySummary.length} industry output
+                {row.focusSlugs.length} focus{row.focusSlugs.length === 1 ? "" : "es"} mapped to {industrySummary.length} industry output
                 {industrySummary.length === 1 ? "" : "s"}.
               </Text>
             </Box>
@@ -477,11 +509,11 @@ function FocusToIndustryCard(props) {
               Ordered Focuses
             </Text>
             <Wrap spacing={3}>
-              {row.focusIds.map((focusId, index) => {
-                const focusMeta = focusMetaById.get(focusId);
-                const label = focusMeta?.label || focusId;
+              {row.focusSlugs.map((focusSlug, index) => {
+                const focusMeta = focusMetaByToken.get(focusSlug);
+                const label = focusMeta?.label || focusSlug;
                 return (
-                  <WrapItem key={`${focusId}-${index}`}>
+                  <WrapItem key={`${focusSlug}-${index}`}>
                     <Tooltip label={focusMeta?.description || "No description available."} hasArrow>
                       <Tag size="lg" borderRadius="full" bg="blue.50" color="blue.900">
                         <TagLabel>{`${index + 1}. ${label}`}</TagLabel>
@@ -541,7 +573,7 @@ function FocusToIndustryCard(props) {
  *     focusToIndustry: {rows: unknown[]},
  *     focusToIndustryCatalog: {
  *       industryOptions: string[],
- *       focusOptions: Array<{id: string, label: string, description: string}>
+ *       focusOptions: Array<{id: string, slug: string, label: string, description: string}>
  *     }
  *   },
  *   actionData?: {error?: {message?: string}}|null
@@ -557,7 +589,7 @@ export function FocusToIndustryEditorPage({ data, actionData }) {
   const [editingRowKey, setEditingRowKey] = useState("");
   const [draftRow, setDraftRow] = useState(null);
   const [isDraftNew, setIsDraftNew] = useState(false);
-  const [selectedFocusId, setSelectedFocusId] = useState("");
+  const [selectedFocusSlug, setSelectedFocusSlug] = useState("");
   const documentIdRef = useRef(readTrimmedString(data.id));
   const {
     saveSummary,
@@ -576,7 +608,10 @@ export function FocusToIndustryEditorPage({ data, actionData }) {
       formData.set("expectedVersion", summary.version == null ? "" : String(summary.version));
       formData.set("document", JSON.stringify(data.document ?? null));
       formData.set("editor", JSON.stringify(data.editor ?? null));
-      formData.set("focusToIndustryRows", JSON.stringify(stripTransientFields(rows)));
+      formData.set(
+        "focusToIndustryRows",
+        JSON.stringify(canonicalizeRowsForSave(rows, focusSlugByToken))
+      );
       return formData;
     }
   });
@@ -599,7 +634,7 @@ export function FocusToIndustryEditorPage({ data, actionData }) {
     setEditingRowKey("");
     setDraftRow(null);
     setIsDraftNew(false);
-    setSelectedFocusId("");
+    setSelectedFocusSlug("");
     addPatternDrawer.onClose();
   }, [data.description, data.focusToIndustry?.rows, data.id, data.metadata]);
 
@@ -613,38 +648,59 @@ export function FocusToIndustryEditorPage({ data, actionData }) {
         ? data.focusToIndustryCatalog.focusOptions
             .map((option) => ({
               id: readTrimmedString(option?.id),
+              slug: readTrimmedString(option?.slug),
               label: readTrimmedString(option?.label),
               description: readTrimmedString(option?.description)
             }))
-            .filter((option) => option.id && option.label)
+            .filter((option) => option.slug && option.label)
         : [],
     [data.focusToIndustryCatalog?.focusOptions]
   );
-  const focusMetaById = useMemo(
-    () => new Map(focusOptions.map((option) => [option.id, { label: option.label, description: option.description || "No description available." }])),
+  const focusMetaByToken = useMemo(
+    () =>
+      new Map(
+        focusOptions.flatMap((option) => [
+          [option.slug, { label: option.label, description: option.description || "No description available." }],
+          [option.id, { label: option.label, description: option.description || "No description available." }],
+        ])
+      ),
+    [focusOptions]
+  );
+  const focusSlugByToken = useMemo(
+    () =>
+      new Map(
+        focusOptions.flatMap((option) => [
+          [option.slug, option.slug],
+          [option.id, option.slug],
+        ])
+      ),
     [focusOptions]
   );
   const filteredFocusOptions = useMemo(() => {
-    const selectedIds = new Set(Array.isArray(draftRow?.focusIds) ? draftRow.focusIds : []);
+    const selectedSlugs = new Set(
+      Array.isArray(draftRow?.focusSlugs)
+        ? draftRow.focusSlugs.map((entry) => canonicalizeFocusSlug(entry, focusSlugByToken)).filter(Boolean)
+        : []
+    );
     return focusOptions.filter((option) => {
-      if (selectedIds.has(option.id)) {
+      if (selectedSlugs.has(option.slug)) {
         return false;
       }
       return true;
     });
-  }, [draftRow?.focusIds, focusOptions]);
+  }, [draftRow?.focusSlugs, focusOptions, focusSlugByToken]);
   const displayName = readTrimmedString(metadata?.name) || data.name;
 
   useEffect(() => {
-    if (!selectedFocusId && filteredFocusOptions[0]?.id) {
-      setSelectedFocusId(filteredFocusOptions[0].id);
+    if (!selectedFocusSlug && filteredFocusOptions[0]?.slug) {
+      setSelectedFocusSlug(filteredFocusOptions[0].slug);
       return;
     }
 
-    if (selectedFocusId && !filteredFocusOptions.some((option) => option.id === selectedFocusId)) {
-      setSelectedFocusId(filteredFocusOptions[0]?.id || "");
+    if (selectedFocusSlug && !filteredFocusOptions.some((option) => option.slug === selectedFocusSlug)) {
+      setSelectedFocusSlug(filteredFocusOptions[0]?.slug || "");
     }
-  }, [filteredFocusOptions, selectedFocusId]);
+  }, [filteredFocusOptions, selectedFocusSlug]);
 
   /**
    * Builds one background save payload from a future row state.
@@ -659,7 +715,10 @@ export function FocusToIndustryEditorPage({ data, actionData }) {
     formData.set("expectedVersion", summary.version == null ? "" : String(summary.version));
     formData.set("document", JSON.stringify(data.document ?? null));
     formData.set("editor", JSON.stringify(data.editor ?? null));
-    formData.set("focusToIndustryRows", JSON.stringify(stripTransientFields(nextRows)));
+    formData.set(
+      "focusToIndustryRows",
+      JSON.stringify(canonicalizeRowsForSave(nextRows, focusSlugByToken))
+    );
     return formData;
   }
 
@@ -676,7 +735,7 @@ export function FocusToIndustryEditorPage({ data, actionData }) {
     setEditingRowKey(rowKey);
     setDraftRow(cloneRows([matchedRow])[0] || buildEmptyRow());
     setIsDraftNew(false);
-    setSelectedFocusId("");
+    setSelectedFocusSlug("");
     addPatternDrawer.onOpen();
   }
 
@@ -688,7 +747,7 @@ export function FocusToIndustryEditorPage({ data, actionData }) {
     setEditingRowKey(nextDraft.__clientKey);
     setDraftRow(nextDraft);
     setIsDraftNew(true);
-    setSelectedFocusId("");
+    setSelectedFocusSlug("");
     addPatternDrawer.onOpen();
   }
 
@@ -699,7 +758,7 @@ export function FocusToIndustryEditorPage({ data, actionData }) {
     setEditingRowKey("");
     setDraftRow(null);
     setIsDraftNew(false);
-    setSelectedFocusId("");
+    setSelectedFocusSlug("");
     addPatternDrawer.onClose();
   }
 
@@ -750,34 +809,34 @@ export function FocusToIndustryEditorPage({ data, actionData }) {
    * Adds the selected focus to the current draft.
    */
   function addSelectedFocus() {
-    const focusId = readTrimmedString(selectedFocusId);
-    if (!focusId) {
+    const focusSlug = readTrimmedString(selectedFocusSlug);
+    if (!focusSlug) {
       return;
     }
 
     setDraftRow((currentValue) => {
-      if (!currentValue || currentValue.focusIds.includes(focusId)) {
+      if (!currentValue || currentValue.focusSlugs.includes(focusSlug)) {
         return currentValue;
       }
 
       return {
         ...currentValue,
-        focusIds: [...currentValue.focusIds, focusId]
+        focusSlugs: [...currentValue.focusSlugs, focusSlug]
       };
     });
-    setSelectedFocusId("");
+    setSelectedFocusSlug("");
   }
 
   /**
    * Removes one focus from the current draft.
-   * @param {string} focusId
+   * @param {string} focusSlug
    */
-  function removeFocus(focusId) {
+  function removeFocus(focusSlug) {
     setDraftRow((currentValue) =>
       currentValue
         ? {
             ...currentValue,
-            focusIds: currentValue.focusIds.filter((value) => value !== focusId)
+            focusSlugs: currentValue.focusSlugs.filter((value) => value !== focusSlug)
           }
         : currentValue
     );
@@ -793,7 +852,7 @@ export function FocusToIndustryEditorPage({ data, actionData }) {
       currentValue
         ? {
             ...currentValue,
-            focusIds: moveItem(currentValue.focusIds, fromIndex, toIndex)
+            focusSlugs: moveItem(currentValue.focusSlugs, fromIndex, toIndex)
           }
         : currentValue
     );
@@ -914,11 +973,11 @@ export function FocusToIndustryEditorPage({ data, actionData }) {
                       <Tr key={row.__clientKey} bg={rowBackground} _hover={{ bg: rowHoverBackground }}>
                         <Td verticalAlign="middle">
                           <Wrap spacing={2}>
-                            {row.focusIds.map((focusId, index) => {
-                              const focusMeta = focusMetaById.get(focusId);
-                              const label = focusMeta?.label || focusId;
+                            {row.focusSlugs.map((focusSlug, index) => {
+                              const focusMeta = focusMetaByToken.get(focusSlug);
+                              const label = focusMeta?.label || focusSlug;
                               return (
-                                <Tooltip key={`${focusId}-${index}`} label={focusMeta?.description || "No description available."} hasArrow>
+                                <Tooltip key={`${focusSlug}-${index}`} label={focusMeta?.description || "No description available."} hasArrow>
                                   <WrapItem>
                                     <Tag size="md" borderRadius="full" bg="blue.50" color="blue.900">
                                       <TagLabel>{`${index + 1}. ${label}`}</TagLabel>
@@ -989,12 +1048,12 @@ export function FocusToIndustryEditorPage({ data, actionData }) {
             {draftRow ? (
               <FocusToIndustryCard
                 row={draftRow}
-                focusMetaById={focusMetaById}
+                focusMetaByToken={focusMetaByToken}
                 industryOptions={industryOptions}
                 filteredFocusOptions={filteredFocusOptions}
-                selectedFocusId={selectedFocusId}
+                selectedFocusSlug={selectedFocusSlug}
                 isEditing
-                onSelectedFocusChange={setSelectedFocusId}
+                onSelectedFocusChange={setSelectedFocusSlug}
                 onAddFocus={addSelectedFocus}
                 onRemoveFocus={removeFocus}
                 onReorderFocus={reorderFocus}
