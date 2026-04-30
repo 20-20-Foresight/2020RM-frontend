@@ -4,11 +4,16 @@ import { Alert, AlertDescription, AlertIcon } from "@chakra-ui/react";
 import { AdminDataDetailEditor } from "../components/AdminDataPage";
 import { CategoryEditorPage } from "../components/CategoryEditorPage";
 import { DimensionDefinitionEditorPage } from "../components/DimensionDefinitionEditorPage";
+import { FocusToIndustryEditorPage } from "../components/FocusToIndustryEditorPage";
 import { SegmentationDefaultEditorPage } from "../components/SegmentationDefaultEditorPage";
 import {
   buildDimensionDefinitionDocument,
   buildDimensionDefinitionViewModel
 } from "../models/dimension-definition-document.mjs";
+import {
+  buildFocusToIndustryDocument,
+  buildFocusToIndustryViewModel
+} from "../models/focus-to-industry-document.mjs";
 import {
   buildCategoryDocument,
   buildCategoryViewModel
@@ -20,6 +25,7 @@ import {
 } from "../models/segmentation-default-editor.mjs";
 
 const CUSTOM_SEGMENTATION_EDITOR_TYPES = new Set(["segmentation.default", "segmentation.code", "segmentation.list"]);
+const FOCUS_TO_INDUSTRY_DOCUMENT_KEY = "focus_to_industry";
 
 /**
  * Builds a stable route error payload.
@@ -112,6 +118,26 @@ async function loadSegmentationDimensionCatalogModule() {
   return module.default || module;
 }
 
+/**
+ * Loads the Focus to Industry catalog server module on the server only.
+ * @returns {Promise<import("../models/focus-to-industry-catalog.server.js")>}
+ */
+async function loadFocusToIndustryCatalogModule() {
+  const module = await import("../models/focus-to-industry-catalog.server.js");
+  return module.default || module;
+}
+
+/**
+ * Returns whether the current raw document should use the Focus to Industry editor.
+ * @param {{key?: unknown, metadata?: Record<string, unknown>|null}|null|undefined} data
+ * @returns {boolean}
+ */
+function isFocusToIndustryDocument(data) {
+  const key = typeof data?.key === "string" ? data.key.trim().toLowerCase() : "";
+  const metadataKey = typeof data?.metadata?.key === "string" ? data.metadata.key.trim().toLowerCase() : "";
+  return key === FOCUS_TO_INDUSTRY_DOCUMENT_KEY || metadataKey === FOCUS_TO_INDUSTRY_DOCUMENT_KEY;
+}
+
 export async function loader({ request, params }) {
   const id = typeof params.dataId === "string" ? params.dataId : "";
   const { loadRawAdminDataDocument, normalizeLoadedAdminDataDocument } = await loadAdminDataServerModule();
@@ -123,6 +149,24 @@ export async function loader({ request, params }) {
     });
     const documentType = rawData.metadata?.type;
     const editorType = resolveSegmentationDefaultEditorType(rawData.editor, rawData.document, rawData.metadata?.type);
+
+    if (isFocusToIndustryDocument(rawData)) {
+      const { loadFocusToIndustryCatalog } = await loadFocusToIndustryCatalogModule();
+      const focusToIndustryCatalog = await loadFocusToIndustryCatalog({
+        request
+      });
+
+      return json({
+        data: {
+          ...rawData,
+          focusToIndustry: buildFocusToIndustryViewModel({
+            document: rawData.document
+          }),
+          focusToIndustryCatalog
+        },
+        error: null
+      });
+    }
 
     if (documentType === "dimension-definition") {
       return json({
@@ -217,10 +261,32 @@ export async function action({ request, params }) {
   const segmentationRows = parseJsonField(formData, "segmentationRows", []);
   const dimensionDefinitionRows = parseJsonField(formData, "dimensionDefinitionRows", []);
   const categoryRows = parseJsonField(formData, "categoryRows", []);
+  const focusToIndustryRows = parseJsonField(formData, "focusToIndustryRows", []);
   const customDocumentType = readFormString(formData, "customDocumentType").trim();
   const supportsPreference = readFormString(formData, "supportsPreference").trim() === "true";
 
   try {
+    if (customDocumentType === "focus-to-industry") {
+      const saved = await saveRawAdminDataDocument({
+        request,
+        id,
+        metadata: metadata && typeof metadata === "object" ? metadata : null,
+        description,
+        expectedVersion,
+        editor: editor && typeof editor === "object" ? editor : null,
+        document: buildFocusToIndustryDocument({
+          sourceDocument: document,
+          rows: Array.isArray(focusToIndustryRows) ? focusToIndustryRows : []
+        })
+      });
+
+      return json({
+        ok: true,
+        saved,
+        error: null
+      });
+    }
+
     if (customDocumentType === "dimension-definition") {
       const saved = await saveRawAdminDataDocument({
         request,
@@ -329,6 +395,16 @@ export default function AdminDataDetailRoute() {
         <AlertIcon />
         <AlertDescription>{error?.message || "Unable to load this data set."}</AlertDescription>
       </Alert>
+    );
+  }
+
+  if (data.focusToIndustry) {
+    return (
+      <FocusToIndustryEditorPage
+        data={data}
+        actionData={actionData}
+        isSaving={navigation.state === "submitting"}
+      />
     );
   }
 
