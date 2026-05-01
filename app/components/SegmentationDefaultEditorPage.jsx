@@ -5,6 +5,13 @@ import {
   Box,
   Button,
   Checkbox,
+  Drawer,
+  DrawerBody,
+  DrawerCloseButton,
+  DrawerContent,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerOverlay,
   Flex,
   FormControl,
   FormLabel,
@@ -12,13 +19,6 @@ import {
   Heading,
   IconButton,
   Input,
-  Modal,
-  ModalBody,
-  ModalCloseButton,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
   Select,
   Tag,
   TagCloseButton,
@@ -36,9 +36,10 @@ import {
   VStack
 } from "@chakra-ui/react";
 import { EditIcon, SearchIcon } from "@chakra-ui/icons";
-import { useLocation } from "@remix-run/react";
+import { useFetcher, useLocation } from "@remix-run/react";
 import { useEffect, useRef, useState } from "react";
 import { MdDescription } from "react-icons/md";
+import { appendFocusOption, buildCreatedFocusRow, NEW_FOCUS_OPTION_VALUE } from "../models/focus-shortcut.mjs";
 import {
   applyBulkSelectionUpdate,
   buildTaxonomyOptions,
@@ -49,6 +50,7 @@ import {
 } from "../models/segmentation-default-page.mjs";
 import { buildSegmentationDefaultSubmitFormData } from "../models/segmentation-default-submit.mjs";
 import { InlineSaveStatus } from "./InlineSaveStatus";
+import { RichTextField } from "./ui/molecules/RichTextField";
 import { RegexBuilder, RegexTokenDisplay, parseRegexToTokens } from "./ui/molecules/RegexBuilder";
 import { useQueuedDocumentSave } from "../hooks/useQueuedDocumentSave";
 import { useRowSaveHighlight } from "../hooks/useRowSaveHighlight";
@@ -218,6 +220,17 @@ function buildEmptyBulkChangeDraft() {
 }
 
 /**
+ * Builds one empty draft for inline Focus creation.
+ * @returns {{label: string, description: string}}
+ */
+function buildEmptyNewFocusDraft() {
+  return {
+    label: "",
+    description: ""
+  };
+}
+
+/**
  * Builds one normalized column key for category filters.
  * @param {number} index
  * @returns {string}
@@ -319,6 +332,81 @@ function SearchableHeader({
 }
 
 /**
+ * Renders the inline Focus-creation editor used by the row and bulk-change flyouts.
+ * @param {{
+ *   isVisible?: boolean,
+ *   draft?: {label?: string, description?: string},
+ *   errorMessage?: string,
+ *   isSaving?: boolean,
+ *   onDraftChange?: (field: "label"|"description", value: string) => void,
+ *   onCancel?: () => void,
+ *   onSave?: () => void
+ * }} props
+ * @returns {JSX.Element|null}
+ */
+function NewFocusEditorPanel({
+  isVisible = false,
+  draft = buildEmptyNewFocusDraft(),
+  errorMessage = "",
+  isSaving = false,
+  onDraftChange,
+  onCancel,
+  onSave
+}) {
+  if (!isVisible) {
+    return null;
+  }
+
+  return (
+    <Box borderWidth="1px" borderColor="blue.200" borderRadius="lg" bg="blue.50" px={4} py={4}>
+      <VStack align="stretch" spacing={4}>
+        <Box>
+          <Text fontWeight="semibold" color="blue.900">
+            New Focus
+          </Text>
+          <Text fontSize="sm" color="blue.800">
+            Add the Focus here and save it back to the Focus page without leaving this editor.
+          </Text>
+        </Box>
+
+        {errorMessage ? (
+          <Alert status="error" borderRadius="md">
+            <AlertIcon />
+            <AlertDescription>{errorMessage}</AlertDescription>
+          </Alert>
+        ) : null}
+
+        <FormControl isRequired>
+          <FormLabel>Focus Name</FormLabel>
+          <Input
+            value={draft.label || ""}
+            onChange={(event) => onDraftChange?.("label", event.target.value)}
+            bg="white"
+            placeholder="Enter a new Focus"
+          />
+        </FormControl>
+
+        <RichTextField
+          label="Description"
+          value={draft.description || ""}
+          onChange={(value) => onDraftChange?.("description", value)}
+          height="220px"
+        />
+
+        <HStack justify="flex-end" spacing={3}>
+          <Button type="button" variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="button" colorScheme="blue" onClick={onSave} isLoading={isSaving} loadingText="Saving Focus">
+            Save Focus
+          </Button>
+        </HStack>
+      </VStack>
+    </Box>
+  );
+}
+
+/**
  * Renders the segmentation.default admin-data editor.
  * @param {{
  *   data: {
@@ -355,6 +443,7 @@ function SearchableHeader({
  */
 export function SegmentationDefaultEditorPage({ data, actionData, isSaving = false }) {
   const location = useLocation();
+  const createFocusFetcher = useFetcher();
   const categoryDepth = data.segmentationDefault.categoryColumns.length;
   const defaultBranchFieldNames = Array.isArray(data.segmentationDefault.categoryFieldNames)
     ? data.segmentationDefault.categoryFieldNames
@@ -378,22 +467,29 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
   const [selectedRowIndexes, setSelectedRowIndexes] = useState([]);
   const [editingRowIndex, setEditingRowIndex] = useState(null);
   const [draftRow, setDraftRow] = useState(() => buildEmptySegmentationRow(categoryDepth, defaultBranchFieldNames));
+  const [focusCatalogOptions, setFocusCatalogOptions] = useState(() =>
+    Array.isArray(data.categoryCatalog?.focusOptions) ? data.categoryCatalog.focusOptions : []
+  );
   const [bulkChangeDraft, setBulkChangeDraft] = useState(() => buildEmptyBulkChangeDraft());
+  const [newFocusContext, setNewFocusContext] = useState(null);
+  const [newFocusDraft, setNewFocusDraft] = useState(() => buildEmptyNewFocusDraft());
+  const [newFocusErrorMessage, setNewFocusErrorMessage] = useState("");
   const documentIdRef = useRef(readTrimmedString(data.id));
+  const handledCreateFocusResponseRef = useRef(null);
   const {
-    isOpen: isRowModalOpen,
-    onOpen: openRowModal,
-    onClose: closeRowModal
+    isOpen: isRowDrawerOpen,
+    onOpen: openRowDrawer,
+    onClose: closeRowDrawer
   } = useDisclosure();
   const {
-    isOpen: isMetadataModalOpen,
-    onOpen: openMetadataModal,
-    onClose: closeMetadataModal
+    isOpen: isMetadataDrawerOpen,
+    onOpen: openMetadataDrawer,
+    onClose: closeMetadataDrawer
   } = useDisclosure();
   const {
-    isOpen: isBulkChangeModalOpen,
-    onOpen: openBulkChangeModal,
-    onClose: closeBulkChangeModal
+    isOpen: isBulkChangeDrawerOpen,
+    onOpen: openBulkChangeDrawer,
+    onClose: closeBulkChangeDrawer
   } = useDisclosure();
   const {
     saveSummary,
@@ -449,14 +545,84 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
           : {}
     );
     setRows(cloneSegmentationRows(data.segmentationDefault.rows, categoryDepth));
+    setFocusCatalogOptions(Array.isArray(data.categoryCatalog?.focusOptions) ? data.categoryCatalog.focusOptions : []);
     setFilters({});
     setDraftFilters({});
     setOpenFilterKeys({});
     setSelectedRowIndexes([]);
     setBulkChangeDraft(buildEmptyBulkChangeDraft());
-  }, [categoryDepth, data.description, data.editorType, data.id]);
+    setNewFocusContext(null);
+    setNewFocusDraft(buildEmptyNewFocusDraft());
+    setNewFocusErrorMessage("");
+    handledCreateFocusResponseRef.current = null;
+  }, [categoryDepth, data.categoryCatalog?.focusOptions, data.description, data.editorType, data.id]);
 
-  const taxonomyOptions = buildTaxonomyOptions(data.categoryCatalog, rows);
+  useEffect(() => {
+    if (createFocusFetcher.state !== "idle") {
+      return;
+    }
+
+    const payload = createFocusFetcher.data;
+    if (!payload || payload.intent !== "create-focus" || handledCreateFocusResponseRef.current === payload) {
+      return;
+    }
+
+    handledCreateFocusResponseRef.current = payload;
+    if (!payload.ok) {
+      setNewFocusErrorMessage(payload.error?.message || "Unable to create the new Focus.");
+      return;
+    }
+
+    const createdFocus = buildCreatedFocusRow(payload.createdFocus);
+    if (!createdFocus.label) {
+      return;
+    }
+
+    setFocusCatalogOptions((currentOptions) => appendFocusOption(currentOptions, createdFocus.label));
+    setNewFocusErrorMessage("");
+
+    if (newFocusContext?.surface === "row") {
+      setDraftRow((currentRow) => {
+        if (!currentRow) {
+          return currentRow;
+        }
+
+        const targetIndex = Number.isInteger(newFocusContext.targetIndex) ? newFocusContext.targetIndex : 0;
+        const nextTargets = Array.isArray(currentRow.focusTargets) ? currentRow.focusTargets.slice() : [];
+        while (nextTargets.length <= targetIndex) {
+          nextTargets.push(buildEmptyTargetRow());
+        }
+
+        nextTargets[targetIndex] = {
+          ...nextTargets[targetIndex],
+          name: createdFocus.label
+        };
+
+        return {
+          ...currentRow,
+          focusTargets: nextTargets
+        };
+      });
+    }
+
+    if (newFocusContext?.surface === "bulk") {
+      setBulkChangeDraft((currentValue) => ({
+        ...currentValue,
+        focus: createdFocus.label
+      }));
+    }
+
+    setNewFocusContext(null);
+    setNewFocusDraft(buildEmptyNewFocusDraft());
+  }, [createFocusFetcher.data, createFocusFetcher.state, newFocusContext]);
+
+  const taxonomyOptions = buildTaxonomyOptions(
+    {
+      ...(data.categoryCatalog || {}),
+      focusOptions: focusCatalogOptions
+    },
+    rows
+  );
   const filteredRows = rows.filter((row) => rowMatchesFilters(row, filters, taxonomyOptions));
   const selectedRowIndexSet = new Set(selectedRowIndexes);
   const filteredSourceRowIndexes = filteredRows
@@ -506,26 +672,32 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
     });
   }
   /**
-   * Opens the row modal for the requested row index.
+   * Opens the row flyout for the requested row index.
    * @param {number|null} rowIndex
    */
   function openRowEditor(rowIndex) {
+    setNewFocusContext(null);
+    setNewFocusDraft(buildEmptyNewFocusDraft());
+    setNewFocusErrorMessage("");
     setEditingRowIndex(rowIndex);
     setDraftRow(
       rowIndex == null
         ? buildEmptySegmentationRow(categoryDepth, defaultBranchFieldNames)
         : cloneSegmentationRows([rows[rowIndex]], categoryDepth)[0] || buildEmptySegmentationRow(categoryDepth, defaultBranchFieldNames)
     );
-    openRowModal();
+    openRowDrawer();
   }
 
   /**
-   * Closes the row modal and resets draft state.
+   * Closes the row flyout and resets draft state.
    */
   function closeRowEditor() {
     setEditingRowIndex(null);
     setDraftRow(buildEmptySegmentationRow(categoryDepth, defaultBranchFieldNames));
-    closeRowModal();
+    setNewFocusContext(null);
+    setNewFocusDraft(buildEmptyNewFocusDraft());
+    setNewFocusErrorMessage("");
+    closeRowDrawer();
   }
 
   /**
@@ -738,7 +910,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
   }
 
   /**
-   * Persists metadata edits and closes the metadata modal.
+   * Persists metadata edits and closes the metadata flyout.
    */
   function saveMetadataChanges() {
     requestSave((summary) =>
@@ -746,7 +918,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
         summary
       })
     );
-    closeMetadataModal();
+    closeMetadataDrawer();
   }
 
   /**
@@ -805,11 +977,14 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
   }
 
   /**
-   * Resets and closes the bulk-change modal.
+   * Resets and closes the bulk-change flyout.
    */
   function closeBulkChangeEditor() {
     setBulkChangeDraft(buildEmptyBulkChangeDraft());
-    closeBulkChangeModal();
+    setNewFocusContext(null);
+    setNewFocusDraft(buildEmptyNewFocusDraft());
+    setNewFocusErrorMessage("");
+    closeBulkChangeDrawer();
   }
 
   /**
@@ -833,9 +1008,52 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
     closeBulkChangeEditor();
   }
 
+  /**
+   * Opens the inline Focus-creation panel for the requested editor surface.
+   * @param {{surface: "row"|"bulk", targetIndex?: number|null}} context
+   */
+  function openNewFocusEditor(context) {
+    setNewFocusContext(context);
+    setNewFocusDraft(buildEmptyNewFocusDraft());
+    setNewFocusErrorMessage("");
+  }
+
+  /**
+   * Updates one field inside the Focus-creation draft.
+   * @param {"label"|"description"} field
+   * @param {string} value
+   */
+  function updateNewFocusDraft(field, value) {
+    setNewFocusDraft((currentValue) => ({
+      ...currentValue,
+      [field]: value
+    }));
+  }
+
+  /**
+   * Saves a new Focus into the Focus category document.
+   */
+  function saveNewFocus() {
+    const label = readTrimmedString(newFocusDraft.label);
+    if (!label) {
+      setNewFocusErrorMessage("Focus name is required.");
+      return;
+    }
+
+    setNewFocusErrorMessage("");
+    const formData = new FormData();
+    formData.set("intent", "create-focus");
+    formData.set("focusLabel", label);
+    formData.set("focusDescription", newFocusDraft.description || "");
+    createFocusFetcher.submit(formData, {
+      method: "post"
+    });
+  }
+
   const displayDescription = readTrimmedString(description);
   const displayName = readTrimmedString(metadata?.name) || data.name;
   const editorTypeLabel = readTrimmedString(editorConfig?.type) || data.editorType || "segmentation.default";
+  const isCreatingFocus = createFocusFetcher.state !== "idle";
 
   return (
     <Box bg="white" h="100%" minH="0" display="flex" flexDirection="column">
@@ -851,7 +1069,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
             />
           </Box>
           <HStack spacing={3} align="center" flexWrap="wrap">
-            <Button type="button" variant="link" size="sm" colorScheme="blue" onClick={openMetadataModal}>
+            <Button type="button" variant="link" size="sm" colorScheme="blue" onClick={openMetadataDrawer}>
               edit metadata
             </Button>
           </HStack>
@@ -896,7 +1114,17 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                     </Button>
                   </>
                 ) : null}
-                <Button type="button" variant="outline" onClick={openBulkChangeModal} isDisabled={!hasSelectedRows}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setNewFocusContext(null);
+                    setNewFocusDraft(buildEmptyNewFocusDraft());
+                    setNewFocusErrorMessage("");
+                    openBulkChangeDrawer();
+                  }}
+                  isDisabled={!hasSelectedRows}
+                >
                   Bulk Change
                 </Button>
                 <Button type="button" variant="outline" onClick={() => openRowEditor(null)}>
@@ -1099,12 +1327,12 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
         </Box>
       </Box>
 
-      <Modal isOpen={isRowModalOpen} onClose={closeRowEditor} size="4xl" scrollBehavior="inside">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>{editingRowIndex == null ? "Add Row" : "Edit Row"}</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
+      <Drawer isOpen={isRowDrawerOpen} onClose={closeRowEditor} placement="right" size="xl">
+        <DrawerOverlay />
+        <DrawerContent>
+          <DrawerCloseButton />
+          <DrawerHeader>{editingRowIndex == null ? "Add Row" : "Edit Row"}</DrawerHeader>
+          <DrawerBody pb={6}>
             <VStack align="stretch" spacing={4}>
               {isIncompleteRow(draftRow) ? (
                 <Alert status="info" borderRadius="md">
@@ -1190,7 +1418,17 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                     <HStack key={`focus-target-${index}`} align="start">
                       <Select
                         value={resolveFriendlyTaxonomyLabel(target.name, taxonomyOptions.focusOptions) || target.name}
-                        onChange={(event) => updateDraftTarget("focusTargets", index, "name", event.target.value)}
+                        onChange={(event) => {
+                          if (event.target.value === NEW_FOCUS_OPTION_VALUE) {
+                            openNewFocusEditor({
+                              surface: "row",
+                              targetIndex: index
+                            });
+                            return;
+                          }
+
+                          updateDraftTarget("focusTargets", index, "name", event.target.value);
+                        }}
                         bg="white"
                       >
                         <option value="">Select focus</option>
@@ -1199,6 +1437,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                             {option}
                           </option>
                         ))}
+                        <option value={NEW_FOCUS_OPTION_VALUE}>New Focus</option>
                       </Select>
                       <Input
                         value={target.score}
@@ -1218,14 +1457,28 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                 </VStack>
               </FormControl>
 
+              <NewFocusEditorPanel
+                isVisible={newFocusContext?.surface === "row"}
+                draft={newFocusDraft}
+                errorMessage={newFocusErrorMessage}
+                isSaving={isCreatingFocus}
+                onDraftChange={updateNewFocusDraft}
+                onCancel={() => {
+                  setNewFocusContext(null);
+                  setNewFocusDraft(buildEmptyNewFocusDraft());
+                  setNewFocusErrorMessage("");
+                }}
+                onSave={saveNewFocus}
+              />
+
               <FormControl>
                 <FormLabel>Notes</FormLabel>
                 <Textarea value={draftRow.notes} onChange={(event) => updateDraftField("notes", event.target.value)} minH="112px" />
               </FormControl>
             </VStack>
-          </ModalBody>
+          </DrawerBody>
 
-          <ModalFooter>
+          <DrawerFooter>
             <HStack spacing={3}>
               {editingRowIndex == null ? null : (
                 <Button type="button" variant="ghost" colorScheme="red" onClick={deleteDraftRow}>
@@ -1239,16 +1492,16 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                 Save Row
               </Button>
             </HStack>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
-      <Modal isOpen={isBulkChangeModalOpen} onClose={closeBulkChangeEditor} size="xl" isCentered>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Bulk Change Industry/Focus</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
+      <Drawer isOpen={isBulkChangeDrawerOpen} onClose={closeBulkChangeEditor} placement="right" size="md">
+        <DrawerOverlay />
+        <DrawerContent>
+          <DrawerCloseButton />
+          <DrawerHeader>Bulk Change Industry/Focus</DrawerHeader>
+          <DrawerBody pb={6}>
             <VStack align="stretch" spacing={4}>
               <Alert status="info" borderRadius="md">
                 <AlertIcon />
@@ -1281,7 +1534,16 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                 <FormLabel>Focus</FormLabel>
                 <Select
                   value={bulkChangeDraft.focus}
-                  onChange={(event) => updateBulkChangeDraft("focus", event.target.value)}
+                  onChange={(event) => {
+                    if (event.target.value === NEW_FOCUS_OPTION_VALUE) {
+                      openNewFocusEditor({
+                        surface: "bulk"
+                      });
+                      return;
+                    }
+
+                    updateBulkChangeDraft("focus", event.target.value);
+                  }}
                   bg="white"
                 >
                   <option value="">Do not change focus</option>
@@ -1290,11 +1552,26 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                       {option}
                     </option>
                   ))}
+                  <option value={NEW_FOCUS_OPTION_VALUE}>New Focus</option>
                 </Select>
               </FormControl>
+
+              <NewFocusEditorPanel
+                isVisible={newFocusContext?.surface === "bulk"}
+                draft={newFocusDraft}
+                errorMessage={newFocusErrorMessage}
+                isSaving={isCreatingFocus}
+                onDraftChange={updateNewFocusDraft}
+                onCancel={() => {
+                  setNewFocusContext(null);
+                  setNewFocusDraft(buildEmptyNewFocusDraft());
+                  setNewFocusErrorMessage("");
+                }}
+                onSave={saveNewFocus}
+              />
             </VStack>
-          </ModalBody>
-          <ModalFooter>
+          </DrawerBody>
+          <DrawerFooter>
             <HStack spacing={3}>
               <Button type="button" variant="ghost" onClick={closeBulkChangeEditor}>
                 Cancel
@@ -1310,16 +1587,16 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                 Save
               </Button>
             </HStack>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
-      <Modal isOpen={isMetadataModalOpen} onClose={closeMetadataModal} size="xl" scrollBehavior="inside">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Metadata</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
+      <Drawer isOpen={isMetadataDrawerOpen} onClose={closeMetadataDrawer} placement="right" size="md">
+        <DrawerOverlay />
+        <DrawerContent>
+          <DrawerCloseButton />
+          <DrawerHeader>Metadata</DrawerHeader>
+          <DrawerBody pb={6}>
             <VStack align="stretch" spacing={4}>
               <FormControl>
                 <FormLabel>Name</FormLabel>
@@ -1346,19 +1623,19 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                 <Textarea value={description} onChange={(event) => setDescription(event.target.value)} minH="120px" bg="white" />
               </FormControl>
             </VStack>
-          </ModalBody>
-          <ModalFooter>
+          </DrawerBody>
+          <DrawerFooter>
             <HStack spacing={3}>
-              <Button type="button" variant="ghost" onClick={closeMetadataModal}>
+              <Button type="button" variant="ghost" onClick={closeMetadataDrawer}>
                 Cancel
               </Button>
               <Button type="button" colorScheme="blue" onClick={saveMetadataChanges} isLoading={isSaving} loadingText="Saving">
                 Save
               </Button>
             </HStack>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
     </Box>
   );
 }

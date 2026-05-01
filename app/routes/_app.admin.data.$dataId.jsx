@@ -6,6 +6,8 @@ import { CategoryEditorPage } from "../components/CategoryEditorPage";
 import { DimensionDefinitionEditorPage } from "../components/DimensionDefinitionEditorPage";
 import { FocusToIndustryEditorPage } from "../components/FocusToIndustryEditorPage";
 import { SegmentationDefaultEditorPage } from "../components/SegmentationDefaultEditorPage";
+import { resolveLockedDimensionId } from "../models/category-editor-page.mjs";
+import { buildCreatedFocusRow, findExistingFocusRow } from "../models/focus-shortcut.mjs";
 import {
   buildDimensionDefinitionDocument,
   buildDimensionDefinitionViewModel
@@ -246,8 +248,9 @@ export async function loader({ request, params }) {
 
 export async function action({ request, params }) {
   const id = typeof params.dataId === "string" ? params.dataId : "";
-  const { saveAdminDataDocument, saveRawAdminDataDocument } = await loadAdminDataServerModule();
+  const { loadRawAdminDataDocument, saveAdminDataDocument, saveRawAdminDataDocument } = await loadAdminDataServerModule();
   const formData = await request.formData();
+  const intent = readFormString(formData, "intent").trim();
   const description = readFormString(formData, "description");
   const editorType = readFormString(formData, "editorType").trim();
   const shape = readFormString(formData, "shape");
@@ -266,6 +269,111 @@ export async function action({ request, params }) {
   const supportsPreference = readFormString(formData, "supportsPreference").trim() === "true";
 
   try {
+    if (intent === "create-focus") {
+      const focusLabel = readFormString(formData, "focusLabel").trim();
+      const focusDescription = readFormString(formData, "focusDescription");
+      if (!focusLabel) {
+        return json(
+          {
+            ok: false,
+            intent,
+            saved: null,
+            error: {
+              message: "Focus name is required."
+            }
+          },
+          {
+            status: 400
+          }
+        );
+      }
+
+      const { loadCategoryDocuments } = await import("../models/segmentation-document.server.js");
+      const categoryDocuments = await loadCategoryDocuments({
+        request
+      });
+      const focusSummary =
+        categoryDocuments.find((item) => String(item?.name || "").trim().toLowerCase() === "focus") || null;
+      if (!focusSummary?.id) {
+        return json(
+          {
+            ok: false,
+            intent,
+            saved: null,
+            error: {
+              message: "The Focus category document could not be found."
+            }
+          },
+          {
+            status: 404
+          }
+        );
+      }
+
+      const focusDetail = await loadRawAdminDataDocument({
+        request,
+        id: focusSummary.id
+      });
+      const focusRows = buildCategoryViewModel({
+        document: focusDetail?.document
+      }).rows;
+      const existingFocusRow = findExistingFocusRow(focusRows, focusLabel);
+      if (existingFocusRow) {
+        return json(
+          {
+            ok: false,
+            intent,
+            saved: null,
+            error: {
+              message: `Focus "${focusLabel}" already exists on the Focus page.`
+            }
+          },
+          {
+            status: 400
+          }
+        );
+      }
+
+      const { loadSegmentationDimensionCatalog } = await loadSegmentationDimensionCatalogModule();
+      const dimensionCatalog = await loadSegmentationDimensionCatalog({
+        request
+      });
+      const lockedDimensionId = resolveLockedDimensionId({
+        documentName: focusDetail?.name || focusDetail?.metadata?.name,
+        metadataName: focusDetail?.metadata?.name,
+        dimensionCatalog
+      });
+      const nextFocusRow = buildCreatedFocusRow({
+        label: focusLabel,
+        description: focusDescription,
+        dimensionId: lockedDimensionId
+      });
+      const saved = await saveRawAdminDataDocument({
+        request,
+        id: focusSummary.id,
+        metadata: focusDetail?.metadata && typeof focusDetail.metadata === "object" ? focusDetail.metadata : null,
+        description: typeof focusDetail?.description === "string" ? focusDetail.description : "",
+        expectedVersion: Number.isFinite(focusDetail?.version) ? Number(focusDetail.version) : null,
+        editor: focusDetail?.editor && typeof focusDetail.editor === "object" ? focusDetail.editor : null,
+        document: buildCategoryDocument({
+          sourceDocument: focusDetail?.document,
+          rows: [...focusRows, nextFocusRow],
+          supportsPreference: false
+        })
+      });
+
+      return json({
+        ok: true,
+        intent,
+        saved,
+        createdFocus: {
+          label: nextFocusRow.label,
+          description: nextFocusRow.description
+        },
+        error: null
+      });
+    }
+
     if (customDocumentType === "focus-to-industry") {
       const saved = await saveRawAdminDataDocument({
         request,
@@ -374,6 +482,7 @@ export async function action({ request, params }) {
     return json(
       {
         ok: false,
+        intent: intent || null,
         saved: null,
         error: buildRouteError(error)
       },
