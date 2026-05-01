@@ -104,14 +104,16 @@ test("buildOrganizationSegmentationViewModel uses nested projection reasons when
         {
           name: "PE RE",
           score: 8,
+          sourceDocumentId: "segmentation.description-rules",
           sourceDocumentName: "Description Rules",
           reasons: [
             {
               reason: {
-                source: "description",
+                source: "biscred.description",
                 match: "reit",
                 phrase: "Public REIT platform with private real estate investments"
               },
+              crosswalkDocumentId: "segmentation.description-rules",
               crosswalkDocumentName: "Description Rules",
               rule: "row-reit-1"
             }
@@ -125,9 +127,10 @@ test("buildOrganizationSegmentationViewModel uses nested projection reasons when
           reasons: [
             {
               reason: {
-                source: "description",
+                source: "biscred.description",
                 description: "Derived from existing data, awaiting fresh segmentation"
               },
+              crosswalkDocumentId: "segmentation.description-rules",
               crosswalkDocumentName: "Description Rules",
               rule: "row-reit-1"
             }
@@ -141,10 +144,12 @@ test("buildOrganizationSegmentationViewModel uses nested projection reasons when
   assert.deepEqual(result.focuses, ["REIT"]);
   assert.equal(result.explanations.length, 2);
   assert.deepEqual(result.explanations[0], {
-    source: "description",
+    source: "biscred.description",
+    sourceField: "biscred.description",
     dimension: "Industry",
     value: "PE RE",
     score: 8,
+    crosswalkDocumentId: "segmentation.description-rules",
     crosswalkDocumentName: "Description Rules",
     rule: "row-reit-1",
     reasonHtml:

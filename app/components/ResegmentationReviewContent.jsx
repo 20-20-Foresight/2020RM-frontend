@@ -8,6 +8,8 @@ import {
   Checkbox,
   Divider,
   HStack,
+  Icon,
+  Link,
   Modal,
   ModalBody,
   ModalContent,
@@ -37,6 +39,50 @@ import {
   normalizeSegmentationVisualSummary,
   readDisplayedExplanations
 } from "../models/resegmentation-ui.mjs";
+import { MdOpenInNew } from "react-icons/md";
+import { buildSegmentationDocumentPath } from "../models/segmentation-document.mjs";
+
+function readTrimmedString(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readExplanationFieldLabel(row) {
+  return (
+    readTrimmedString(row?.sourceField) ||
+    readTrimmedString(row?.source) ||
+    "Not set"
+  );
+}
+
+function renderExplanationCrosswalk(row) {
+  const crosswalkName = readTrimmedString(row?.crosswalkDocumentName);
+  const crosswalkId = readTrimmedString(row?.crosswalkDocumentId);
+  const label = crosswalkName || crosswalkId;
+
+  if (!label) {
+    return "Not set";
+  }
+
+  if (!crosswalkId) {
+    return label;
+  }
+
+  return (
+    <HStack spacing={1} align="center">
+      <Text as="span" fontSize="xs">
+        {label}
+      </Text>
+      <Link
+        href={buildSegmentationDocumentPath(crosswalkId)}
+        isExternal
+        color="blue.500"
+        aria-label={`Open ${label} crosswalk`}
+      >
+        <Icon as={MdOpenInNew} boxSize={3.5} />
+      </Link>
+    </HStack>
+  );
+}
 
 /**
  * Renders one segmentation chip list.
@@ -229,19 +275,19 @@ export function ExplanationTable({
           <Thead bg={theadBg}>
             <Tr>
               <Th>Segmentation</Th>
-              <Th>Source</Th>
+              <Th>Field</Th>
               <Th>Crosswalk</Th>
               <Th>How Derived</Th>
             </Tr>
           </Thead>
           <Tbody>
             {visibleExplanations.map((row, index) => (
-              <Tr key={`${row.source || "source"}-${index}`}>
+              <Tr key={`${row.sourceField || row.source || "source"}-${index}`}>
                 <Td fontSize="xs" fontWeight="medium">
                   {buildExplanationSegmentationLabel(row)}
                 </Td>
-                <Td fontSize="xs">{row.source || "Not set"}</Td>
-                <Td fontSize="xs">{row.crosswalkDocumentName || "Not set"}</Td>
+                <Td fontSize="xs">{readExplanationFieldLabel(row)}</Td>
+                <Td fontSize="xs">{renderExplanationCrosswalk(row)}</Td>
                 <Td fontSize="xs" maxW="340px" whiteSpace="normal" lineHeight="1.5">
                   <Box
                     sx={{

@@ -369,7 +369,7 @@ function buildOrderedSectors(sectors, reasons) {
 /**
  * Builds explanation rows from the new projection-style nested reasons.
  * @param {{dimension: string, values: ReturnType<typeof normalizeScoredEntries>}} options
- * @returns {Array<{source: string|null, dimension: string, value: string, score: number|null, crosswalkDocumentName: string|null, rule: string|null, reasonHtml: string}>}
+ * @returns {Array<{source: string|null, sourceField: string|null, dimension: string, value: string, score: number|null, crosswalkDocumentId: string|null, crosswalkDocumentName: string|null, rule: string|null, reasonHtml: string}>}
  */
 function buildProjectionExplanationRows(options) {
   const rows = [];
@@ -380,11 +380,24 @@ function buildProjectionExplanationRows(options) {
     }
 
     for (const reason of value.reasons) {
+      const reasonPayload = isObjectLike(reason?.reason) ? reason.reason : reason;
       rows.push({
-        source: readTrimmedString(reason?.reason?.source) || null,
+        source: readTrimmedString(reasonPayload?.source) || null,
+        sourceField:
+          readTrimmedString(reasonPayload?.sourceField) ||
+          readTrimmedString(reasonPayload?.fieldPath) ||
+          readTrimmedString(reason?.sourceField) ||
+          readTrimmedString(reason?.fieldPath) ||
+          readTrimmedString(reasonPayload?.source) ||
+          null,
         dimension: options.dimension,
         value: value.name,
         score: Number.isFinite(value.score) ? value.score : null,
+        crosswalkDocumentId:
+          readTrimmedString(reason?.crosswalkDocumentId) ||
+          readTrimmedString(reason?.sourceDocumentId) ||
+          value.sourceDocumentId ||
+          null,
         crosswalkDocumentName:
           readTrimmedString(reason?.crosswalkDocumentName) ||
           readTrimmedString(reason?.crosswalk) ||
@@ -402,7 +415,7 @@ function buildProjectionExplanationRows(options) {
 /**
  * Builds explanation rows from the legacy flat reasons payload.
  * @param {object[]} reasons
- * @returns {Array<{source: string|null, dimension: string, value: string, score: number|null, crosswalkDocumentName: string|null, rule: string|null, reasonHtml: string}>}
+ * @returns {Array<{source: string|null, sourceField: string|null, dimension: string, value: string, score: number|null, crosswalkDocumentId: string|null, crosswalkDocumentName: string|null, rule: string|null, reasonHtml: string}>}
  */
 function buildLegacyExplanationRows(reasons) {
   return (Array.isArray(reasons) ? reasons : [])
@@ -431,9 +444,18 @@ function buildLegacyExplanationRows(reasons) {
 
       return {
         source: readTrimmedString(reason?.source),
+        sourceField:
+          readTrimmedString(reason?.sourceField) ||
+          readTrimmedString(reason?.fieldPath) ||
+          readTrimmedString(reason?.source) ||
+          null,
         dimension,
         value,
         score: null,
+        crosswalkDocumentId:
+          readTrimmedString(reason?.crosswalkDocumentId) ||
+          readTrimmedString(reason?.sourceDocumentId) ||
+          null,
         crosswalkDocumentName:
           readTrimmedString(reason?.sourceDocumentName) ||
           readTrimmedString(reason?.crosswalk) ||
@@ -451,7 +473,7 @@ function buildLegacyExplanationRows(reasons) {
  * @returns {{
  *   industries: string[],
  *   focuses: string[],
- *   explanations: Array<{source: string|null, dimension: string, value: string, score: number|null, crosswalkDocumentName: string|null, rule: string|null, reasonHtml: string}>
+ *   explanations: Array<{source: string|null, sourceField: string|null, dimension: string, value: string, score: number|null, crosswalkDocumentId: string|null, crosswalkDocumentName: string|null, rule: string|null, reasonHtml: string}>
  * }|null}
  */
 function buildOrganizationSegmentationViewModel(record) {

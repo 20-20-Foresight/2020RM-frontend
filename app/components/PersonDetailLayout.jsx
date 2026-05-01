@@ -11,13 +11,19 @@ import {
   Icon,
   IconButton,
   Link as ChakraLink,
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuList,
   Text,
+  useDisclosure,
   VStack
 } from "@chakra-ui/react";
 import { Link as RemixLink } from "@remix-run/react";
 import { FaLinkedin } from "react-icons/fa";
-import { FiMail, FiPhone, FiPhoneCall, FiSettings } from "react-icons/fi";
+import { FiDatabase, FiMail, FiPhone, FiPhoneCall, FiSettings } from "react-icons/fi";
 import { buildPersonHeaderViewModel } from "../models/person-detail-view.mjs";
+import { SourceDataFlyout } from "./SourceDataFlyout";
 
 const BRAND_BLUE = "#0F4C81";
 const PAGE_BG = "#F8FAFC";
@@ -85,6 +91,7 @@ function ContactMetaItem({ icon, label, href = null, isExternal = false }) {
  * @returns {JSX.Element}
  */
 export function PersonDetailLayout({ data, tabs, activeTabKey, children = null }) {
+  const { isOpen: isSourceOpen, onOpen: onSourceOpen, onClose: onSourceClose } = useDisclosure();
   const header = buildPersonHeaderViewModel({
     record: data?.record || null,
     schema: data?.schema || null,
@@ -182,15 +189,29 @@ export function PersonDetailLayout({ data, tabs, activeTabKey, children = null }
               </Box>
             </HStack>
 
-            <IconButton
-              aria-label="Contact options"
-              icon={<FiSettings />}
-              variant="outline"
-              colorScheme="gray"
-              borderColor={BORDER_COLOR}
-              color={BRAND_BLUE}
-              alignSelf={{ base: "stretch", lg: "flex-start" }}
-              isDisabled
+            <Menu placement="bottom-end">
+              <MenuButton
+                as={IconButton}
+                aria-label="Contact options"
+                icon={<FiSettings />}
+                variant="outline"
+                colorScheme="gray"
+                borderColor={BORDER_COLOR}
+                color={BRAND_BLUE}
+                alignSelf={{ base: "stretch", lg: "flex-start" }}
+              />
+              <MenuList minW="200px" shadow="lg" borderColor={BORDER_COLOR}>
+                <MenuItem icon={<FiDatabase />} onClick={onSourceOpen} fontSize="sm">
+                  View Source Data
+                </MenuItem>
+              </MenuList>
+            </Menu>
+
+            <SourceDataFlyout
+              isOpen={isSourceOpen}
+              onClose={onSourceClose}
+              data={data}
+              entityType="person"
             />
           </Flex>
         </Box>

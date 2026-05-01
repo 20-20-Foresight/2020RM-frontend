@@ -9,14 +9,20 @@ import {
   Icon,
   IconButton,
   Link as ChakraLink,
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuList,
   Text,
+  useDisclosure,
   VStack
 } from "@chakra-ui/react";
 import { Link as RemixLink } from "@remix-run/react";
 import { FaLinkedin } from "react-icons/fa";
-import { FiGlobe, FiMapPin, FiPhone, FiSettings } from "react-icons/fi";
+import { FiDatabase, FiGlobe, FiMapPin, FiPhone, FiSettings } from "react-icons/fi";
 import { MdBusiness } from "react-icons/md";
 import { buildOrganizationHeaderViewModel } from "../models/organization-detail-view.mjs";
+import { SourceDataFlyout } from "./SourceDataFlyout";
 
 const BRAND_BLUE = "#0F4C81";
 const PAGE_BG = "#F8FAFC";
@@ -88,6 +94,7 @@ function HeaderMetaItem({ icon, label, href = null, isExternal = false }) {
  * @returns {JSX.Element}
  */
 export function OrganizationDetailLayout({ data, tabs, activeTabKey, children = null }) {
+  const { isOpen: isSourceOpen, onOpen: onSourceOpen, onClose: onSourceClose } = useDisclosure();
   const header = buildOrganizationHeaderViewModel({
     record: data?.record || null,
     schema: data?.schema || null,
@@ -181,15 +188,29 @@ export function OrganizationDetailLayout({ data, tabs, activeTabKey, children = 
               </Box>
             </HStack>
 
-            <IconButton
-              aria-label="Organization options"
-              icon={<FiSettings />}
-              variant="outline"
-              colorScheme="gray"
-              borderColor={BORDER_COLOR}
-              color={BRAND_BLUE}
-              alignSelf={{ base: "stretch", lg: "flex-start" }}
-              isDisabled
+            <Menu placement="bottom-end">
+              <MenuButton
+                as={IconButton}
+                aria-label="Organization options"
+                icon={<FiSettings />}
+                variant="outline"
+                colorScheme="gray"
+                borderColor={BORDER_COLOR}
+                color={BRAND_BLUE}
+                alignSelf={{ base: "stretch", lg: "flex-start" }}
+              />
+              <MenuList minW="200px" shadow="lg" borderColor={BORDER_COLOR}>
+                <MenuItem icon={<FiDatabase />} onClick={onSourceOpen} fontSize="sm">
+                  View Source Data
+                </MenuItem>
+              </MenuList>
+            </Menu>
+
+            <SourceDataFlyout
+              isOpen={isSourceOpen}
+              onClose={onSourceClose}
+              data={data}
+              entityType="organization"
             />
           </Flex>
         </Box>

@@ -2,6 +2,9 @@ import {
   Box,
   Button,
   Heading,
+  HStack,
+  Icon,
+  Link,
   Modal,
   ModalBody,
   ModalCloseButton,
@@ -22,7 +25,9 @@ import {
   Wrap,
   WrapItem
 } from "@chakra-ui/react";
+import { MdOpenInNew } from "react-icons/md";
 import { buildOrganizationSegmentationViewModel } from "../models/organization-segmentation.mjs";
+import { buildSegmentationDocumentPath } from "../models/segmentation-document.mjs";
 
 /**
  * Renders one segmentation chip.
@@ -86,6 +91,48 @@ function formatExplanationCell(value) {
   return value || "Not set";
 }
 
+function readTrimmedString(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readExplanationFieldLabel(row) {
+  return (
+    readTrimmedString(row?.sourceField) ||
+    readTrimmedString(row?.source) ||
+    "Not set"
+  );
+}
+
+function renderExplanationCrosswalk(row) {
+  const crosswalkName = readTrimmedString(row?.crosswalkDocumentName);
+  const crosswalkId = readTrimmedString(row?.crosswalkDocumentId);
+  const label = crosswalkName || crosswalkId;
+
+  if (!label) {
+    return "Not set";
+  }
+
+  if (!crosswalkId) {
+    return label;
+  }
+
+  return (
+    <HStack spacing={1} align="center">
+      <Text as="span" fontSize="sm">
+        {label}
+      </Text>
+      <Link
+        href={buildSegmentationDocumentPath(crosswalkId)}
+        isExternal
+        color="blue.500"
+        aria-label={`Open ${label} crosswalk`}
+      >
+        <Icon as={MdOpenInNew} boxSize={3.5} />
+      </Link>
+    </HStack>
+  );
+}
+
 /**
  * Renders one organization segmentation section and explanation modal.
  * @param {{record: object|null}} props
@@ -128,7 +175,7 @@ export function OrganizationSegmentationSection({ record }) {
                 <Table size="sm" variant="simple">
                   <Thead>
                     <Tr>
-                      <Th>Source</Th>
+                      <Th>Field</Th>
                       <Th>Dimension</Th>
                       <Th>Value</Th>
                       <Th>Score</Th>
@@ -139,12 +186,12 @@ export function OrganizationSegmentationSection({ record }) {
                   </Thead>
                   <Tbody>
                     {segmentation.explanations.map((row, index) => (
-                      <Tr key={`${row.source || "source"}-${index}`}>
-                        <Td>{formatExplanationCell(row.source)}</Td>
+                      <Tr key={`${row.sourceField || row.source || "source"}-${index}`}>
+                        <Td>{readExplanationFieldLabel(row)}</Td>
                         <Td>{formatExplanationCell(row.dimension)}</Td>
                         <Td whiteSpace="pre-line">{formatExplanationCell(row.value)}</Td>
                         <Td>{row.score == null ? "Not set" : String(row.score)}</Td>
-                        <Td>{formatExplanationCell(row.crosswalkDocumentName)}</Td>
+                        <Td>{renderExplanationCrosswalk(row)}</Td>
                         <Td>{formatExplanationCell(row.rule)}</Td>
                         <Td>
                           <Box
