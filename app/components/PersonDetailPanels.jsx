@@ -4,6 +4,13 @@ import {
   Badge,
   Box,
   Button,
+  Divider,
+  Drawer,
+  DrawerBody,
+  DrawerCloseButton,
+  DrawerContent,
+  DrawerHeader,
+  DrawerOverlay,
   Flex,
   Grid,
   GridItem,
@@ -25,20 +32,25 @@ import {
   Th,
   Thead,
   Tr,
+  useDisclosure,
   VStack
 } from "@chakra-ui/react";
 import {
+  FiArrowDown,
+  FiArrowUp,
   FiBriefcase,
   FiCalendar,
   FiCheckCircle,
   FiChevronLeft,
   FiChevronRight,
+  FiClock,
   FiFilter,
   FiGrid,
   FiHome,
   FiMail,
   FiMapPin,
   FiMoreVertical,
+  FiPhone,
   FiSearch,
   FiUsers
 } from "react-icons/fi";
@@ -880,6 +892,487 @@ export function PersonNotesPanel() {
       <Button alignSelf="center" variant="ghost" color={BRAND_BLUE}>
         Load Archived Notes
       </Button>
+    </Stack>
+  );
+}
+
+// ─── Outreach Panel ────────────────────────────────────────────────────────────
+
+const MOCK_OUTREACH_STATUS = { label: "Active", colorScheme: "green" };
+
+const MOCK_LAST_CONTACT = {
+  date: "Jan 23, 2024",
+  type: "email",
+  subject: "Re: Follow-up on Q4 partnership discussion"
+};
+
+const MOCK_OUTREACH_RECORDS = [
+  {
+    id: "email-003",
+    type: "email",
+    direction: "outbound",
+    status: "Opened",
+    statusColorScheme: "blue",
+    timestamp: "Jan 23, 2024 · 2:14 PM",
+    from: { name: "Sarah Chen", email: "s.chen@2020rm.com" },
+    to: [{ name: "Michael Torres", email: "m.torres@blackstone.com" }],
+    subject: "Re: Follow-up on Q4 partnership discussion",
+    body: "Hi Michael,\n\nJust wanted to circle back on the points we covered last Tuesday regarding the Q4 partnership opportunities. I've attached our updated deck with the revised projections you requested.\n\nA few action items from our call:\n• Review the attached model — specifically the sensitivity analysis on page 8\n• Confirm the kick-off date (we're flexible between Feb 12–16)\n• Connect me with your compliance team re: data-sharing agreement\n\nLooking forward to moving this forward. Happy to jump on a quick call this week if easier.\n\nBest,\nSarah Chen\nSenior Relationship Manager, 2020 Relationship Management\nm: +1 (415) 555-0147",
+    outlookJson: {
+      "@odata.type": "#microsoft.graph.message",
+      "id": "AAMkADhmMzQ5OWI4LTQzNzYtNGU4ZC1iMzk5LWM4NzBkNjgwYzM5OQBGAAAAAADpq0MrQqAAAA",
+      "subject": "Re: Follow-up on Q4 partnership discussion",
+      "from": { "emailAddress": { "name": "Sarah Chen", "address": "s.chen@2020rm.com" } },
+      "toRecipients": [{ "emailAddress": { "name": "Michael Torres", "address": "m.torres@blackstone.com" } }],
+      "receivedDateTime": "2024-01-23T21:14:00Z",
+      "sentDateTime": "2024-01-23T21:14:00Z",
+      "isRead": false,
+      "hasAttachments": true,
+      "importance": "normal",
+      "conversationId": "AAQkADhmMzQ5OWI4LTQzNzYtNGU4ZC1iMzk5LWM4NzBkNjgwYzM5OQAQADuqMrQqQe=="
+    }
+  },
+  {
+    id: "call-002",
+    type: "phone",
+    direction: "inbound",
+    status: "Connected",
+    statusColorScheme: "green",
+    timestamp: "Jan 18, 2024 · 10:47 AM",
+    from: { name: "Michael Torres", phone: "+1 (212) 555-0192" },
+    to: [{ name: "Sarah Chen", phone: "+1 (415) 555-0147" }],
+    subject: null,
+    duration: "14 min",
+    summary: "Michael called to discuss the upcoming renewal timeline and asked for a revised pricing proposal. He mentioned the committee review is scheduled for Feb 5. Requested we send terms no later than Jan 31. No objections raised on current scope.",
+    transcript: null
+  },
+  {
+    id: "email-002",
+    type: "email",
+    direction: "outbound",
+    status: "Sent",
+    statusColorScheme: "gray",
+    timestamp: "Jan 10, 2024 · 9:02 AM",
+    from: { name: "Sarah Chen", email: "s.chen@2020rm.com" },
+    to: [{ name: "Michael Torres", email: "m.torres@blackstone.com" }],
+    subject: "2024 Partnership Roadmap — Initial Thoughts",
+    body: "Hi Michael,\n\nHope the new year is off to a great start. I wanted to share some initial thoughts ahead of our Q1 sync.\n\nWe've been refining our enterprise roadmap for 2024 and I think there are a few areas that align closely with what you mentioned in December around portfolio monitoring workflows.\n\nHighlights:\n• Automated relationship scoring across portfolio companies\n• Direct LinkedIn integration for exec tracking\n• Enhanced reporting exports for committee decks\n\nWould love to find 30 minutes to walk through these — does the week of Jan 22 work for you?\n\nBest,\nSarah",
+    outlookJson: {
+      "@odata.type": "#microsoft.graph.message",
+      "id": "AAMkADhmMzQ5OWI4LTQzNzYtNGU4ZC1iMzk5LWM4NzBkNjgwYzM5OBGAAAAAADpq0MrQqAAAA",
+      "subject": "2024 Partnership Roadmap — Initial Thoughts",
+      "from": { "emailAddress": { "name": "Sarah Chen", "address": "s.chen@2020rm.com" } },
+      "toRecipients": [{ "emailAddress": { "name": "Michael Torres", "address": "m.torres@blackstone.com" } }],
+      "receivedDateTime": "2024-01-10T17:02:00Z",
+      "sentDateTime": "2024-01-10T17:02:00Z",
+      "isRead": true,
+      "hasAttachments": false,
+      "importance": "normal"
+    }
+  },
+  {
+    id: "call-001",
+    type: "phone",
+    direction: "outbound",
+    status: "Voicemail",
+    statusColorScheme: "orange",
+    timestamp: "Jan 8, 2024 · 4:33 PM",
+    from: { name: "Sarah Chen", phone: "+1 (415) 555-0147" },
+    to: [{ name: "Michael Torres", phone: "+1 (212) 555-0192" }],
+    subject: null,
+    duration: "1 min",
+    summary: "Left voicemail asking Michael to connect before end of week to discuss renewal terms and new platform features.",
+    transcript: null
+  },
+  {
+    id: "email-001",
+    type: "email",
+    direction: "inbound",
+    status: "Read",
+    statusColorScheme: "gray",
+    timestamp: "Dec 14, 2023 · 11:28 AM",
+    from: { name: "Michael Torres", email: "m.torres@blackstone.com" },
+    to: [{ name: "Sarah Chen", email: "s.chen@2020rm.com" }],
+    subject: "Re: Year-End Check-in",
+    body: "Sarah,\n\nGreat speaking with you this week. Quick note — we'll have budget clarity by mid-January, so I'd suggest we aim to reconnect around Jan 15.\n\nA few things on my radar going into 2024:\n• We're evaluating vendors across the portfolio monitoring space\n• The committee wants a cleaner view of exec relationships\n• Integration with our existing data stack is a must-have\n\nSend me whatever you have on the roadmap after the holidays and we can go from there.\n\nThanks,\nMichael Torres\nManaging Director, Portfolio Operations\nBlackstone",
+    outlookJson: {
+      "@odata.type": "#microsoft.graph.message",
+      "id": "AAMkADhmMzQ5OWI4LTQzNzYtNGU4ZC1iMzk5LWM4NzBkNjgwYzM5OCGA",
+      "subject": "Re: Year-End Check-in",
+      "from": { "emailAddress": { "name": "Michael Torres", "address": "m.torres@blackstone.com" } },
+      "toRecipients": [{ "emailAddress": { "name": "Sarah Chen", "address": "s.chen@2020rm.com" } }],
+      "receivedDateTime": "2023-12-14T19:28:00Z",
+      "sentDateTime": "2023-12-14T19:28:00Z",
+      "isRead": true,
+      "hasAttachments": false,
+      "importance": "normal"
+    }
+  }
+];
+
+function contactDisplay(party) {
+  if (!party) return "—";
+  const addr = party.email ? `<${party.email}>` : party.phone || "";
+  return addr ? `${party.name} ${addr}` : party.name;
+}
+
+function OutlookJsonViewer({ json }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <Box>
+      <Button size="xs" variant="ghost" color="gray.500" onClick={() => setExpanded((v) => !v)}>
+        {expanded ? "Hide" : "View"} Raw Outlook JSON
+      </Button>
+      {expanded ? (
+        <Box
+          mt={2}
+          p={4}
+          bg="gray.50"
+          borderRadius="md"
+          borderWidth="1px"
+          borderColor={BORDER_COLOR}
+          overflowX="auto"
+          maxH="320px"
+          overflowY="auto"
+        >
+          <Text as="pre" fontSize="xs" fontFamily="mono" color="gray.700" whiteSpace="pre">
+            {JSON.stringify(json, null, 2)}
+          </Text>
+        </Box>
+      ) : null}
+    </Box>
+  );
+}
+
+function OutreachFlyout({ record, isOpen, onClose }) {
+  if (!record) return null;
+
+  const isEmail = record.type === "email";
+  const isOutbound = record.direction === "outbound";
+
+  return (
+    <Drawer isOpen={isOpen} onClose={onClose} size="lg" placement="right">
+      <DrawerOverlay />
+      <DrawerContent>
+        <DrawerCloseButton />
+        <DrawerHeader borderBottomWidth="1px" borderColor={BORDER_COLOR} pr={12}>
+          <HStack spacing={2} flexWrap="wrap">
+            <Badge colorScheme={record.statusColorScheme}>{record.status}</Badge>
+            <Badge
+              variant="subtle"
+              colorScheme={isOutbound ? "blue" : "purple"}
+            >
+              <HStack spacing={1} as="span">
+                <Icon as={isOutbound ? FiArrowUp : FiArrowDown} boxSize={3} />
+                <span>{isOutbound ? "Outbound" : "Inbound"}</span>
+              </HStack>
+            </Badge>
+            <Badge variant="outline" colorScheme="gray">
+              <HStack spacing={1} as="span">
+                <Icon as={isEmail ? FiMail : FiPhone} boxSize={3} />
+                <span>{isEmail ? "Email" : "Phone"}</span>
+              </HStack>
+            </Badge>
+          </HStack>
+        </DrawerHeader>
+
+        <DrawerBody p={0}>
+          <Box px={6} py={5} bg="#F8FAFC" borderBottomWidth="1px" borderColor={BORDER_COLOR}>
+            {record.subject ? (
+              <Text fontWeight="bold" fontSize="md" color="gray.900" mb={4}>
+                {record.subject}
+              </Text>
+            ) : null}
+            <Stack spacing={2}>
+              <Flex gap={3} align="baseline">
+                <Text fontSize="sm" color="gray.500" w="60px" flexShrink={0}>From</Text>
+                <Text fontSize="sm" fontWeight="medium" color="gray.800">{contactDisplay(record.from)}</Text>
+              </Flex>
+              <Flex gap={3} align="baseline">
+                <Text fontSize="sm" color="gray.500" w="60px" flexShrink={0}>To</Text>
+                <Text fontSize="sm" fontWeight="medium" color="gray.800">
+                  {record.to.map(contactDisplay).join(", ")}
+                </Text>
+              </Flex>
+              <Flex gap={3} align="baseline">
+                <Text fontSize="sm" color="gray.500" w="60px" flexShrink={0}>Date</Text>
+                <Text fontSize="sm" color="gray.700">{record.timestamp}</Text>
+              </Flex>
+              {record.duration ? (
+                <Flex gap={3} align="baseline">
+                  <Text fontSize="sm" color="gray.500" w="60px" flexShrink={0}>Duration</Text>
+                  <HStack spacing={1}>
+                    <Icon as={FiClock} boxSize={3} color="gray.400" />
+                    <Text fontSize="sm" color="gray.700">{record.duration}</Text>
+                  </HStack>
+                </Flex>
+              ) : null}
+            </Stack>
+          </Box>
+
+          <Box px={6} py={6}>
+            {isEmail && record.body ? (
+              <Text fontSize="sm" color="gray.700" whiteSpace="pre-wrap" lineHeight="1.9">
+                {record.body}
+              </Text>
+            ) : null}
+
+            {!isEmail ? (
+              <Stack spacing={6}>
+                <Box>
+                  <Text
+                    fontSize="xs"
+                    fontWeight="bold"
+                    letterSpacing="0.08em"
+                    textTransform="uppercase"
+                    color="gray.500"
+                    mb={3}
+                  >
+                    Call Summary
+                  </Text>
+                  <Text fontSize="sm" color="gray.700" lineHeight="1.9">
+                    {record.summary || "No summary available."}
+                  </Text>
+                </Box>
+                {record.transcript ? (
+                  <Box>
+                    <Text
+                      fontSize="xs"
+                      fontWeight="bold"
+                      letterSpacing="0.08em"
+                      textTransform="uppercase"
+                      color="gray.500"
+                      mb={3}
+                    >
+                      Transcript
+                    </Text>
+                    <Text fontSize="sm" color="gray.700" lineHeight="1.9" whiteSpace="pre-wrap">
+                      {record.transcript}
+                    </Text>
+                  </Box>
+                ) : null}
+              </Stack>
+            ) : null}
+
+            {record.outlookJson ? (
+              <>
+                <Divider my={6} borderColor={BORDER_COLOR} />
+                <OutlookJsonViewer json={record.outlookJson} />
+              </>
+            ) : null}
+          </Box>
+        </DrawerBody>
+      </DrawerContent>
+    </Drawer>
+  );
+}
+
+export function PersonOutreachPanel() {
+  const [selected, setSelected] = useState(null);
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [dirFilter, setDirFilter] = useState("all");
+
+  const filtered = MOCK_OUTREACH_RECORDS.filter((r) => {
+    if (typeFilter !== "all" && r.type !== typeFilter) return false;
+    if (dirFilter !== "all" && r.direction !== dirFilter) return false;
+    return true;
+  });
+
+  function handleView(record) {
+    setSelected(record);
+    onOpen();
+  }
+
+  return (
+    <Stack spacing={6}>
+      <SurfaceCard>
+        <Flex
+          align={{ base: "stretch", md: "center" }}
+          justify="space-between"
+          direction={{ base: "column", md: "row" }}
+          gap={4}
+        >
+          <Box>
+            <Heading size="lg" color={BRAND_BLUE}>
+              Outreach History
+            </Heading>
+            <Text mt={1} color="gray.500" fontSize="sm">
+              All logged communications with this contact.
+            </Text>
+          </Box>
+          <Stack
+            direction={{ base: "column", sm: "row" }}
+            spacing={4}
+            align={{ base: "stretch", sm: "center" }}
+          >
+            <HStack spacing={2}>
+              <Text fontSize="sm" color="gray.500" whiteSpace="nowrap">Status</Text>
+              <Badge colorScheme={MOCK_OUTREACH_STATUS.colorScheme} px={3} py={1} borderRadius="full" fontSize="sm">
+                {MOCK_OUTREACH_STATUS.label}
+              </Badge>
+            </HStack>
+            <Box
+              px={4}
+              py={2}
+              bg="#F0F5FF"
+              borderRadius="md"
+              borderWidth="1px"
+              borderColor="#C7D7F5"
+            >
+              <Text fontSize="xs" color="gray.500" fontWeight="bold" textTransform="uppercase" letterSpacing="0.06em" mb={0.5}>
+                Last Communication
+              </Text>
+              <HStack spacing={2}>
+                <Icon as={MOCK_LAST_CONTACT.type === "email" ? FiMail : FiPhone} boxSize={3.5} color={BRAND_BLUE} />
+                <Text fontSize="sm" fontWeight="medium" color="gray.800">
+                  {MOCK_LAST_CONTACT.date}
+                </Text>
+                <Text fontSize="sm" color="gray.500" noOfLines={1} maxW="200px">
+                  — {MOCK_LAST_CONTACT.subject}
+                </Text>
+              </HStack>
+            </Box>
+          </Stack>
+        </Flex>
+      </SurfaceCard>
+
+      <SurfaceCard p={0}>
+        <Flex
+          px={{ base: 4, md: 6 }}
+          py={4}
+          gap={3}
+          flexWrap="wrap"
+          borderBottomWidth="1px"
+          borderColor={BORDER_COLOR}
+          align="center"
+        >
+          <HStack spacing={2} flex="1" minW="160px">
+            <Icon as={FiFilter} color="gray.400" />
+            <Text fontSize="sm" color="gray.500">Filter</Text>
+          </HStack>
+          <Select
+            size="sm"
+            maxW="140px"
+            borderRadius="md"
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+          >
+            <option value="all">All Types</option>
+            <option value="email">Email</option>
+            <option value="phone">Phone</option>
+          </Select>
+          <Select
+            size="sm"
+            maxW="160px"
+            borderRadius="md"
+            value={dirFilter}
+            onChange={(e) => setDirFilter(e.target.value)}
+          >
+            <option value="all">All Directions</option>
+            <option value="outbound">Outbound</option>
+            <option value="inbound">Inbound</option>
+          </Select>
+        </Flex>
+
+        <TableContainer>
+          <Table size="sm" variant="simple">
+            <Thead bg="#F8FAFC">
+              <Tr>
+                <Th borderColor={BORDER_COLOR} color="gray.500" fontSize="xs">Date</Th>
+                <Th borderColor={BORDER_COLOR} color="gray.500" fontSize="xs">Type</Th>
+                <Th borderColor={BORDER_COLOR} color="gray.500" fontSize="xs">Direction</Th>
+                <Th borderColor={BORDER_COLOR} color="gray.500" fontSize="xs">From</Th>
+                <Th borderColor={BORDER_COLOR} color="gray.500" fontSize="xs">To</Th>
+                <Th borderColor={BORDER_COLOR} color="gray.500" fontSize="xs">Subject</Th>
+                <Th borderColor={BORDER_COLOR} color="gray.500" fontSize="xs">Status</Th>
+                <Th borderColor={BORDER_COLOR} />
+              </Tr>
+            </Thead>
+            <Tbody>
+              {filtered.length === 0 ? (
+                <Tr>
+                  <Td colSpan={8} py={10} textAlign="center" borderColor={BORDER_COLOR}>
+                    <Text color="gray.400">No outreach records match the current filters.</Text>
+                  </Td>
+                </Tr>
+              ) : (
+                filtered.map((record) => (
+                  <Tr
+                    key={record.id}
+                    _hover={{ bg: "#F8FAFC" }}
+                    cursor="default"
+                  >
+                    <Td borderColor={BORDER_COLOR} whiteSpace="nowrap">
+                      <Text fontSize="sm" color="gray.700">{record.timestamp}</Text>
+                    </Td>
+                    <Td borderColor={BORDER_COLOR}>
+                      <HStack spacing={1.5}>
+                        <Icon
+                          as={record.type === "email" ? FiMail : FiPhone}
+                          boxSize={3.5}
+                          color={BRAND_BLUE}
+                        />
+                        <Text fontSize="sm" color="gray.700" textTransform="capitalize">
+                          {record.type}
+                        </Text>
+                      </HStack>
+                    </Td>
+                    <Td borderColor={BORDER_COLOR}>
+                      <HStack spacing={1}>
+                        <Icon
+                          as={record.direction === "outbound" ? FiArrowUp : FiArrowDown}
+                          boxSize={3}
+                          color={record.direction === "outbound" ? "blue.500" : "purple.500"}
+                        />
+                        <Text fontSize="sm" color="gray.700" textTransform="capitalize">
+                          {record.direction}
+                        </Text>
+                      </HStack>
+                    </Td>
+                    <Td borderColor={BORDER_COLOR}>
+                      <Text fontSize="sm" color="gray.700">{record.from.name}</Text>
+                    </Td>
+                    <Td borderColor={BORDER_COLOR}>
+                      <Text fontSize="sm" color="gray.700">
+                        {record.to.map((t) => t.name).join(", ")}
+                      </Text>
+                    </Td>
+                    <Td borderColor={BORDER_COLOR} maxW="260px">
+                      <Text fontSize="sm" color="gray.700" noOfLines={1}>
+                        {record.subject || (
+                          <Text as="span" color="gray.400" fontStyle="italic">
+                            {record.duration ? `Call · ${record.duration}` : "—"}
+                          </Text>
+                        )}
+                      </Text>
+                    </Td>
+                    <Td borderColor={BORDER_COLOR}>
+                      <Badge colorScheme={record.statusColorScheme} variant="subtle">
+                        {record.status}
+                      </Badge>
+                    </Td>
+                    <Td borderColor={BORDER_COLOR}>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        colorScheme="blue"
+                        borderColor={BRAND_BLUE}
+                        color={BRAND_BLUE}
+                        onClick={() => handleView(record)}
+                      >
+                        View
+                      </Button>
+                    </Td>
+                  </Tr>
+                ))
+              )}
+            </Tbody>
+          </Table>
+        </TableContainer>
+      </SurfaceCard>
+
+      <OutreachFlyout record={selected} isOpen={isOpen} onClose={onClose} />
     </Stack>
   );
 }

@@ -22,6 +22,12 @@ const PERSON_DETAIL_TABS = [
     label: "Notes",
     segment: "notes",
     loadingLabel: "Loading notes..."
+  },
+  {
+    key: "outreach",
+    label: "Outreach",
+    segment: "outreach",
+    loadingLabel: "Loading outreach..."
   }
 ];
 

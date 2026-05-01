@@ -6,7 +6,7 @@ const {
 /**
  * Parses one contact detail pathname into person and tab segments.
  * @param {string|null|undefined} pathname
- * @returns {{personUUID: string, tabKey: "overview"|"lists"|"similarContacts"|"notes"}|null}
+ * @returns {{personUUID: string, tabKey: "overview"|"lists"|"similarContacts"|"notes"|"outreach"}|null}
  */
 function parsePersonDetailPath(pathname) {
   if (typeof pathname !== "string") {
@@ -52,7 +52,7 @@ function isSamePersonDetailNavigation(options) {
  *   navigationState: string,
  *   navigationPathname?: string|null|undefined
  * }} options
- * @returns {{activeTabKey: "overview"|"lists"|"similarContacts"|"notes", isLoading: boolean, label: string|null}}
+ * @returns {{activeTabKey: "overview"|"lists"|"similarContacts"|"notes"|"outreach", isLoading: boolean, label: string|null}}
  */
 function getPersonDetailTabUiState(options) {
   const current = parsePersonDetailPath(options.currentPathname);
