@@ -27,12 +27,7 @@ export async function loader({ request }) {
 
   try {
     const items = await loadAdminDataList({
-      request,
-      filter: selectedType
-        ? {
-            type: selectedType
-          }
-        : null
+      request
     });
 
     return json({

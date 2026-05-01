@@ -26,7 +26,7 @@ import {
   VStack
 } from "@chakra-ui/react";
 import { SearchIcon } from "@chakra-ui/icons";
-import { Form, Link } from "@remix-run/react";
+import { Form, Link, useLocation } from "@remix-run/react";
 import {
   filterAdminDataItems,
   listAdminDataTypes,
@@ -159,12 +159,59 @@ export function AdminDataListPage({
   searchQuery = "",
   error
 }) {
-  const sortedItems = sortAdminDataItems(items);
-  const filteredItems = filterAdminDataItems(sortedItems, {
-    type: selectedType,
-    query: searchQuery
-  });
-  const knownTypes = listAdminDataTypes(items);
+  const location = useLocation();
+  const sortedItems = useMemo(() => sortAdminDataItems(items), [items]);
+  const knownTypes = useMemo(() => listAdminDataTypes(items), [items]);
+  const [activeSearchQuery, setActiveSearchQuery] = useState(searchQuery);
+  const [activeType, setActiveType] = useState(selectedType);
+
+  useEffect(() => {
+    setActiveSearchQuery(searchQuery);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    setActiveType(selectedType);
+  }, [selectedType]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const searchParams = new URLSearchParams(location.search);
+    const trimmedType = activeType.trim();
+    const trimmedQuery = activeSearchQuery.trim();
+
+    if (trimmedType) {
+      searchParams.set("type", trimmedType);
+    } else {
+      searchParams.delete("type");
+    }
+
+    if (trimmedQuery) {
+      searchParams.set("q", trimmedQuery);
+    } else {
+      searchParams.delete("q");
+    }
+
+    const nextSearch = searchParams.toString();
+    const currentUrl = `${location.pathname}${location.search}`;
+    const nextUrl = `${location.pathname}${nextSearch ? `?${nextSearch}` : ""}`;
+
+    if (nextUrl !== currentUrl) {
+      window.history.replaceState(window.history.state, "", nextUrl);
+    }
+  }, [activeSearchQuery, activeType, location.pathname, location.search]);
+
+  const filteredItems = useMemo(
+    () =>
+      filterAdminDataItems(sortedItems, {
+        type: activeType,
+        query: activeSearchQuery
+      }),
+    [activeSearchQuery, activeType, sortedItems]
+  );
+  const hasActiveFilters = Boolean(activeType.trim() || activeSearchQuery.trim());
 
   return (
     <Box bg="white" h="100%" minH="0" display="flex" flexDirection="column">
@@ -181,25 +228,25 @@ export function AdminDataListPage({
           </Alert>
         ) : null}
 
-        <Box as={Form} method="get" mb={4}>
+        <Box mb={4}>
           <HStack align="end" spacing={3} flexWrap="wrap">
             <FormControl maxW={{ base: "100%", md: "360px" }}>
-              <FormLabel mb={2}>Filter</FormLabel>
+              <FormLabel mb={2}>Search</FormLabel>
               <InputGroup>
                 <InputLeftElement pointerEvents="none">
                   <SearchIcon color="gray.400" />
                 </InputLeftElement>
                 <Input
-                  name="q"
                   placeholder="Filter by name, description, key, or type"
-                  defaultValue={searchQuery}
+                  value={activeSearchQuery}
+                  onChange={(event) => setActiveSearchQuery(event.target.value)}
                 />
               </InputGroup>
             </FormControl>
 
             <FormControl maxW={{ base: "100%", md: "260px" }}>
               <FormLabel mb={2}>Type</FormLabel>
-              <Select name="type" defaultValue={selectedType || ""}>
+              <Select value={activeType} onChange={(event) => setActiveType(event.target.value)}>
                 <option value="">All Types</option>
                 {knownTypes.map((type) => (
                   <option key={type} value={type}>
@@ -209,8 +256,16 @@ export function AdminDataListPage({
               </Select>
             </FormControl>
 
-            <Button type="submit" colorScheme="blue">
-              Apply
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setActiveSearchQuery("");
+                setActiveType("");
+              }}
+              isDisabled={!hasActiveFilters}
+            >
+              Clear
             </Button>
           </HStack>
         </Box>
@@ -222,10 +277,10 @@ export function AdminDataListPage({
                 <Thead bg="gray.50">
                   <Tr>
                     <Th position="sticky" top={0} bg="gray.50" zIndex={1}>
-                      Type
+                      Name
                     </Th>
                     <Th position="sticky" top={0} bg="gray.50" zIndex={1}>
-                      Name
+                      Type
                     </Th>
                     <Th position="sticky" top={0} bg="gray.50" zIndex={1}>
                       Description
@@ -245,11 +300,6 @@ export function AdminDataListPage({
                     return (
                       <Tr key={item.id || item.name} _hover={{ bg: item.id ? "gray.50" : "transparent" }}>
                         <Td verticalAlign="top">
-                          <Text color={item.type ? "gray.800" : "gray.400"} fontSize="sm">
-                            {item.type || "Unknown"}
-                          </Text>
-                        </Td>
-                        <Td verticalAlign="top">
                           {item.id ? (
                             <Link
                               to={itemPath}
@@ -267,6 +317,11 @@ export function AdminDataListPage({
                               {item.name}
                             </Text>
                           )}
+                        </Td>
+                        <Td verticalAlign="top">
+                          <Text color={item.type ? "gray.800" : "gray.400"} fontSize="sm">
+                            {item.type || "Unknown"}
+                          </Text>
                         </Td>
                         <Td verticalAlign="top">
                           <Text color={item.description ? "gray.700" : "gray.400"} noOfLines={3}>
