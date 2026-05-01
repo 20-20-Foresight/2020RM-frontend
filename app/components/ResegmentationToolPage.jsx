@@ -214,6 +214,7 @@ export function ResegmentationToolPage({
   const [listImportMessage, setListImportMessage] = useState("");
 
   const searchRequestRef = useRef(0);
+  const searchTimeoutRef = useRef(null);
   const { isOpen: isSingleApplyOpen, onOpen: openSingleApply, onClose: closeSingleApply } =
     useDisclosure();
   const { isOpen: isListApplyOpen, onOpen: openListApply, onClose: closeListApply } =
@@ -225,45 +226,68 @@ export function ResegmentationToolPage({
   const headerBg = useColorModeValue("gray.50", "gray.700");
   const appliedRowBg = useColorModeValue("green.50", "green.900");
 
-  useEffect(() => {
+  async function executeOrganizationSearch(trimmedQuery, requestNumber) {
+    setIsSearching(true);
+    try {
+      const payload = await postResegmentationAction("searchOrganizations", {
+        query: trimmedQuery
+      });
+      if (searchRequestRef.current !== requestNumber) {
+        return;
+      }
+      setSearchResults(Array.isArray(payload.organizations) ? payload.organizations : []);
+      setSearchError("");
+    } catch (error) {
+      if (searchRequestRef.current !== requestNumber) {
+        return;
+      }
+      setSearchResults([]);
+      setSearchError(error instanceof Error ? error.message : "Unable to search organizations.");
+    } finally {
+      if (searchRequestRef.current === requestNumber) {
+        setIsSearching(false);
+      }
+    }
+  }
+
+  function clearPendingOrganizationSearch() {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+      searchTimeoutRef.current = null;
+    }
+  }
+
+  function triggerOrganizationSearch({ immediate = false } = {}) {
     const trimmedQuery = readTrimmedString(singleQuery);
     const selectedName = readTrimmedString(selectedOrganization?.summary?.name);
+
+    clearPendingOrganizationSearch();
 
     if (!trimmedQuery || (selectedName && trimmedQuery === selectedName)) {
       setSearchResults([]);
       setSearchError("");
       setIsSearching(false);
-      return undefined;
+      return;
     }
 
     const requestNumber = searchRequestRef.current + 1;
     searchRequestRef.current = requestNumber;
 
-    const timeout = setTimeout(async () => {
-      setIsSearching(true);
-      try {
-        const payload = await postResegmentationAction("searchOrganizations", {
-          query: trimmedQuery
-        });
-        if (searchRequestRef.current !== requestNumber) {
-          return;
-        }
-        setSearchResults(Array.isArray(payload.organizations) ? payload.organizations : []);
-        setSearchError("");
-      } catch (error) {
-        if (searchRequestRef.current !== requestNumber) {
-          return;
-        }
-        setSearchResults([]);
-        setSearchError(error instanceof Error ? error.message : "Unable to search organizations.");
-      } finally {
-        if (searchRequestRef.current === requestNumber) {
-          setIsSearching(false);
-        }
-      }
-    }, ORGANIZATION_SEARCH_DEBOUNCE_MS);
+    if (immediate) {
+      void executeOrganizationSearch(trimmedQuery, requestNumber);
+      return;
+    }
 
-    return () => clearTimeout(timeout);
+    searchTimeoutRef.current = setTimeout(() => {
+      searchTimeoutRef.current = null;
+      void executeOrganizationSearch(trimmedQuery, requestNumber);
+    }, ORGANIZATION_SEARCH_DEBOUNCE_MS);
+  }
+
+  useEffect(() => {
+    triggerOrganizationSearch();
+
+    return () => clearPendingOrganizationSearch();
   }, [singleQuery, selectedOrganization?.summary?.name]);
 
   const resultCurrentSummary = normalizeSegmentationVisualSummary(singleResult?.current);
@@ -592,6 +616,14 @@ export function ResegmentationToolPage({
                   }}
                   onFocus={() => setSearchFocused(true)}
                   onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") {
+                      return;
+                    }
+                    event.preventDefault();
+                    setSearchFocused(true);
+                    triggerOrganizationSearch({ immediate: true });
+                  }}
                   autoComplete="off"
                 />
               </InputGroup>
