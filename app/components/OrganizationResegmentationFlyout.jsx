@@ -25,8 +25,8 @@ import {
   buildAppliedResult,
   hasVisibleSegmentationSummary,
   normalizeSegmentationVisualSummary,
-  readDisplayedSegmentationExplanationHeading,
-  readDisplayedSegmentationExplanations
+  readCurrentSegmentationExplanations,
+  readProposedSegmentationExplanations
 } from "../models/resegmentation-ui.mjs";
 import { ApplyModal, ExplanationTable, SegmentCompare } from "./ResegmentationReviewContent.jsx";
 
@@ -90,8 +90,8 @@ export function OrganizationResegmentationFlyout({
     : hasVisibleSegmentationSummary(resultCurrentSummary)
       ? resultCurrentSummary
       : buildRecordSegmentationSummary(record);
-  const displayedExplanations = readDisplayedSegmentationExplanations(record, result);
-  const explanationHeading = readDisplayedSegmentationExplanationHeading(record, result);
+  const currentDisplayedExplanations = readCurrentSegmentationExplanations(record, result);
+  const proposedDisplayedExplanations = readProposedSegmentationExplanations(result);
   const isReady = Boolean(organizationUUID);
   const emptyPreviewWarning = hasPreviewed && !hasProposedSummary
     ? "Not enough data exists to segment this organization."
@@ -225,8 +225,13 @@ export function OrganizationResegmentationFlyout({
               }
             />
             <ExplanationTable
-              explanations={displayedExplanations}
-              heading={explanationHeading}
+              explanations={currentDisplayedExplanations}
+              heading="Current Segmentation Reasoning"
+              loading={isSegmenting}
+            />
+            <ExplanationTable
+              explanations={proposedDisplayedExplanations}
+              heading="Proposed Segmentation Reasoning"
               loading={isSegmenting}
             />
           </DrawerBody>

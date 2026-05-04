@@ -4,9 +4,12 @@ const assert = require("node:assert/strict");
 const {
   applyResegmentationToRecord,
   buildAppliedResult,
+  buildExplanationSegmentationLabel,
   normalizeSegmentationVisualSummary,
+  readCurrentSegmentationExplanations,
   readDisplayedSegmentationExplanationHeading,
-  readDisplayedSegmentationExplanations
+  readDisplayedSegmentationExplanations,
+  readProposedSegmentationExplanations
 } = require("../app/models/resegmentation-ui");
 
 test("applyResegmentationToRecord updates segmentation and projection without mutating the source record", () => {
@@ -54,16 +57,34 @@ test("buildAppliedResult promotes proposed segments into the current comparison 
       industry: ["old industry"],
       focus: ["old focus"]
     },
+    currentExplanations: [
+      {
+        source: "legacy",
+        reasonHtml: "Old explanation"
+      }
+    ],
     proposed: {
       industry: ["new industry"],
       focus: ["new focus"]
-    }
+    },
+    explanations: [
+      {
+        source: "description",
+        reasonHtml: "New explanation"
+      }
+    ]
   });
 
   assert.deepEqual(result.current, {
     industry: ["new industry"],
     focus: ["new focus"]
   });
+  assert.deepEqual(result.currentExplanations, [
+    {
+      source: "description",
+      reasonHtml: "New explanation"
+    }
+  ]);
 });
 
 test("normalizeSegmentationVisualSummary removes empty values", () => {
@@ -76,6 +97,27 @@ test("normalizeSegmentationVisualSummary removes empty values", () => {
       industry: ["software"],
       focus: ["payments"]
     }
+  );
+});
+
+test("buildExplanationSegmentationLabel breaks combined industry and focus rows onto separate lines", () => {
+  assert.equal(
+    buildExplanationSegmentationLabel({
+      dimension: "Industry/Focus",
+      value: "Real Estate Operating Companies (+1)\nDevelopment (+1)"
+    }),
+    "Industry: Real Estate Operating Companies (+1)\nFocus: Development (+1)"
+  );
+});
+
+test("buildExplanationSegmentationLabel does not duplicate existing dimension prefixes", () => {
+  assert.equal(
+    buildExplanationSegmentationLabel({
+      dimension: "Industry/Focus",
+      value:
+        "Industry: Real Estate Operating Companies (+1)\nFocus: Development (+1)"
+    }),
+    "Industry: Real Estate Operating Companies (+1)\nFocus: Development (+1)"
   );
 });
 
@@ -141,6 +183,57 @@ test("readDisplayedSegmentationExplanations replaces current reasons with previe
   assert.equal(
     readDisplayedSegmentationExplanationHeading(record, resegmentation),
     "Proposed Segmentation Reasoning"
+  );
+});
+
+test("readCurrentSegmentationExplanations prefers saved current history rows from resegmentation", () => {
+  const record = {
+    metadata: {
+      segmentation: {
+        industry: ["software"],
+        reasons: [
+          {
+            source: "linkedin",
+            reason: 'Industry Listed: "Software"'
+          }
+        ]
+      }
+    }
+  };
+  const resegmentation = {
+    currentExplanations: [
+      {
+        source: "history",
+        reasonHtml: "Saved explanation from prior segmentation"
+      }
+    ]
+  };
+
+  assert.deepEqual(
+    readCurrentSegmentationExplanations(record, resegmentation),
+    resegmentation.currentExplanations
+  );
+});
+
+test("readProposedSegmentationExplanations returns only the proposed preview rows", () => {
+  const resegmentation = {
+    currentExplanations: [
+      {
+        source: "history",
+        reasonHtml: "Saved explanation from prior segmentation"
+      }
+    ],
+    explanations: [
+      {
+        source: "description",
+        reasonHtml: "Derived from fresh description text"
+      }
+    ]
+  };
+
+  assert.deepEqual(
+    readProposedSegmentationExplanations(resegmentation),
+    resegmentation.explanations
   );
 });
 

@@ -54,6 +54,38 @@ function readExplanationFieldLabel(row) {
   );
 }
 
+function readExplanationStatusLabel(row) {
+  switch (readTrimmedString(row?.rowType)) {
+    case "matched":
+      return "Matched";
+    case "missing_input":
+      return "Missing Input";
+    case "no_match":
+      return "No Match";
+    case "source_missing":
+      return "Missing Data";
+    case "warning":
+      return "Warning";
+    default:
+      return "";
+  }
+}
+
+function readExplanationStatusScheme(row) {
+  switch (readTrimmedString(row?.rowType)) {
+    case "matched":
+      return "green";
+    case "warning":
+      return "orange";
+    case "missing_input":
+    case "no_match":
+    case "source_missing":
+      return "yellow";
+    default:
+      return "gray";
+  }
+}
+
 function renderExplanationCrosswalk(row) {
   const crosswalkName = readTrimmedString(row?.crosswalkDocumentName);
   const crosswalkId = readTrimmedString(row?.crosswalkDocumentId);
@@ -247,7 +279,9 @@ export function ExplanationTable({
   loading = false,
   heading = "Segmentation Reasoning"
 }) {
+  const [reviewRow, setReviewRow] = useState(null);
   const theadBg = useColorModeValue("gray.50", "gray.700");
+  const reviewBg = useColorModeValue("gray.50", "gray.800");
   const visibleExplanations = readDisplayedExplanations(explanations);
 
   if (loading) {
@@ -274,39 +308,103 @@ export function ExplanationTable({
         <Table size="sm" variant="simple">
           <Thead bg={theadBg}>
             <Tr>
+              <Th>Status</Th>
               <Th>Segmentation</Th>
               <Th>Field</Th>
               <Th>Crosswalk</Th>
               <Th>How Derived</Th>
+              <Th>Review</Th>
             </Tr>
           </Thead>
           <Tbody>
-            {visibleExplanations.map((row, index) => (
-              <Tr key={`${row.sourceField || row.source || "source"}-${index}`}>
-                <Td fontSize="xs" fontWeight="medium">
-                  {buildExplanationSegmentationLabel(row)}
-                </Td>
-                <Td fontSize="xs">{readExplanationFieldLabel(row)}</Td>
-                <Td fontSize="xs">{renderExplanationCrosswalk(row)}</Td>
-                <Td fontSize="xs" maxW="340px" whiteSpace="normal" lineHeight="1.5">
-                  <Box
-                    sx={{
-                      mark: {
-                        bg: "yellow.100",
-                        px: 1,
-                        borderRadius: "sm"
-                      }
-                    }}
-                    dangerouslySetInnerHTML={{
-                      __html: row.reasonHtml || "Not provided"
-                    }}
-                  />
-                </Td>
-              </Tr>
-            ))}
+            {visibleExplanations.map((row, index) => {
+              const statusLabel = readExplanationStatusLabel(row);
+              return (
+                <Tr key={`${row.sourceField || row.source || "source"}-${index}`}>
+                  <Td fontSize="xs">
+                    {statusLabel ? (
+                      <Badge colorScheme={readExplanationStatusScheme(row)} fontSize="10px">
+                        {statusLabel}
+                      </Badge>
+                    ) : null}
+                  </Td>
+                  <Td fontSize="xs" fontWeight="medium" whiteSpace="pre-line">
+                    {buildExplanationSegmentationLabel(row)}
+                  </Td>
+                  <Td fontSize="xs">{readExplanationFieldLabel(row)}</Td>
+                  <Td fontSize="xs">{renderExplanationCrosswalk(row)}</Td>
+                  <Td fontSize="xs" maxW="340px" whiteSpace="normal" lineHeight="1.5">
+                    <Box
+                      sx={{
+                        mark: {
+                          bg: "yellow.100",
+                          px: 1,
+                          borderRadius: "sm"
+                        }
+                      }}
+                      dangerouslySetInnerHTML={{
+                        __html: row.reasonHtml || "Not provided"
+                      }}
+                    />
+                  </Td>
+                  <Td fontSize="xs">
+                    {row?.review?.description ? (
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        onClick={() => setReviewRow(row)}
+                      >
+                        Review
+                      </Button>
+                    ) : (
+                      <Text color="gray.400">-</Text>
+                    )}
+                  </Td>
+                </Tr>
+              );
+            })}
           </Tbody>
         </Table>
       </TableContainer>
+      <Modal
+        isOpen={Boolean(reviewRow)}
+        onClose={() => setReviewRow(null)}
+        size="xl"
+        isCentered
+      >
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader fontSize="md">
+            {reviewRow?.review?.label || "Review Source"}
+          </ModalHeader>
+          <Divider />
+          <ModalBody py={5}>
+            <Stack spacing={3}>
+              <Text fontSize="sm" color="gray.500">
+                {readExplanationFieldLabel(reviewRow)}
+              </Text>
+              <Box
+                border="1px solid"
+                borderColor="gray.200"
+                borderRadius="md"
+                p={4}
+                bg={reviewBg}
+                maxH="420px"
+                overflowY="auto"
+              >
+                <Text fontSize="sm" whiteSpace="pre-wrap">
+                  {reviewRow?.review?.description || "No review text is available."}
+                </Text>
+              </Box>
+            </Stack>
+          </ModalBody>
+          <ModalFooter>
+            <Button size="sm" onClick={() => setReviewRow(null)}>
+              Close
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 }

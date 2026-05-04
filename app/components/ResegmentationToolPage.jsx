@@ -57,8 +57,8 @@ import {
   buildAppliedResult,
   hasVisibleSegmentationSummary,
   normalizeSegmentationVisualSummary,
-  readDisplayedSegmentationExplanationHeading,
-  readDisplayedSegmentationExplanations,
+  readCurrentSegmentationExplanations,
+  readProposedSegmentationExplanations,
   readPrimaryValue,
   readTrimmedString
 } from "../models/resegmentation-ui.mjs";
@@ -117,6 +117,13 @@ function ReviewDrawer({ isOpen, onClose, org, result, onApply, isApplied }) {
     return null;
   }
 
+  const currentExplanations = Array.isArray(result?.currentExplanations)
+    ? result.currentExplanations
+    : [];
+  const proposedExplanations = Array.isArray(result?.explanations)
+    ? result.explanations
+    : [];
+
   return (
     <>
       <Drawer isOpen={isOpen} onClose={onClose} placement="right" size="xl">
@@ -145,7 +152,14 @@ function ReviewDrawer({ isOpen, onClose, org, result, onApply, isApplied }) {
               </Alert>
             ) : null}
             <SegmentCompare current={result?.current} proposed={result?.proposed} />
-            <ExplanationTable explanations={result?.explanations} />
+            <ExplanationTable
+              explanations={currentExplanations}
+              heading="Current Segmentation Reasoning"
+            />
+            <ExplanationTable
+              explanations={proposedExplanations}
+              heading="Proposed Segmentation Reasoning"
+            />
           </DrawerBody>
 
           <DrawerFooter borderTopWidth="1px" gap={3} justifyContent="flex-start">
@@ -298,14 +312,11 @@ export function ResegmentationToolPage({
     : hasVisibleSegmentationSummary(resultCurrentSummary)
       ? resultCurrentSummary
       : buildRecordSegmentationSummary(selectedOrganization?.record || null);
-  const singleDisplayedExplanations = readDisplayedSegmentationExplanations(
+  const singleCurrentExplanations = readCurrentSegmentationExplanations(
     selectedOrganization?.record || null,
     singleResult
   );
-  const singleExplanationHeading = readDisplayedSegmentationExplanationHeading(
-    selectedOrganization?.record || null,
-    singleResult
-  );
+  const singleProposedExplanations = readProposedSegmentationExplanations(singleResult);
   const singleEmptyPreviewWarning = hasSinglePreviewed && !hasSingleProposedSummary
     ? "Not enough data exists to segment this organization."
     : "";
@@ -781,8 +792,13 @@ export function ResegmentationToolPage({
                   }
                 />
                 <ExplanationTable
-                  explanations={singleDisplayedExplanations}
-                  heading={singleExplanationHeading}
+                  explanations={singleCurrentExplanations}
+                  heading="Current Segmentation Reasoning"
+                  loading={isSegmentingSingle}
+                />
+                <ExplanationTable
+                  explanations={singleProposedExplanations}
+                  heading="Proposed Segmentation Reasoning"
                   loading={isSegmentingSingle}
                 />
               </Box>

@@ -77,8 +77,33 @@ function readDisplayedExplanationScore(value) {
 function buildExplanationSegmentationLabel(row) {
   const dimension = readTrimmedString(row?.dimension) || "Not set";
   const value = readTrimmedString(row?.value) || "Not set";
-  const score = readDisplayedExplanationScore(row?.score);
-  return `${dimension}: ${value} (${score})`;
+  const dimensionParts = dimension
+    .split("/")
+    .map((part) => readTrimmedString(part))
+    .filter(Boolean);
+  const valueParts = value
+    .split("\n")
+    .map((part) => readTrimmedString(part))
+    .filter(Boolean);
+
+  if (dimensionParts.length > 1 && dimensionParts.length === valueParts.length) {
+    return dimensionParts
+      .map((part, index) => {
+        const currentValue = valueParts[index] || "Not set";
+        const prefix = `${part}:`;
+        if (currentValue.toLowerCase().startsWith(prefix.toLowerCase())) {
+          return currentValue;
+        }
+        return `${part}: ${currentValue}`;
+      })
+      .join("\n");
+  }
+
+  const parsedScore = Number(row?.score);
+  if (Number.isFinite(parsedScore) && parsedScore > 0) {
+    return `${dimension}: ${value} (${parsedScore})`;
+  }
+  return `${dimension}: ${value}`;
 }
 
 /**
@@ -105,6 +130,37 @@ function readDisplayedSegmentationExplanations(record, resegmentation) {
   }
 
   return readRecordSegmentationExplanations(record);
+}
+
+/**
+ * Returns the current saved explanation rows for one resegmentation review.
+ * @param {object|null|undefined} record
+ * @param {object|null|undefined} resegmentation
+ * @returns {object[]}
+ */
+function readCurrentSegmentationExplanations(record, resegmentation) {
+  if (
+    resegmentation &&
+    typeof resegmentation === "object" &&
+    Array.isArray(resegmentation.currentExplanations)
+  ) {
+    return resegmentation.currentExplanations;
+  }
+
+  return readRecordSegmentationExplanations(record);
+}
+
+/**
+ * Returns the proposed explanation rows for one resegmentation review.
+ * @param {object|null|undefined} resegmentation
+ * @returns {object[]}
+ */
+function readProposedSegmentationExplanations(resegmentation) {
+  if (resegmentation && typeof resegmentation === "object") {
+    return Array.isArray(resegmentation.explanations) ? resegmentation.explanations : [];
+  }
+
+  return [];
 }
 
 /**
@@ -172,7 +228,12 @@ function buildAppliedResult(resegmentation) {
 
   return {
     ...resegmentation,
-    current: resegmentation.proposed || resegmentation.current || null
+    current: resegmentation.proposed || resegmentation.current || null,
+    currentExplanations: Array.isArray(resegmentation.explanations)
+      ? resegmentation.explanations
+      : Array.isArray(resegmentation.currentExplanations)
+        ? resegmentation.currentExplanations
+        : []
   };
 }
 
@@ -182,10 +243,12 @@ module.exports = {
   buildExplanationSegmentationLabel,
   hasVisibleSegmentationSummary,
   normalizeSegmentationVisualSummary,
+  readCurrentSegmentationExplanations,
   readDisplayedSegmentationExplanationHeading,
   readDisplayedSegmentationExplanations,
   readDisplayedExplanations,
   readDisplayedExplanationScore,
+  readProposedSegmentationExplanations,
   readRecordSegmentationExplanations,
   readPrimaryValue,
   readTrimmedString
