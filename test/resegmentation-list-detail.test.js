@@ -27,6 +27,7 @@ test("buildSelectedListRows reads normalized member rows", async () => {
       membershipUUID: "membership-1",
       uuid: "org-1",
       name: "Rose Builders Group",
+      currentEMIndustry: "",
       currentSegmentation: {
         industry: ["Real Estate"],
         focus: ["Development"],
@@ -48,6 +49,7 @@ test("buildSelectedListRows tolerates alternate upstream member shapes", async (
         entity2: {
           uuid: "org-1",
           name: "Rose Builders Group",
+          currentEMIndustry: "PE RE",
           currentSegmentation: {
             industry: ["Real Estate"],
             focus: ["Development"],
@@ -69,4 +71,5 @@ test("buildSelectedListRows tolerates alternate upstream member shapes", async (
   assert.equal(countRenderableListMembers(listDetail), 2);
   assert.deepEqual(rows.map((row) => row.uuid), ["org-1", "org-2"]);
   assert.equal(rows[1].name, "Beacon Health Partners");
+  assert.equal(rows[0].currentEMIndustry, "PE RE");
 });

@@ -37,6 +37,7 @@ import {
 import {
   buildExplanationSegmentationLabel,
   normalizeSegmentationVisualSummary,
+  readEMIndustryValue,
   readDisplayedExplanations
 } from "../models/resegmentation-ui.mjs";
 import { MdOpenInNew } from "react-icons/md";
@@ -157,6 +158,8 @@ export function SegmentTagList({ items, colorScheme = "blue" }) {
 export function SegmentCompare({
   current,
   proposed,
+  currentEMIndustry = "",
+  proposedEMIndustry = "",
   loading = false,
   alwaysShow = false,
   emptyProposedMessage = "Run segmentation to preview the proposed updates."
@@ -165,6 +168,8 @@ export function SegmentCompare({
   const newBg = useColorModeValue("green.50", "green.900");
   const currentSummary = normalizeSegmentationVisualSummary(current);
   const proposedSummary = normalizeSegmentationVisualSummary(proposed);
+  const currentEMIndustryLabel = readEMIndustryValue(currentEMIndustry, "Not set");
+  const proposedEMIndustryLabel = readEMIndustryValue(proposedEMIndustry, "Not set");
 
   if (loading) {
     return (
@@ -214,6 +219,14 @@ export function SegmentCompare({
         <Stack spacing={3}>
           <Box>
             <Text fontSize="xs" color="gray.500" mb={1}>
+              EM Industry
+            </Text>
+            <Text fontSize="sm" color={currentEMIndustryLabel === "Not set" ? "gray.400" : "inherit"}>
+              {currentEMIndustryLabel}
+            </Text>
+          </Box>
+          <Box>
+            <Text fontSize="xs" color="gray.500" mb={1}>
               Industry
             </Text>
             <SegmentTagList items={currentSummary.industry} colorScheme="gray" />
@@ -246,6 +259,17 @@ export function SegmentCompare({
         </HStack>
         {proposedSummary.industry.length || proposedSummary.focus.length ? (
           <Stack spacing={3}>
+            <Box>
+              <Text fontSize="xs" color="gray.500" mb={1}>
+                EM Industry
+              </Text>
+              <Text
+                fontSize="sm"
+                color={proposedEMIndustryLabel === "Not set" ? "gray.400" : "inherit"}
+              >
+                {proposedEMIndustryLabel}
+              </Text>
+            </Box>
             <Box>
               <Text fontSize="xs" color="gray.500" mb={1}>
                 Industry

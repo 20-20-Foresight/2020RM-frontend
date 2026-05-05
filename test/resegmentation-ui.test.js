@@ -6,6 +6,7 @@ const {
   buildAppliedResult,
   buildExplanationSegmentationLabel,
   normalizeSegmentationVisualSummary,
+  readEMIndustryValue,
   readCurrentSegmentationExplanations,
   readDisplayedSegmentationExplanationHeading,
   readDisplayedSegmentationExplanations,
@@ -67,6 +68,8 @@ test("buildAppliedResult promotes proposed segments into the current comparison 
       industry: ["new industry"],
       focus: ["new focus"]
     },
+    currentEMIndustry: "PE RE",
+    proposedEMIndustry: "Real Estate Operating Companies",
     explanations: [
       {
         source: "description",
@@ -85,6 +88,7 @@ test("buildAppliedResult promotes proposed segments into the current comparison 
       reasonHtml: "New explanation"
     }
   ]);
+  assert.equal(result.currentEMIndustry, "Real Estate Operating Companies");
 });
 
 test("normalizeSegmentationVisualSummary removes empty values", () => {
@@ -98,6 +102,12 @@ test("normalizeSegmentationVisualSummary removes empty values", () => {
       focus: ["payments"]
     }
   );
+});
+
+test("readEMIndustryValue returns a stable fallback for empty values", () => {
+  assert.equal(readEMIndustryValue("PE RE"), "PE RE");
+  assert.equal(readEMIndustryValue(" "), "Not set");
+  assert.equal(readEMIndustryValue(null), "Not set");
 });
 
 test("buildExplanationSegmentationLabel breaks combined industry and focus rows onto separate lines", () => {

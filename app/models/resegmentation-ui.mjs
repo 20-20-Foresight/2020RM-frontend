@@ -6,6 +6,7 @@ export const {
   buildExplanationSegmentationLabel,
   hasVisibleSegmentationSummary,
   normalizeSegmentationVisualSummary,
+  readEMIndustryValue,
   readCurrentSegmentationExplanations,
   readDisplayedSegmentationExplanationHeading,
   readDisplayedSegmentationExplanations,

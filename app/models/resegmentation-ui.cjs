@@ -48,6 +48,16 @@ function readPrimaryValue(values, fallback = "Not set") {
 }
 
 /**
+ * Build one display-friendly EM Industry value.
+ * @param {unknown} value
+ * @param {string} fallback
+ * @returns {string}
+ */
+function readEMIndustryValue(value, fallback = "Not set") {
+  return readTrimmedString(value) || fallback;
+}
+
+/**
  * Returns the display-ready explanation rows for this UI.
  * Sector rows are intentionally hidden until the backend sector issue is fixed.
  * @param {object[]|null|undefined} explanations
@@ -191,6 +201,7 @@ function applyResegmentationToRecord(record, resegmentation) {
       ? JSON.parse(JSON.stringify(record))
       : {};
   nextRecord.metadata ||= {};
+  nextRecord.currentEMIndustry = readTrimmedString(resegmentation?.proposedEMIndustry) || "";
   nextRecord.metadata.segmentation = {
     sector: resegmentation?.proposed?.sector || null,
     industry: Array.isArray(resegmentation?.proposed?.industry)
@@ -229,6 +240,10 @@ function buildAppliedResult(resegmentation) {
   return {
     ...resegmentation,
     current: resegmentation.proposed || resegmentation.current || null,
+    currentEMIndustry:
+      readTrimmedString(resegmentation?.proposedEMIndustry) ||
+      readTrimmedString(resegmentation?.currentEMIndustry) ||
+      "",
     currentExplanations: Array.isArray(resegmentation.explanations)
       ? resegmentation.explanations
       : Array.isArray(resegmentation.currentExplanations)
@@ -243,6 +258,7 @@ module.exports = {
   buildExplanationSegmentationLabel,
   hasVisibleSegmentationSummary,
   normalizeSegmentationVisualSummary,
+  readEMIndustryValue,
   readCurrentSegmentationExplanations,
   readDisplayedSegmentationExplanationHeading,
   readDisplayedSegmentationExplanations,

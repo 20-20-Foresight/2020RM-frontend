@@ -25,10 +25,15 @@ import {
   buildAppliedResult,
   hasVisibleSegmentationSummary,
   normalizeSegmentationVisualSummary,
+  readEMIndustryValue,
   readCurrentSegmentationExplanations,
   readProposedSegmentationExplanations
 } from "../models/resegmentation-ui.mjs";
-import { ApplyModal, ExplanationTable, SegmentCompare } from "./ResegmentationReviewContent.jsx";
+import {
+  ApplyModal,
+  ExplanationTable,
+  SegmentCompare
+} from "./ResegmentationReviewContent.jsx";
 
 /**
  * Build the comparison-friendly summary from one exported organization record.
@@ -90,6 +95,10 @@ export function OrganizationResegmentationFlyout({
     : hasVisibleSegmentationSummary(resultCurrentSummary)
       ? resultCurrentSummary
       : buildRecordSegmentationSummary(record);
+  const currentEMIndustry = isApplied
+    ? readEMIndustryValue(record?.currentEMIndustry, "")
+    : readEMIndustryValue(result?.currentEMIndustry || record?.currentEMIndustry, "");
+  const proposedEMIndustry = readEMIndustryValue(result?.proposedEMIndustry, "");
   const currentDisplayedExplanations = readCurrentSegmentationExplanations(record, result);
   const proposedDisplayedExplanations = readProposedSegmentationExplanations(result);
   const isReady = Boolean(organizationUUID);
@@ -216,6 +225,8 @@ export function OrganizationResegmentationFlyout({
             <SegmentCompare
               current={currentSummary}
               proposed={result?.proposed || null}
+              currentEMIndustry={currentEMIndustry}
+              proposedEMIndustry={proposedEMIndustry}
               loading={isSegmenting}
               alwaysShow
               emptyProposedMessage={

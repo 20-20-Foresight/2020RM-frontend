@@ -57,6 +57,7 @@ import {
   buildAppliedResult,
   hasVisibleSegmentationSummary,
   normalizeSegmentationVisualSummary,
+  readEMIndustryValue,
   readCurrentSegmentationExplanations,
   readProposedSegmentationExplanations,
   readPrimaryValue,
@@ -123,6 +124,8 @@ function ReviewDrawer({ isOpen, onClose, org, result, onApply, isApplied }) {
   const proposedExplanations = Array.isArray(result?.explanations)
     ? result.explanations
     : [];
+  const currentEMIndustry = readEMIndustryValue(result?.currentEMIndustry, "");
+  const proposedEMIndustry = readEMIndustryValue(result?.proposedEMIndustry, "");
 
   return (
     <>
@@ -151,7 +154,12 @@ function ReviewDrawer({ isOpen, onClose, org, result, onApply, isApplied }) {
                 Segmentation has been applied.
               </Alert>
             ) : null}
-            <SegmentCompare current={result?.current} proposed={result?.proposed} />
+            <SegmentCompare
+              current={result?.current}
+              proposed={result?.proposed}
+              currentEMIndustry={currentEMIndustry}
+              proposedEMIndustry={proposedEMIndustry}
+            />
             <ExplanationTable
               explanations={currentExplanations}
               heading="Current Segmentation Reasoning"
@@ -312,6 +320,13 @@ export function ResegmentationToolPage({
     : hasVisibleSegmentationSummary(resultCurrentSummary)
       ? resultCurrentSummary
       : buildRecordSegmentationSummary(selectedOrganization?.record || null);
+  const singleCurrentEMIndustry = singleApplied
+    ? readEMIndustryValue(selectedOrganization?.record?.currentEMIndustry, "")
+    : readEMIndustryValue(
+        singleResult?.currentEMIndustry || selectedOrganization?.record?.currentEMIndustry,
+        ""
+      );
+  const singleProposedEMIndustry = readEMIndustryValue(singleResult?.proposedEMIndustry, "");
   const singleCurrentExplanations = readCurrentSegmentationExplanations(
     selectedOrganization?.record || null,
     singleResult
@@ -783,6 +798,8 @@ export function ResegmentationToolPage({
                 <SegmentCompare
                   current={selectedCurrentSummary}
                   proposed={singleResult?.proposed || null}
+                  currentEMIndustry={singleCurrentEMIndustry}
+                  proposedEMIndustry={singleProposedEMIndustry}
                   loading={isLoadingOrganization || isSegmentingSingle}
                   alwaysShow
                   emptyProposedMessage={
@@ -895,8 +912,15 @@ export function ResegmentationToolPage({
                       <Thead bg={headerBg}>
                         <Tr>
                           <Th>Organization</Th>
+                          <Th>Current EM Industry</Th>
                           <Th>Current Industry</Th>
                           <Th>Current Focus</Th>
+                          <Th>
+                            <HStack spacing={1}>
+                              <Text>Updated EM Industry</Text>
+                              <Icon as={MdOutlineArrowForward} color="green.500" boxSize={3} />
+                            </HStack>
+                          </Th>
                           <Th>
                             <HStack spacing={1}>
                               <Text>Updated Industry</Text>
@@ -920,6 +944,14 @@ export function ResegmentationToolPage({
                           const isSegmenting = rowSegmentingIds.has(org.uuid);
                           const isApplied = rowAppliedIds.has(org.uuid);
                           const currentSummary = readListRowCurrentSummary(org, result);
+                          const currentEMIndustry = readEMIndustryValue(
+                            result?.currentEMIndustry || org.currentEMIndustry,
+                            "Not set"
+                          );
+                          const proposedEMIndustry = readEMIndustryValue(
+                            result?.proposedEMIndustry,
+                            result ? "Not set" : "—"
+                          );
 
                           return (
                             <Tr
@@ -934,10 +966,20 @@ export function ResegmentationToolPage({
                                 </HStack>
                               </Td>
                               <Td fontSize="xs" color="gray.600">
+                                {currentEMIndustry}
+                              </Td>
+                              <Td fontSize="xs" color="gray.600">
                                 {readPrimaryValue(currentSummary.industry)}
                               </Td>
                               <Td fontSize="xs" color="gray.600">
                                 {readPrimaryValue(currentSummary.focus)}
+                              </Td>
+                              <Td fontSize="xs" color={result ? "green.700" : "gray.300"}>
+                                {isSegmenting ? (
+                                  <Skeleton height="20px" width="120px" />
+                                ) : (
+                                  proposedEMIndustry
+                                )}
                               </Td>
                               <Td>
                                 {isSegmenting ? (

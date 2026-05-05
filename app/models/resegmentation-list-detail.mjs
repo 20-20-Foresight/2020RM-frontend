@@ -43,6 +43,7 @@ function readMemberEntity(row) {
  *   membershipUUID: string,
  *   uuid: string,
  *   name: string,
+ *   currentEMIndustry: string,
  *   currentSegmentation: {industry: string[], focus: string[]}
  * }|null}
  */
@@ -67,6 +68,10 @@ function normalizeListRow(row) {
       readTrimmedString(row.uuid) || readTrimmedString(row.membershipUUID) || memberUuid,
     uuid: memberUuid,
     name: readTrimmedString(member?.name) || "Unnamed organization",
+    currentEMIndustry:
+      readTrimmedString(member?.currentEMIndustry) ||
+      readTrimmedString(row.currentEMIndustry) ||
+      "",
     currentSegmentation: normalizeSegmentationSummary(
       member?.currentSegmentation || row.currentSegmentation || null
     ),
@@ -80,6 +85,7 @@ function normalizeListRow(row) {
  *   membershipUUID: string,
  *   uuid: string,
  *   name: string,
+ *   currentEMIndustry: string,
  *   currentSegmentation: {industry: string[], focus: string[]}
  * }>}
  */
