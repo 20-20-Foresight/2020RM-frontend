@@ -49,64 +49,41 @@ export const FEED_SOURCES = {
         settingsKey: "aum",
         description: "Filter by Assets Under Management. Leave blank for no limit.",
         unit: "mn"
+      },
+      onlyNewCompanies: {
+        label: "New Companies Only",
+        type: "checkbox",
+        settingsKey: "onlyNewCompanies",
+        description: "Page through source results until enough companies not already in CRM are found.",
+        summaryValue: "New Companies"
       }
     }
   },
   biscred: {
     label: "Biscred",
     color: "teal",
-    description: "Commercial real estate companies — developers, investors, and operators",
+    description: "Commercial real estate companies via direct Biscred keyword search",
     filters: {
-      assetClasses: {
-        label: "Asset Classes",
-        type: "multiselect",
-        settingsKey: "assetClasses",
-        options: [
-          "Data Center",
-          "Affordable Housing",
-          "Land",
-          "Senior Living",
-          "Life Sciences",
-          "Industrial",
-          "Retail",
-          "Office",
-          "Multifamily",
-          "Hotel / Hospitality",
-          "Healthcare",
-          "Mixed Use",
-          "Self Storage",
-          "Student Housing"
-        ]
-      },
-      industries: {
-        label: "Industries",
-        type: "multiselect",
-        settingsKey: "industries",
-        options: [
-          "Developer",
-          "Institutional Investor",
-          "Real Estate Investment Firm",
-          "Real Estate Investment Trust (REIT)",
-          "Private Equity",
-          "CRE Broker",
-          "Property Management",
-          "Residential",
-          "Corporates"
-        ]
+      keywords: {
+        label: "Keywords",
+        type: "tags",
+        settingsKey: "keywords",
+        placeholder: "e.g. Data Center, affordable housing, REIT",
+        description: "Each term is sent to the Biscred company keyword search"
       }
     }
   },
   revenuebase: {
     label: "RevenueBase",
     color: "purple",
-    description: "B2B contact and company enrichment for targeted outreach",
+    description: "Company search and enrichment via direct RevenueBase API filters",
     filters: {
-      jobTitles: {
-        label: "Job Titles",
+      keywords: {
+        label: "Keywords",
         type: "tags",
-        settingsKey: "jobTitles",
-        placeholder: "e.g. CFO, VP Finance, Managing Director",
-        description: "Press Enter or comma to add a title"
+        settingsKey: "keywords",
+        placeholder: "e.g. Data Center, power infrastructure, logistics",
+        description: "Matches company specialties and descriptive fields"
       },
       industries: {
         label: "Industries",
@@ -114,6 +91,13 @@ export const FEED_SOURCES = {
         settingsKey: "industries",
         placeholder: "e.g. Real Estate, Private Equity, Finance",
         description: "Press Enter or comma to add an industry"
+      },
+      countries: {
+        label: "Countries",
+        type: "tags",
+        settingsKey: "countries",
+        placeholder: "e.g. United States, Canada, United Kingdom",
+        description: "Optional. Limit RevenueBase results to one or more countries."
       },
       revenueRange: {
         label: "Annual Revenue Range (USD)",
@@ -128,6 +112,71 @@ export const FEED_SOURCES = {
         settingsKey: "employeeRange",
         description: "Filter companies by headcount. Leave blank for no limit.",
         unit: "employees"
+      },
+      onlyNewCompanies: {
+        label: "New Companies Only",
+        type: "checkbox",
+        settingsKey: "onlyNewCompanies",
+        description: "Page through RevenueBase results until enough companies not already in CRM are found.",
+        summaryValue: "New Companies"
+      }
+    }
+  },
+  salesforce: {
+    label: "Salesforce",
+    color: "orange",
+    description: "Search existing Salesforce Accounts and queue the ones that need a fresh ESRA run",
+    filters: {
+      countries: {
+        label: "Country",
+        type: "tags",
+        settingsKey: "countries",
+        placeholder: "e.g. US, CA, United States, Canada",
+        description: "Optional. Matches Salesforce account billing country."
+      },
+      stateProvinces: {
+        label: "State / Province",
+        type: "tags",
+        settingsKey: "stateProvinces",
+        placeholder: "e.g. TX, NY, Ontario",
+        description: "Optional. Matches Salesforce account billing state or province."
+      },
+      emIndustries: {
+        label: "EM Industry",
+        type: "tags",
+        settingsKey: "emIndustries",
+        placeholder: "e.g. REIT, Hospitality, Office",
+        description: "Optional. Exact match against Salesforce EM Industry."
+      },
+      focus: {
+        label: "Focus",
+        type: "tags",
+        settingsKey: "focus",
+        placeholder: "e.g. Data Center, Industrial, Multi-family",
+        description: "Optional. Each value is matched with LIKE against Salesforce Focus."
+      },
+      lastEsraOlderThanDays: {
+        label: "Days Old",
+        type: "number",
+        settingsKey: "lastEsraOlderThanDays",
+        placeholder: "e.g. 30",
+        description: "Only include accounts never ingested or ingested before this cutoff.",
+        min: 1,
+        summaryLabel: "days old",
+        summaryLast: true
+      }
+    }
+  },
+  list: {
+    label: "List",
+    color: "cyan",
+    description: "Use an existing organization list or upload a CSV/XLSX file to create one for this feed",
+    filters: {
+      sourceListName: {
+        label: "List",
+        type: "listFinder",
+        settingsKey: "sourceListName",
+        description: "Choose an existing list or upload a CSV/XLSX file to create a new list."
       }
     }
   }

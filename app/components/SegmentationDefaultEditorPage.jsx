@@ -20,9 +20,6 @@ import {
   IconButton,
   Input,
   Select,
-  Tag,
-  TagCloseButton,
-  TagLabel,
   Table,
   Tbody,
   Td,
@@ -35,7 +32,7 @@ import {
   useDisclosure,
   VStack
 } from "@chakra-ui/react";
-import { EditIcon, SearchIcon } from "@chakra-ui/icons";
+import { EditIcon } from "@chakra-ui/icons";
 import { useFetcher, useLocation } from "@remix-run/react";
 import { useEffect, useRef, useState } from "react";
 import { MdDescription } from "react-icons/md";
@@ -54,6 +51,7 @@ import { RichTextField } from "./ui/molecules/RichTextField";
 import { RegexBuilder, RegexTokenDisplay, parseRegexToTokens } from "./ui/molecules/RegexBuilder";
 import { useQueuedDocumentSave } from "../hooks/useQueuedDocumentSave";
 import { useRowSaveHighlight } from "../hooks/useRowSaveHighlight";
+import { ColumnFilterHeader } from "./ui/molecules/ColumnFilterHeader";
 
 /**
  * Returns whether a value is a plain object.
@@ -237,98 +235,6 @@ function buildEmptyNewFocusDraft() {
  */
 function buildCategoryFilterKey(index) {
   return `category-${index}`;
-}
-
-/**
- * Renders one compact search toggle and control.
- * @param {{
- *   columnKey: string,
- *   label: string,
- *   isOpen: boolean,
- *   activeValue: string,
- *   draftValue?: string,
- *   onToggle: () => void,
- *   onDraftChange: (value: string) => void,
- *   onApply: (value?: string) => void,
- *   onClear: () => void,
- *   selectOptions?: string[]|null,
- *   disabled?: boolean
- * }} props
- * @returns {JSX.Element}
- */
-function SearchableHeader({
-  columnKey,
-  label,
-  isOpen,
-  activeValue,
-  draftValue = "",
-  onToggle,
-  onDraftChange,
-  onApply,
-  onClear,
-  selectOptions = null,
-  disabled = false
-}) {
-  return (
-    <VStack align="stretch" spacing={2}>
-      <HStack spacing={2} align="center">
-        <Text>{label}</Text>
-        {disabled || activeValue ? null : (
-          <IconButton
-            aria-label={`Search ${columnKey}`}
-            icon={<SearchIcon />}
-            size="xs"
-            type="button"
-            variant={isOpen ? "solid" : "ghost"}
-            colorScheme={isOpen ? "blue" : "gray"}
-            onClick={onToggle}
-          />
-        )}
-      </HStack>
-      {activeValue ? (
-        <Tag size="sm" colorScheme="blue" alignSelf="flex-start" maxW="100%">
-          <TagLabel overflow="hidden" textOverflow="ellipsis">
-            {activeValue}
-          </TagLabel>
-          <TagCloseButton onClick={onClear} />
-        </Tag>
-      ) : isOpen ? (
-        Array.isArray(selectOptions) ? (
-          <Select
-            size="xs"
-            value={draftValue}
-            onChange={(event) => {
-              onDraftChange(event.target.value);
-              onApply(event.target.value);
-            }}
-            bg="white"
-          >
-            <option value="">All</option>
-            {selectOptions.map((option) => (
-              <option key={`${columnKey}-${option}`} value={option}>
-                {option}
-              </option>
-            ))}
-          </Select>
-        ) : (
-          <Input
-            size="xs"
-            value={draftValue}
-            onChange={(event) => onDraftChange(event.target.value)}
-            onBlur={onApply}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                onApply();
-              }
-            }}
-            bg="white"
-            autoFocus
-          />
-        )
-      ) : null}
-    </VStack>
-  );
 }
 
 /**
@@ -1160,7 +1066,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                             color={isRegex ? "blue.700" : undefined}
                             zIndex={1}
                           >
-                            <SearchableHeader
+                            <ColumnFilterHeader
                               columnKey={columnKey}
                               label={columnLabel}
                               isOpen={Boolean(openFilterKeys[columnKey])}
@@ -1176,7 +1082,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                       })}
                       {valueColumns.map((column) => (
                         <Th key={column.key} position="sticky" top={0} bg="gray.50" zIndex={1}>
-                          <SearchableHeader
+                          <ColumnFilterHeader
                             columnKey={column.key}
                             label={column.label}
                             isOpen={Boolean(openFilterKeys[column.key])}
@@ -1190,7 +1096,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                         </Th>
                       ))}
                       <Th position="sticky" top={0} bg="gray.50" zIndex={1} sx={{ borderLeft: "4px double", borderLeftColor: "#CBD5E0" }}>
-                        <SearchableHeader
+                        <ColumnFilterHeader
                           columnKey="industry"
                           label="Industry"
                           isOpen={Boolean(openFilterKeys.industry)}
@@ -1204,7 +1110,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                         />
                       </Th>
                       <Th position="sticky" top={0} bg="gray.50" zIndex={1}>
-                        <SearchableHeader
+                        <ColumnFilterHeader
                           columnKey="focus"
                           label="Focus"
                           isOpen={Boolean(openFilterKeys.focus)}

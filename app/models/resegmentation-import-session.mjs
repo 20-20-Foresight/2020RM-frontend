@@ -137,8 +137,11 @@ export function countImportedMemberships(rows) {
  * }}
  */
 export function buildResegmentationImportCommitRequest(options) {
+  const includeUnmatchedCompanies =
+    readTrimmedString(options?.importScope) === "include_unmatched_companies";
   return {
     listName: readTrimmedString(options?.destinationName),
+    importScope: includeUnmatchedCompanies ? "include_unmatched_companies" : "matched_only",
     unmatchedColumnBehavior:
       readTrimmedString(options?.unmatchedColumnBehavior) || "save_as_membership_metadata",
     listTypeSlug: "LIST",
@@ -146,12 +149,25 @@ export function buildResegmentationImportCommitRequest(options) {
     subjectType: "organization",
     membershipMode: "static",
     rows: (Array.isArray(options?.rows) ? options.rows : [])
-      .filter((row) => row?.lookup?.status === "matched" && readTrimmedString(row?.lookup?.match?.uuid))
+      .filter((row) => {
+        const matched = row?.lookup?.status === "matched" && readTrimmedString(row?.lookup?.match?.uuid);
+        if (matched) {
+          return true;
+        }
+
+        if (!includeUnmatchedCompanies) {
+          return false;
+        }
+
+        return row?.validation?.status === "valid" && hasLookupIdentifiers(row);
+      })
       .map((row) => ({
         rowNumber: row.rowNumber,
-        match: {
-          uuid: readTrimmedString(row.lookup.match.uuid),
-        },
+        match: readTrimmedString(row?.lookup?.match?.uuid)
+          ? {
+              uuid: readTrimmedString(row.lookup.match.uuid),
+            }
+          : null,
         values: {
           ...(row.values || {}),
         },

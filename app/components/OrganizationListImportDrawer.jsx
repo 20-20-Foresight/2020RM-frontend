@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { FormControl, FormLabel, Select } from "@chakra-ui/react";
 import {
   ImportListDrawer,
 } from "./ui/organisms/ImportListDrawer.jsx";
@@ -22,6 +23,24 @@ const UNMATCHED_COLUMN_BEHAVIOR = "save_as_membership_metadata";
 const LIST_READY_POLL_INTERVAL_MS = 1500;
 const LIST_READY_TIMEOUT_MS = 30000;
 const APP_SIDEBAR_EXPANDED_WIDTH = "250px";
+const DEFAULT_IMPORT_SCOPE = "matched_only";
+
+export const DEFAULT_ORGANIZATION_IMPORT_SOURCE = {
+  lookupPath: "/api/rest/resegmentation/import/lookup",
+  importPath: "/api/rest/resegmentation/import",
+  getListDetailPath(listUuid) {
+    return `/api/rest/resegmentation/lists/${encodeURIComponent(listUuid)}`;
+  },
+  buildLookupRequests(rows, batchSize) {
+    return buildResegmentationImportLookupRequests(rows, batchSize);
+  },
+  applyLookupResults(rows, lookupRows) {
+    return applyResegmentationImportLookupResults(rows, lookupRows);
+  },
+  buildCommitRequest(options) {
+    return buildResegmentationImportCommitRequest(options);
+  },
+};
 
 /**
  * Read one trimmed string.
@@ -65,6 +84,20 @@ async function readActionResponse(response) {
  */
 function buildDefaultDestinationName() {
   return `Resegmentation Test ${new Date().toISOString().slice(0, 10)}`;
+}
+
+/**
+ * Builds one destination list name from an uploaded filename.
+ * @param {string} fileName
+ * @returns {string}
+ */
+function buildDestinationNameFromFileName(fileName) {
+  const trimmed = readTrimmedString(fileName);
+  if (!trimmed) {
+    return buildDefaultDestinationName();
+  }
+
+  return trimmed.replace(/\.[^.]+$/, "").trim() || buildDefaultDestinationName();
 }
 
 /**
@@ -205,15 +238,34 @@ function applyImportResults(rows, importedRows) {
  * @param {{
  *   isOpen: boolean,
  *   onClose: () => void,
+ *   allowImportScopeSelection?: boolean,
+ *   defaultImportScope?: "matched_only"|"include_unmatched_companies",
+ *   requireListReady?: boolean,
+ *   importSource?: {
+ *     lookupPath?: string,
+ *     importPath?: string,
+ *     getListDetailPath?: (listUuid: string) => string,
+ *     buildLookupRequests?: (rows: object[], batchSize: number) => object[],
+ *     applyLookupResults?: (rows: object[], lookupRows: object[]) => object[],
+ *     buildCommitRequest?: (options: object) => {rows: object[]}
+ *   },
  *   onImportedList?: (list: object, details?: {statusExplained?: string, listDetail?: object|null}) => Promise<void>|void
  * }} props
  * @returns {JSX.Element}
  */
-export default function ResegmentationImportDrawer({
+export default function OrganizationListImportDrawer({
   isOpen,
   onClose,
+  allowImportScopeSelection = false,
+  defaultImportScope = DEFAULT_IMPORT_SCOPE,
+  requireListReady = true,
+  importSource = DEFAULT_ORGANIZATION_IMPORT_SOURCE,
   onImportedList = () => {},
 }) {
+  const effectiveImportSource = {
+    ...DEFAULT_ORGANIZATION_IMPORT_SOURCE,
+    ...(importSource && typeof importSource === "object" ? importSource : {}),
+  };
   const fileInputRef = useRef(null);
   const lookupRequestRef = useRef(0);
   const [phase, setPhase] = useState("upload");
@@ -228,6 +280,7 @@ export default function ResegmentationImportDrawer({
   const [isImporting, setIsImporting] = useState(false);
   const [isPreparingList, setIsPreparingList] = useState(false);
   const [destinationName, setDestinationName] = useState(buildDefaultDestinationName());
+  const [importScope, setImportScope] = useState(defaultImportScope);
   const [pendingImportedList, setPendingImportedList] = useState(null);
   const [pendingImportedCount, setPendingImportedCount] = useState(0);
   const [preparedListDetail, setPreparedListDetail] = useState(null);
@@ -250,6 +303,7 @@ export default function ResegmentationImportDrawer({
     setIsImporting(false);
     setIsPreparingList(false);
     setDestinationName(buildDefaultDestinationName());
+    setImportScope(defaultImportScope);
     setPendingImportedList(null);
     setPendingImportedCount(0);
     setPreparedListDetail(null);
@@ -276,7 +330,10 @@ export default function ResegmentationImportDrawer({
     setRows(currentRows);
     setPhase("lookup");
 
-    const lookupRequests = buildResegmentationImportLookupRequests(nextRows, LOOKUP_BATCH_SIZE);
+    const lookupRequests =
+      typeof effectiveImportSource.buildLookupRequests === "function"
+        ? effectiveImportSource.buildLookupRequests(nextRows, LOOKUP_BATCH_SIZE)
+        : [];
     if (!lookupRequests.length) {
       setRows(nextRows);
       setPhase("review");
@@ -285,7 +342,7 @@ export default function ResegmentationImportDrawer({
 
     try {
       for (const lookupRequest of lookupRequests) {
-        const response = await fetch("/api/rest/resegmentation/import/lookup", {
+        const response = await fetch(effectiveImportSource.lookupPath, {
           method: "POST",
           credentials: "same-origin",
           headers: {
@@ -302,7 +359,10 @@ export default function ResegmentationImportDrawer({
           return;
         }
 
-        currentRows = applyResegmentationImportLookupResults(currentRows, payload.rows);
+        currentRows =
+          typeof effectiveImportSource.applyLookupResults === "function"
+            ? effectiveImportSource.applyLookupResults(currentRows, payload.rows)
+            : currentRows;
         setRows(currentRows);
       }
 
@@ -352,7 +412,7 @@ export default function ResegmentationImportDrawer({
    */
   async function loadListDetail(listUuid) {
     const response = await fetch(
-      `/api/rest/resegmentation/lists/${encodeURIComponent(listUuid)}`,
+      effectiveImportSource.getListDetailPath(listUuid),
       {
         method: "GET",
         credentials: "same-origin",
@@ -375,6 +435,13 @@ export default function ResegmentationImportDrawer({
     const expectedCount = Number(options?.expectedCount || 0);
     if (!listUuid || expectedCount <= 0) {
       return null;
+    }
+
+    if (!requireListReady) {
+      return {
+        list: options.list,
+        listDetail: options.initialListDetail || null,
+      };
     }
 
     const initialListDetail = options?.initialListDetail || null;
@@ -423,9 +490,11 @@ export default function ResegmentationImportDrawer({
    * @returns {Promise<void>}
    */
   async function parseFile(file) {
-    setFileName(file?.name || "");
+    const nextFileName = file?.name || "";
+    setFileName(nextFileName);
     setIsLoadingFile(true);
     setErrorMessage("");
+    setDestinationName(buildDestinationNameFromFileName(nextFileName));
 
     try {
       const buffer = await file.arrayBuffer();
@@ -465,10 +534,10 @@ export default function ResegmentationImportDrawer({
         isOpen={isOpen}
         onClose={handleClose}
         title="Import list members"
-        description="Upload a CSV/XLSX file, review matched organizations, and create a resegmentation list."
+        description="Upload a CSV/XLSX file, review matched organizations, and create an organization list."
         subjectLabelSingular="organization"
         subjectLabelPlural="organizations"
-        destinationLabel="Destination list"
+        destinationLabel="Destination List Name"
         phase={phase}
         parsedImport={parsedImport}
         sourceToDestination={sourceToDestination}
@@ -478,6 +547,22 @@ export default function ResegmentationImportDrawer({
         destinationMode="new"
         destinationName={destinationName}
         unmatchedColumnBehavior={UNMATCHED_COLUMN_BEHAVIOR}
+        additionalReviewControls={
+          allowImportScopeSelection ? (
+            <FormControl>
+              <FormLabel fontSize="sm">Import Scope</FormLabel>
+              <Select
+                size="sm"
+                value={importScope}
+                onChange={(event) => setImportScope(event.target.value)}
+                isDisabled={isImporting || isPreparingList || phase === "complete"}
+              >
+                <option value="matched_only">Matched organizations only</option>
+                <option value="include_unmatched_companies">Include unmatched companies</option>
+              </Select>
+            </FormControl>
+          ) : null
+        }
         parserError={errorMessage}
         statusNotice={statusNotice}
         isExpanded={isExpanded}
@@ -561,8 +646,9 @@ export default function ResegmentationImportDrawer({
             return;
           }
 
-          const request = buildResegmentationImportCommitRequest({
+          const request = effectiveImportSource.buildCommitRequest({
             destinationName,
+            importScope,
             rows,
             unmatchedColumnBehavior: UNMATCHED_COLUMN_BEHAVIOR,
           });
@@ -575,11 +661,11 @@ export default function ResegmentationImportDrawer({
           setErrorMessage("");
           setStatusNotice({
             status: "info",
-            message: `Importing ${request.rows.length} organizations into ${destinationName}...`,
+            message: `Importing ${request.rows.length} ${importScope === "include_unmatched_companies" ? "companies" : "organizations"} into ${destinationName}...`,
           });
 
           try {
-            const response = await fetch("/api/rest/resegmentation/import", {
+            const response = await fetch(effectiveImportSource.importPath, {
               method: "POST",
               credentials: "same-origin",
               headers: {
@@ -593,7 +679,11 @@ export default function ResegmentationImportDrawer({
             }
 
             const nextRows = applyImportResults(rows, payload.rows);
-            const importedCount = countImportedMemberships(payload.rows) || request.rows.length;
+            const importedCount =
+              Number(payload?.meta?.importedCount || 0) +
+                Number(payload?.meta?.stagedCandidateCount || 0) ||
+              countImportedMemberships(payload.rows) ||
+              request.rows.length;
             setRows(nextRows);
             setPhase("complete");
             setPendingImportedList(payload.list || null);

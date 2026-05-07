@@ -123,7 +123,7 @@ export const navItems = [
     children: [
       {
         key: "settings-feeds",
-        label: "Feeds",
+        label: "Research Feeds",
         to: "/settings/feeds"
       }
     ]

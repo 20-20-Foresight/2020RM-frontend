@@ -8,9 +8,14 @@ const {
   createFeed,
   deleteFeed,
   groupFeedsBySource,
+  loadFeedDestinationLists,
+  loadFeedRunById,
   loadFeedById,
   loadFeedsList,
   loadMockFeedsList,
+  previewFeed,
+  refreshFeed,
+  saveFeedToQueue,
   setFeedEnabled,
   updateFeed
 } = require("../app/models/feeds.server");
@@ -66,6 +71,49 @@ test("loadFeedsList calls the normalized feed list REST route and preserves cook
   assert.deepEqual(feeds[0].settings, {
     investorType: ["Growth Equity"]
   });
+});
+
+test("loadFeedDestinationLists calls the feed list-source route", async () => {
+  const calls = [];
+  const lists = await loadFeedDestinationLists({
+    request: new Request("http://localhost:3000/settings/feeds/new", {
+      headers: {
+        cookie: "sid=123"
+      }
+    }),
+    fetchImpl: async (url, options) => {
+      calls.push({
+        url: String(url),
+        options
+      });
+
+      return {
+        ok: true,
+        async json() {
+          return {
+            lists: [
+              {
+                uuid: "list-14",
+                name: "Target Accounts",
+                listTypeSlug: "LIST"
+              }
+            ]
+          };
+        }
+      };
+    }
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "http://localhost:3000/api/rest/feeds/lists");
+  assert.equal(calls[0].options.headers.cookie, "sid=123");
+  assert.deepEqual(lists, [
+    {
+      uuid: "list-14",
+      name: "Target Accounts",
+      listTypeSlug: "LIST"
+    }
+  ]);
 });
 
 test("loadFeedById returns null on 404", async () => {
@@ -233,6 +281,169 @@ test("setFeedEnabled uses the enabled patch route", async () => {
   assert.equal(feed.enabled, false);
 });
 
+test("previewFeed posts the preview payload to the preview route", async () => {
+  const calls = [];
+  const preview = await previewFeed({
+    request: new Request("http://localhost:3000/settings/feeds/new", {
+      headers: {
+        cookie: "sid=123"
+      }
+    }),
+    feed: {
+      source: "preqin",
+      name: "Growth Funds"
+    },
+    fetchImpl: async (url, options) => {
+      calls.push({
+        url: String(url),
+        options
+      });
+
+      return {
+        ok: true,
+        async json() {
+          return {
+            preview: {
+              source: "preqin",
+              resultCount: 12,
+              eligibleCount: 4,
+              results: []
+            }
+          };
+        }
+      };
+    }
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "http://localhost:3000/api/rest/feeds/preview");
+  assert.equal(calls[0].options.method, "POST");
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    source: "preqin",
+    name: "Growth Funds"
+  });
+  assert.equal(preview.resultCount, 12);
+});
+
+test("saveFeedToQueue posts linked list metadata to the save-to-queue route", async () => {
+  const calls = [];
+  const run = await saveFeedToQueue({
+    request: new Request("http://localhost:3000/settings/feeds/14", {
+      headers: {
+        cookie: "sid=123"
+      }
+    }),
+    id: 14,
+    linkedListName: "Growth Funds",
+    fetchImpl: async (url, options) => {
+      calls.push({
+        url: String(url),
+        options
+      });
+
+      return {
+        ok: true,
+        async json() {
+          return {
+            run: {
+              id: 88,
+              feed_id: 14,
+              run_type: "save",
+              status: "pending"
+            }
+          };
+        }
+      };
+    }
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "http://localhost:3000/api/rest/feeds/14/save-to-queue");
+  assert.equal(calls[0].options.method, "POST");
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    linkedListName: "Growth Funds"
+  });
+  assert.equal(run.id, 88);
+  assert.equal(run.status, "pending");
+});
+
+test("refreshFeed posts to the refresh route and normalizes the run", async () => {
+  const calls = [];
+  const run = await refreshFeed({
+    request: new Request("http://localhost:3000/settings/feeds/14", {
+      headers: {
+        cookie: "sid=123"
+      }
+    }),
+    id: 14,
+    fetchImpl: async (url, options) => {
+      calls.push({
+        url: String(url),
+        options
+      });
+
+      return {
+        ok: true,
+        async json() {
+          return {
+            run: {
+              id: 89,
+              feed_id: 14,
+              run_type: "refresh",
+              status: "pending"
+            }
+          };
+        }
+      };
+    }
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "http://localhost:3000/api/rest/feeds/14/refresh");
+  assert.equal(calls[0].options.method, "POST");
+  assert.deepEqual(JSON.parse(calls[0].options.body), {});
+  assert.equal(run.run_type, "refresh");
+});
+
+test("loadFeedRunById returns null on 404 and normalizes runs on success", async () => {
+  const notFound = await loadFeedRunById({
+    request: new Request("http://localhost:3000/settings/feeds/14"),
+    id: 91,
+    fetchImpl: async () => ({
+      ok: false,
+      status: 404,
+      async json() {
+        return {
+          message: "Feed run not found."
+        };
+      }
+    })
+  });
+
+  const loaded = await loadFeedRunById({
+    request: new Request("http://localhost:3000/settings/feeds/14"),
+    id: 88,
+    fetchImpl: async () => ({
+      ok: true,
+      async json() {
+        return {
+          run: {
+            id: 88,
+            feed_id: 14,
+            run_type: "save",
+            status: "completed",
+            queued_count: 5
+          }
+        };
+      }
+    })
+  });
+
+  assert.equal(notFound, null);
+  assert.equal(loaded.id, 88);
+  assert.equal(loaded.queued_count, 5);
+});
+
 test("deleteFeed uses the feed detail delete route", async () => {
   const calls = [];
   await deleteFeed({
@@ -296,7 +507,9 @@ test("feed helpers continue to provide stable mock/design utilities", async () =
     name: "",
     source: "preqin",
     description: "",
+    reason: "",
     interval_days: 7,
+    priority: 10,
     records_limit: 100,
     crm_age_days: 90,
     enabled: true,

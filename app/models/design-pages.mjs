@@ -29,8 +29,8 @@ export const designPages = [
   },
   {
     key: "settings-feeds",
-    label: "Settings — Search Feeds",
+    label: "Settings — Research Feeds",
     to: "/design/settings-feeds",
-    description: "Live mock for the Feeds settings page — list view grouped by source with status badges, toggles, and stats. Production at /settings/feeds."
+    description: "Live mock for the Research Feeds settings page. Production at /settings/feeds."
   }
 ];

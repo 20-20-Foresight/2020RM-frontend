@@ -1,45 +1,26 @@
-import React, { useState } from "react";
+import React from "react";
+import { EditIcon } from "@chakra-ui/icons";
 import {
   Badge,
   Box,
   Button,
   Flex,
-  HStack,
   Heading,
+  HStack,
   Icon,
-  IconButton,
   Menu,
   MenuButton,
   MenuItem,
   MenuList,
   Spinner,
-  Switch,
-  Table,
-  Tbody,
-  Td,
   Text,
-  Th,
-  Thead,
   Tooltip,
-  Tr,
   VStack,
-  useToast
 } from "@chakra-ui/react";
-import { Form, Link, useNavigation } from "@remix-run/react";
-import {
-  MdAdd,
-  MdArrowDropDown,
-  MdCheck,
-  MdEdit,
-  MdError,
-  MdSchedule,
-  MdWarning
-} from "react-icons/md";
-import { getFeedSourceColor, getFeedSourceLabel, FEED_SOURCE_KEYS } from "../models/feed-sources.mjs";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+import { Link } from "@remix-run/react";
+import { MdAdd, MdArrowDropDown, MdCheck, MdError, MdRefresh, MdWarning } from "react-icons/md";
+import { FilterableDataTable } from "./ui/organisms/FilterableDataTable";
+import { FEED_SOURCE_KEYS, getFeedSourceColor, getFeedSourceLabel } from "../models/feed-sources.mjs";
 
 function formatDate(value) {
   if (!value) return null;
@@ -50,30 +31,25 @@ function formatDate(value) {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-    hour12: true
+    hour12: true,
   }).format(d);
 }
 
-function formatNextRun(value) {
-  if (!value) return null;
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return null;
-  const now = new Date();
-  const diffMs = d - now;
-  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-  const formatted = new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric"
-  }).format(d);
-  if (diffDays === 0) return `Today (${formatted})`;
-  if (diffDays === 1) return `Tomorrow (${formatted})`;
-  if (diffDays < 0) return `Overdue (${formatted})`;
-  return `In ${diffDays}d (${formatted})`;
+function normalizePriority(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
 }
 
-// ---------------------------------------------------------------------------
-// Status badge
-// ---------------------------------------------------------------------------
+function sortFeeds(feeds) {
+  return [...feeds].sort((a, b) => {
+    const priorityDiff = normalizePriority(b.priority) - normalizePriority(a.priority);
+    if (priorityDiff !== 0) return priorityDiff;
+
+    const nameA = (a.name || "").toLowerCase();
+    const nameB = (b.name || "").toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
+}
 
 function RunStatusBadge({ status, lastError }) {
   if (!status) {
@@ -126,314 +102,135 @@ function RunStatusBadge({ status, lastError }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Source group header
-// ---------------------------------------------------------------------------
-
-function SourceGroupHeader({ source, count, onNewFeed }) {
-  const color = getFeedSourceColor(source);
-  const label = getFeedSourceLabel(source);
-
-  return (
-    <Flex
-      align="center"
-      justify="space-between"
-      px={4}
-      py={2.5}
-      bg={`${color}.50`}
-      borderBottom="1px"
-      borderColor={`${color}.100`}
-    >
-      <HStack spacing={2}>
-        <Badge colorScheme={color} fontSize="sm" px={2.5} py={0.5} borderRadius="md">
-          {label}
-        </Badge>
-        <Text fontSize="sm" color="gray.500">
-          {count} {count === 1 ? "feed" : "feeds"}
-        </Text>
-      </HStack>
-      <Button
-        size="xs"
-        leftIcon={<MdAdd />}
-        colorScheme={color}
-        variant="ghost"
-        as={Link}
-        to={`/settings/feeds/new?source=${source}`}
-        _hover={{ bg: `${color}.100` }}
-      >
-        Add feed
-      </Button>
-    </Flex>
-  );
+function getFeedStatusLabel(feed) {
+  return feed.last_run_status || "Never run";
 }
 
-// ---------------------------------------------------------------------------
-// Feed row
-// ---------------------------------------------------------------------------
+function getLatestRefreshText(feed) {
+  return feed.last_run_completed_at ? formatDate(feed.last_run_completed_at) || "" : "";
+}
 
-function FeedRow({ feed, optimisticEnabled }) {
-  const color = getFeedSourceColor(feed.source);
-  const enabled = optimisticEnabled !== undefined ? optimisticEnabled : feed.enabled;
-
-  return (
-    <Tr
-      _hover={{ bg: "gray.50" }}
-      opacity={enabled ? 1 : 0.6}
-      transition="opacity 0.2s"
-    >
-      <Td py={3}>
+function buildFeedTableColumns() {
+  return [
+    {
+      key: "name",
+      label: "Search Name",
+      width: "38%",
+      filter: {
+        type: "text",
+        getValue: (feed) => `${feed.name || ""} ${feed.description || ""}`,
+      },
+      renderCell: (feed, section) => (
         <VStack align="start" spacing={0.5}>
-          <Text
-            fontWeight="medium"
-            fontSize="sm"
-            color={enabled ? "gray.900" : "gray.500"}
-          >
-            {feed.name}
-          </Text>
-          {feed.description && (
+          <Link to={`/settings/feeds/${feed.id}`}>
+            <Text
+              fontWeight="medium"
+              fontSize="sm"
+              color={section.key === "inactive" ? "gray.600" : "blue.600"}
+              _hover={{ color: "blue.700", textDecoration: "underline" }}
+            >
+              {feed.name}
+            </Text>
+          </Link>
+          {feed.description ? (
             <Text fontSize="xs" color="gray.400" noOfLines={1}>
               {feed.description}
             </Text>
-          )}
+          ) : null}
         </VStack>
-      </Td>
-      <Td py={3}>
+      ),
+    },
+    {
+      key: "type",
+      label: "Type",
+      width: "16%",
+      filter: {
+        type: "select",
+        options: FEED_SOURCE_KEYS.map((source) => getFeedSourceLabel(source)),
+        getValue: (feed) => getFeedSourceLabel(feed.source),
+      },
+      renderCell: (feed) => (
+        <Badge colorScheme={getFeedSourceColor(feed.source)} variant="subtle" fontSize="xs">
+          {getFeedSourceLabel(feed.source)}
+        </Badge>
+      ),
+    },
+    {
+      key: "priority",
+      label: "Priority",
+      width: "10%",
+      filter: {
+        type: "text",
+        getValue: (feed) => String(normalizePriority(feed.priority)),
+      },
+      renderCell: (feed) => (
+        <Text fontSize="sm" color="gray.800" fontWeight="semibold">
+          {normalizePriority(feed.priority)}
+        </Text>
+      ),
+    },
+    {
+      key: "status",
+      label: "Status",
+      width: "16%",
+      filter: {
+        type: "select",
+        options: ["Never run", "running", "complete", "failed"],
+        getValue: (feed) => getFeedStatusLabel(feed),
+      },
+      renderCell: (feed) => (
         <RunStatusBadge status={feed.last_run_status} lastError={feed.last_error} />
-      </Td>
-      <Td py={3}>
-        {feed.last_run_completed_at ? (
+      ),
+    },
+    {
+      key: "latestRefresh",
+      label: "Latest Refresh",
+      width: "15%",
+      filter: {
+        type: "text",
+        getValue: (feed) => getLatestRefreshText(feed),
+      },
+      renderCell: (feed) =>
+        feed.last_run_completed_at ? (
           <VStack align="start" spacing={0}>
             <Text fontSize="xs" color="gray.700">
               {formatDate(feed.last_run_completed_at)}
             </Text>
-            {feed.last_queued_count != null && (
+            {feed.last_queued_count != null ? (
               <Text fontSize="xs" color="gray.400">
                 {feed.last_queued_count} queued
-                {feed.last_result_count != null && ` / ${feed.last_result_count} found`}
               </Text>
-            )}
+            ) : null}
           </VStack>
         ) : (
           <Text fontSize="xs" color="gray.400">
             —
           </Text>
-        )}
-      </Td>
-      <Td py={3}>
-        {feed.next_run_at ? (
-          <HStack spacing={1}>
-            <Icon as={MdSchedule} boxSize={3} color="gray.400" />
-            <Text fontSize="xs" color="gray.600">
-              {formatNextRun(feed.next_run_at)}
-            </Text>
-          </HStack>
-        ) : (
-          <Text fontSize="xs" color="gray.400">
-            —
-          </Text>
-        )}
-      </Td>
-      <Td py={3}>
-        <Badge colorScheme={color} variant="outline" fontSize="xs">
-          Every {feed.interval_days}d
-        </Badge>
-      </Td>
-      <Td py={3}>
-        <Form method="post">
-          <input type="hidden" name="_action" value="toggleEnabled" />
-          <input type="hidden" name="feedId" value={feed.id} />
-          <input type="hidden" name="enabled" value={enabled ? "false" : "true"} />
-          <Switch
-            colorScheme={color}
-            isChecked={enabled}
-            size="sm"
-            onChange={(e) => e.currentTarget.form.requestSubmit()}
-            cursor="pointer"
-          />
-        </Form>
-      </Td>
-      <Td py={3}>
-        <IconButton
+        ),
+    },
+    {
+      key: "actions",
+      label: "Actions",
+      width: "5%",
+      align: "right",
+      filter: {
+        type: "none",
+      },
+      renderCell: (feed) => (
+        <Button
           as={Link}
           to={`/settings/feeds/${feed.id}`}
-          icon={<MdEdit />}
-          size="xs"
-          variant="ghost"
-          colorScheme="gray"
-          aria-label="Edit feed"
-        />
-      </Td>
-    </Tr>
-  );
+          size="sm"
+          leftIcon={<EditIcon />}
+          variant="outline"
+          colorScheme="blue"
+        >
+          Edit
+        </Button>
+      ),
+    },
+  ];
 }
-
-// ---------------------------------------------------------------------------
-// Source section
-// ---------------------------------------------------------------------------
-
-function SourceSection({ source, feeds }) {
-  return (
-    <Box
-      borderWidth="1px"
-      borderColor="gray.200"
-      borderRadius="xl"
-      overflow="hidden"
-      bg="white"
-      boxShadow="sm"
-    >
-      <SourceGroupHeader source={source} count={feeds.length} />
-      <Table size="sm" variant="simple">
-        <Thead>
-          <Tr>
-            <Th
-              py={2.5}
-              color="gray.500"
-              fontWeight="semibold"
-              fontSize="xs"
-              textTransform="uppercase"
-              letterSpacing="wider"
-              w="35%"
-            >
-              Feed Name
-            </Th>
-            <Th
-              py={2.5}
-              color="gray.500"
-              fontWeight="semibold"
-              fontSize="xs"
-              textTransform="uppercase"
-              letterSpacing="wider"
-              w="12%"
-            >
-              Status
-            </Th>
-            <Th
-              py={2.5}
-              color="gray.500"
-              fontWeight="semibold"
-              fontSize="xs"
-              textTransform="uppercase"
-              letterSpacing="wider"
-              w="20%"
-            >
-              Last Run
-            </Th>
-            <Th
-              py={2.5}
-              color="gray.500"
-              fontWeight="semibold"
-              fontSize="xs"
-              textTransform="uppercase"
-              letterSpacing="wider"
-              w="16%"
-            >
-              Next Run
-            </Th>
-            <Th
-              py={2.5}
-              color="gray.500"
-              fontWeight="semibold"
-              fontSize="xs"
-              textTransform="uppercase"
-              letterSpacing="wider"
-              w="8%"
-            >
-              Schedule
-            </Th>
-            <Th
-              py={2.5}
-              color="gray.500"
-              fontWeight="semibold"
-              fontSize="xs"
-              textTransform="uppercase"
-              letterSpacing="wider"
-              w="5%"
-            >
-              On
-            </Th>
-            <Th w="4%" />
-          </Tr>
-        </Thead>
-        <Tbody>
-          {feeds.map((feed) => (
-            <FeedRow key={feed.id} feed={feed} />
-          ))}
-        </Tbody>
-      </Table>
-    </Box>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Stats bar
-// ---------------------------------------------------------------------------
-
-function StatsBar({ stats }) {
-  return (
-    <HStack
-      spacing={6}
-      px={5}
-      py={3}
-      bg="white"
-      borderRadius="xl"
-      borderWidth="1px"
-      borderColor="gray.200"
-      boxShadow="sm"
-    >
-      <VStack spacing={0} align="start">
-        <Text fontSize="xl" fontWeight="bold" color="gray.900" lineHeight="1">
-          {stats.total}
-        </Text>
-        <Text fontSize="xs" color="gray.500">
-          Total feeds
-        </Text>
-      </VStack>
-      <Box w="1px" h="8" bg="gray.200" />
-      <VStack spacing={0} align="start">
-        <Text fontSize="xl" fontWeight="bold" color="green.600" lineHeight="1">
-          {stats.enabled}
-        </Text>
-        <Text fontSize="xs" color="gray.500">
-          Enabled
-        </Text>
-      </VStack>
-      <Box w="1px" h="8" bg="gray.200" />
-      {stats.running > 0 && (
-        <>
-          <VStack spacing={0} align="start">
-            <HStack spacing={1.5}>
-              <Spinner size="xs" color="blue.500" thickness="2px" />
-              <Text fontSize="xl" fontWeight="bold" color="blue.600" lineHeight="1">
-                {stats.running}
-              </Text>
-            </HStack>
-            <Text fontSize="xs" color="gray.500">
-              Running now
-            </Text>
-          </VStack>
-          <Box w="1px" h="8" bg="gray.200" />
-        </>
-      )}
-      {stats.failed > 0 && (
-        <VStack spacing={0} align="start">
-          <HStack spacing={1.5}>
-            <Icon as={MdError} color="red.500" boxSize={4} />
-            <Text fontSize="xl" fontWeight="bold" color="red.600" lineHeight="1">
-              {stats.failed}
-            </Text>
-          </HStack>
-          <Text fontSize="xs" color="gray.500">
-            {stats.failed === 1 ? "Feed failed" : "Feeds failed"}
-          </Text>
-        </VStack>
-      )}
-    </HStack>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// New feed menu
-// ---------------------------------------------------------------------------
 
 function NewFeedMenu() {
   return (
@@ -468,49 +265,60 @@ function NewFeedMenu() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
-
 /**
- * Renders the main feed management page.
  * @param {{
- *   feedsBySource: Record<string, object[]>,
+ *   feeds: object[],
  *   stats: {total: number, enabled: number, running: number, failed: number},
  *   error: string|null
  * }} props
  */
-export function FeedsListPage({ feedsBySource, stats, error }) {
-  const sourceOrder = FEED_SOURCE_KEYS.filter((s) => feedsBySource[s]?.length > 0);
-  const otherSources = Object.keys(feedsBySource).filter((s) => !FEED_SOURCE_KEYS.includes(s));
+export function FeedsListPage({ feeds, stats, error }) {
+  const columns = React.useMemo(() => buildFeedTableColumns(), []);
+  const activeFeeds = React.useMemo(
+    () => sortFeeds(feeds.filter((feed) => feed.enabled !== false)),
+    [feeds]
+  );
+  const inactiveFeeds = React.useMemo(
+    () => sortFeeds(feeds.filter((feed) => feed.enabled === false)),
+    [feeds]
+  );
+
+  const sections = React.useMemo(
+    () => [
+      {
+        key: "active",
+        title: "Active Feeds",
+        description: "Ordered by priority, highest first.",
+        rows: activeFeeds,
+        emptyText: "No active feeds match the current filters.",
+      },
+      {
+        key: "inactive",
+        title: "Inactive Feeds",
+        description: "Paused feeds stay available here for review and reactivation.",
+        rows: inactiveFeeds,
+        emptyText: "No inactive feeds match the current filters.",
+      },
+    ],
+    [activeFeeds, inactiveFeeds]
+  );
 
   return (
     <VStack align="stretch" spacing={0}>
-      {/* Page header */}
-      <Box
-        px={{ base: 4, md: 6 }}
-        py={{ base: 4, md: 5 }}
-        borderBottomWidth="1px"
-        bg="white"
-      >
+      <Box px={{ base: 4, md: 6 }} py={{ base: 4, md: 5 }} borderBottomWidth="1px" bg="white">
         <Flex justify="space-between" align="center" gap={4} wrap="wrap">
           <Box>
-            <Heading size="md">Search Feeds</Heading>
+            <Heading size="md">Research Feeds</Heading>
             <Text color="gray.600" mt={1} fontSize="sm">
-              Automated data ingestion from external sources into the CRM pipeline.
+              Custom lists from external sources that feed the research queue.
             </Text>
           </Box>
           <NewFeedMenu />
         </Flex>
       </Box>
 
-      {/* Content */}
       <VStack align="stretch" spacing={4} px={{ base: 4, md: 6 }} py={5}>
-        {/* Stats */}
-        {stats.total > 0 && <StatsBar stats={stats} />}
-
-        {/* Error state */}
-        {error && (
+        {error ? (
           <Box
             bg="red.50"
             borderWidth="1px"
@@ -526,10 +334,9 @@ export function FeedsListPage({ feedsBySource, stats, error }) {
               </Text>
             </HStack>
           </Box>
-        )}
+        ) : null}
 
-        {/* Empty state */}
-        {stats.total === 0 && !error && (
+        {stats.total === 0 && !error ? (
           <Box
             textAlign="center"
             py={16}
@@ -538,23 +345,27 @@ export function FeedsListPage({ feedsBySource, stats, error }) {
             borderRadius="xl"
             bg="white"
           >
-            <Icon as={MdSchedule} boxSize={10} color="gray.300" mb={3} />
+            <Icon as={MdRefresh} boxSize={10} color="gray.300" mb={3} />
             <Heading size="sm" color="gray.500" mb={2}>
-              No search feeds configured
+              No research feeds configured
             </Heading>
             <Text fontSize="sm" color="gray.400" mb={4}>
-              Add a feed to start pulling contacts into your pipeline automatically.
+              Add a feed to preview source results and queue company research.
             </Text>
             <NewFeedMenu />
           </Box>
-        )}
+        ) : null}
 
-        {/* Source sections */}
-        {[...sourceOrder, ...otherSources].map((source) => {
-          const feeds = feedsBySource[source];
-          if (!feeds?.length) return null;
-          return <SourceSection key={source} source={source} feeds={feeds} />;
-        })}
+        {stats.total > 0 ? (
+          <FilterableDataTable
+            columns={columns}
+            sections={sections}
+            getRowKey={(feed) => feed.id}
+            getRowProps={(_, section) => ({
+              opacity: section.key === "inactive" ? 0.65 : 1,
+            })}
+          />
+        ) : null}
       </VStack>
     </VStack>
   );

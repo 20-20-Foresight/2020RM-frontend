@@ -385,7 +385,9 @@ function normalizeFeed(value) {
     name: readTrimmedString(value.name) || "",
     source: readTrimmedString(value.source) || "",
     description: value.description == null ? null : readTrimmedString(value.description) || "",
+    reason: value.reason == null ? null : readTrimmedString(value.reason) || "",
     interval_days: readInteger(value.interval_days) ?? 7,
+    priority: readInteger(value.priority) ?? 10,
     records_limit: readInteger(value.records_limit),
     crm_age_days: readInteger(value.crm_age_days),
     enabled: value.enabled !== false,
@@ -399,6 +401,37 @@ function normalizeFeed(value) {
     next_run_at: readTrimmedString(value.next_run_at),
     createddate: readTrimmedString(value.createddate),
     modifieddate: readTrimmedString(value.modifieddate)
+  };
+}
+
+/**
+ * Normalizes one feed run payload into a shared UI shape.
+ * @param {unknown} value
+ * @returns {object|null}
+ */
+function normalizeFeedRun(value) {
+  if (!isPlainObject(value)) {
+    return null;
+  }
+
+  return {
+    ...value,
+    id: readInteger(value.id),
+    feed_id: readInteger(value.feed_id),
+    run_type: readTrimmedString(value.run_type) || "save",
+    status: readTrimmedString(value.status) || "pending",
+    linked_list_uuid: readTrimmedString(value.linked_list_uuid),
+    linked_list_name: readTrimmedString(value.linked_list_name),
+    result_count: readInteger(value.result_count),
+    eligible_count: readInteger(value.eligible_count),
+    queued_count: readInteger(value.queued_count),
+    error: readTrimmedString(value.error),
+    started_at: readTrimmedString(value.started_at),
+    completed_at: readTrimmedString(value.completed_at),
+    createddate: readTrimmedString(value.createddate),
+    modifieddate: readTrimmedString(value.modifieddate),
+    request_payload: isPlainObject(value.request_payload) ? value.request_payload : {},
+    response_summary: isPlainObject(value.response_summary) ? value.response_summary : {}
   };
 }
 
@@ -525,6 +558,23 @@ async function loadFeedsList(options) {
 }
 
 /**
+ * Loads the available CRM organization lists that can be linked to one feed.
+ * @param {{request: Request, fetchImpl?: typeof fetch}} options
+ * @returns {Promise<object[]>}
+ */
+async function loadFeedDestinationLists(options) {
+  const payload = await requestFeedApi({
+    request: options.request,
+    pathname: "/api/rest/feeds/lists",
+    fetchImpl: options.fetchImpl
+  });
+
+  return Array.isArray(payload?.lists)
+    ? payload.lists.filter((list) => list && typeof list === "object")
+    : [];
+}
+
+/**
  * Returns a single feed by id.
  * @param {{request: Request, id: string|number, fetchImpl?: typeof fetch}} options
  * @returns {Promise<object|null>}
@@ -616,6 +666,82 @@ async function deleteFeed(options) {
 }
 
 /**
+ * Previews one feed definition without saving queue state.
+ * @param {{request: Request, feed: Record<string, unknown>, fetchImpl?: typeof fetch}} options
+ * @returns {Promise<object|null>}
+ */
+async function previewFeed(options) {
+  const payload = await requestFeedApi({
+    request: options.request,
+    pathname: "/api/rest/feeds/preview",
+    method: "POST",
+    body: isPlainObject(options.feed) ? options.feed : {},
+    fetchImpl: options.fetchImpl
+  });
+
+  return isPlainObject(payload?.preview) ? payload.preview : null;
+}
+
+/**
+ * Queues the initial saved-search run for one feed.
+ * @param {{request: Request, id: string|number, linkedListName?: string|null, fetchImpl?: typeof fetch}} options
+ * @returns {Promise<object|null>}
+ */
+async function saveFeedToQueue(options) {
+  const id = readInteger(options.id);
+  const payload = await requestFeedApi({
+    request: options.request,
+    pathname: `/api/rest/feeds/${encodeURIComponent(String(id))}/save-to-queue`,
+    method: "POST",
+    body: readTrimmedString(options.linkedListName)
+      ? { linkedListName: readTrimmedString(options.linkedListName) }
+      : {},
+    fetchImpl: options.fetchImpl
+  });
+
+  return normalizeFeedRun(payload?.run);
+}
+
+/**
+ * Refreshes one existing saved search.
+ * @param {{request: Request, id: string|number, fetchImpl?: typeof fetch}} options
+ * @returns {Promise<object|null>}
+ */
+async function refreshFeed(options) {
+  const id = readInteger(options.id);
+  const payload = await requestFeedApi({
+    request: options.request,
+    pathname: `/api/rest/feeds/${encodeURIComponent(String(id))}/refresh`,
+    method: "POST",
+    body: {},
+    fetchImpl: options.fetchImpl
+  });
+
+  return normalizeFeedRun(payload?.run);
+}
+
+/**
+ * Returns one feed run by id.
+ * @param {{request: Request, id: string|number, fetchImpl?: typeof fetch}} options
+ * @returns {Promise<object|null>}
+ */
+async function loadFeedRunById(options) {
+  const id = readInteger(options.id);
+  if (!id) {
+    return null;
+  }
+
+  const payload = await requestFeedApi({
+    request: options.request,
+    pathname: `/api/rest/feeds/runs/${encodeURIComponent(String(id))}`,
+    fetchImpl: options.fetchImpl,
+    allowNotFound: true
+  });
+
+  return normalizeFeedRun(payload?.run);
+}
+
+/**
  * Reads one mutable feed payload from a Remix form submission.
  * @param {FormData} formData
  * @param {{includeSource?: boolean}} [options]
@@ -641,13 +767,18 @@ function readFeedFormPayload(formData, options = {}) {
   const payload = {
     name: readTrimmedString(formData.get("name")) || "",
     description: readTrimmedString(formData.get("description")),
+    reason: readTrimmedString(formData.get("reason")),
     interval_days: readInteger(formData.get("interval_days")),
+    priority: readInteger(formData.get("priority")),
     records_limit: readInteger(formData.get("records_limit")),
     crm_age_days: readInteger(formData.get("crm_age_days")),
     next_run_at: readTrimmedString(formData.get("next_run_at")),
-    enabled: formData.get("enabled") === "true",
     settings
   };
+
+  if (formData.has("enabled")) {
+    payload.enabled = formData.get("enabled") === "true";
+  }
 
   if (options.includeSource) {
     payload.source = readTrimmedString(formData.get("source")) || "";
@@ -667,7 +798,9 @@ function buildEmptyFeed(source) {
     name: "",
     source: source || "",
     description: "",
+    reason: "",
     interval_days: 7,
+    priority: 10,
     records_limit: 100,
     crm_age_days: 90,
     enabled: true,
@@ -718,10 +851,15 @@ module.exports = {
   createFeed,
   deleteFeed,
   groupFeedsBySource,
+  loadFeedDestinationLists,
+  loadFeedRunById,
   loadFeedById,
   loadFeedsList,
   loadMockFeedsList,
+  previewFeed,
   readFeedFormPayload,
+  refreshFeed,
+  saveFeedToQueue,
   setFeedEnabled,
   updateFeed
 };

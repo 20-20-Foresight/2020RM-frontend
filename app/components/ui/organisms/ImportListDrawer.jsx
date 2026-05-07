@@ -641,6 +641,7 @@ function ImportRowsTable({
  *   expandedWidth?: string|object,
  *   onToggleExpanded?: (() => void)|null,
  *   reviewTableHeight?: string,
+ *   additionalReviewControls?: React.ReactNode,
  *   onDestinationNameChange?: ((value: string) => void)|null,
  *   isDestinationNameEditable?: boolean,
  *   busyTitle?: string,
@@ -685,6 +686,7 @@ export function ImportListDrawer({
   expandedWidth = "100vw",
   onToggleExpanded = null,
   reviewTableHeight = "42vh",
+  additionalReviewControls = null,
   onDestinationNameChange = null,
   isDestinationNameEditable = true,
   busyTitle = "Building List",
@@ -862,7 +864,7 @@ export function ImportListDrawer({
                   />
                 </Box>
 
-                <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+                <SimpleGrid columns={{ base: 1, md: additionalReviewControls ? 3 : 2 }} spacing={4}>
                   <FormControl>
                     <FormLabel fontSize="sm">Unmatched Column Behavior</FormLabel>
                     <Select value={unmatchedColumnBehavior} size="sm" isReadOnly>
@@ -889,6 +891,7 @@ export function ImportListDrawer({
                       isReadOnly
                     />
                   </FormControl>
+                  {additionalReviewControls}
                 </SimpleGrid>
               </>
             ) : null}

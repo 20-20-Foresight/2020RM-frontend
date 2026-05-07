@@ -72,7 +72,7 @@ import {
   ExplanationTable,
   SegmentCompare
 } from "./ResegmentationReviewContent.jsx";
-import ResegmentationImportDrawer from "./ResegmentationImportDrawer.jsx";
+import OrganizationListImportDrawer from "./OrganizationListImportDrawer.jsx";
 
 const ORGANIZATION_SEARCH_DEBOUNCE_MS = 2000;
 
@@ -1066,7 +1066,7 @@ export function ResegmentationToolPage({
         </TabPanels>
       </Tabs>
 
-      <ResegmentationImportDrawer
+      <OrganizationListImportDrawer
         isOpen={isImportOpen}
         onClose={closeImport}
         onImportedList={handleImportedList}
