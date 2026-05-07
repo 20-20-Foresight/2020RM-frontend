@@ -2,7 +2,7 @@ import { redirect } from "@remix-run/node";
 
 export async function loader({ request }) {
   void request;
-  return redirect("/admin/segmentation/dimensions");
+  return redirect("/admin/data/segmentation");
 }
 
 export default function AdminSegmentationIndexRoute() {

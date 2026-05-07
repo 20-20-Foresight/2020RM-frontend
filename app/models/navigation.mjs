@@ -140,7 +140,14 @@ export const navItems = [
     key: "data",
     label: "Data",
     to: "/admin/data",
-    icon: "table_chart"
+    icon: "table_chart",
+    children: [
+      {
+        key: "data-segmentation",
+        label: "Segmentation",
+        to: "/admin/data/segmentation"
+      }
+    ]
   }
 ];
 

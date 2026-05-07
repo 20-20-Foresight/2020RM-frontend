@@ -366,6 +366,17 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
           }
         : {}
   );
+  const [draftMetadata, setDraftMetadata] = useState(() => (isPlainObject(data.metadata) ? { ...data.metadata } : {}));
+  const [draftDescription, setDraftDescription] = useState(data.description || "");
+  const [draftEditorConfig, setDraftEditorConfig] = useState(() =>
+    isPlainObject(data.editor)
+      ? { ...data.editor }
+      : data.editorType
+        ? {
+            type: data.editorType
+          }
+        : {}
+  );
   const [rows, setRows] = useState(() => cloneSegmentationRows(data.segmentationDefault.rows, categoryDepth));
   const [filters, setFilters] = useState({});
   const [draftFilters, setDraftFilters] = useState({});
@@ -389,8 +400,8 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
   } = useDisclosure();
   const {
     isOpen: isMetadataDrawerOpen,
-    onOpen: openMetadataDrawer,
-    onClose: closeMetadataDrawer
+    onOpen: openMetadataDrawerState,
+    onClose: closeMetadataDrawerState
   } = useDisclosure();
   const {
     isOpen: isBulkChangeDrawerOpen,
@@ -442,6 +453,17 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
     setMetadata(isPlainObject(data.metadata) ? { ...data.metadata } : {});
     setDescription(data.description || "");
     setEditorConfig(
+      isPlainObject(data.editor)
+        ? { ...data.editor }
+        : data.editorType
+          ? {
+            type: data.editorType
+          }
+        : {}
+    );
+    setDraftMetadata(isPlainObject(data.metadata) ? { ...data.metadata } : {});
+    setDraftDescription(data.description || "");
+    setDraftEditorConfig(
       isPlainObject(data.editor)
         ? { ...data.editor }
         : data.editorType
@@ -797,7 +819,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
    * @param {string} value
    */
   function updateEditorConfig(key, value) {
-    setEditorConfig((currentConfig) => ({
+    setDraftEditorConfig((currentConfig) => ({
       ...(isPlainObject(currentConfig) ? currentConfig : {}),
       [key]: value
     }));
@@ -809,22 +831,52 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
    * @param {string} value
    */
   function updateMetadata(key, value) {
-    setMetadata((currentMetadata) => ({
+    setDraftMetadata((currentMetadata) => ({
       ...(isPlainObject(currentMetadata) ? currentMetadata : {}),
       [key]: value
     }));
   }
 
   /**
+   * Opens the metadata flyout with a fresh draft copy of the saved values.
+   */
+  function openMetadataDrawer() {
+    setDraftMetadata(isPlainObject(metadata) ? { ...metadata } : {});
+    setDraftDescription(description);
+    setDraftEditorConfig(isPlainObject(editorConfig) ? { ...editorConfig } : {});
+    openMetadataDrawerState();
+  }
+
+  /**
+   * Closes the metadata flyout and discards unsaved draft changes.
+   */
+  function closeMetadataDrawer() {
+    setDraftMetadata(isPlainObject(metadata) ? { ...metadata } : {});
+    setDraftDescription(description);
+    setDraftEditorConfig(isPlainObject(editorConfig) ? { ...editorConfig } : {});
+    closeMetadataDrawerState();
+  }
+
+  /**
    * Persists metadata edits and closes the metadata flyout.
    */
   function saveMetadataChanges() {
+    const nextMetadata = isPlainObject(draftMetadata) ? { ...draftMetadata } : {};
+    const nextDescription = draftDescription;
+    const nextEditorConfig = isPlainObject(draftEditorConfig) ? { ...draftEditorConfig } : {};
+
+    setMetadata(nextMetadata);
+    setDescription(nextDescription);
+    setEditorConfig(nextEditorConfig);
     requestSave((summary) =>
       buildSaveFormData({
-        summary
+        summary,
+        nextDescription,
+        nextMetadata,
+        nextEditorConfig
       })
     );
-    closeMetadataDrawer();
+    closeMetadataDrawerState();
   }
 
   /**
@@ -1506,7 +1558,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
             <VStack align="stretch" spacing={4}>
               <FormControl>
                 <FormLabel>Name</FormLabel>
-                <Input value={readTrimmedString(metadata?.name)} onChange={(event) => updateMetadata("name", event.target.value)} bg="white" />
+                <Input value={readTrimmedString(draftMetadata?.name)} onChange={(event) => updateMetadata("name", event.target.value)} bg="white" />
               </FormControl>
 
               <FormControl>
@@ -1516,17 +1568,17 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
 
               <FormControl>
                 <FormLabel>Type</FormLabel>
-                <Input value={readTrimmedString(metadata?.type)} onChange={(event) => updateMetadata("type", event.target.value)} bg="white" />
+                <Input value={readTrimmedString(draftMetadata?.type)} onChange={(event) => updateMetadata("type", event.target.value)} bg="white" />
               </FormControl>
 
               <FormControl>
                 <FormLabel>Editor</FormLabel>
-                <Input value={editorTypeLabel} onChange={(event) => updateEditorConfig("type", event.target.value)} bg="white" />
+                <Input value={readTrimmedString(draftEditorConfig?.type) || data.editorType || "segmentation.default"} onChange={(event) => updateEditorConfig("type", event.target.value)} bg="white" />
               </FormControl>
 
               <FormControl>
                 <FormLabel>Description</FormLabel>
-                <Textarea value={description} onChange={(event) => setDescription(event.target.value)} minH="120px" bg="white" />
+                <Textarea value={draftDescription} onChange={(event) => setDraftDescription(event.target.value)} minH="120px" bg="white" />
               </FormControl>
             </VStack>
           </DrawerBody>
