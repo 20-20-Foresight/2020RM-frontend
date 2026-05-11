@@ -202,7 +202,7 @@ export function PersonDetailLayout({ data, tabs, activeTabKey, children = null }
               />
               <MenuList minW="200px" shadow="lg" borderColor={BORDER_COLOR}>
                 <MenuItem icon={<FiDatabase />} onClick={onSourceOpen} fontSize="sm">
-                  View Source Data
+                  View Primary Record
                 </MenuItem>
               </MenuList>
             </Menu>

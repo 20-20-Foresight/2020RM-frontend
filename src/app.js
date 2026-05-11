@@ -382,6 +382,7 @@ function createApp(config, remixHandler, deps = {}) {
   const adminDataDetailFixture = readJsonFixture("ADMIN_DATA_DETAIL_FIXTURE_PATH");
   const organizationDetailFixture = readJsonFixture("ORGANIZATION_DETAIL_FIXTURE_PATH");
   const organizationPeopleFixture = readJsonFixture("ORGANIZATION_PEOPLE_FIXTURE_PATH");
+  const organizationExternalSourcesFixture = readJsonFixture("ORGANIZATION_EXTERNAL_SOURCES_FIXTURE_PATH");
   const personDetailFixture = readJsonFixture("PERSON_DETAIL_FIXTURE_PATH");
 
   app.disable("x-powered-by");
@@ -476,7 +477,7 @@ function createApp(config, remixHandler, deps = {}) {
     });
   }
 
-  if (organizationPeopleFixture || organizationDetailFixture) {
+  if (organizationPeopleFixture || organizationDetailFixture || organizationExternalSourcesFixture) {
     app.get("/api/rest/organization/:organizationId/people", (req, res, next) => {
       if (!organizationPeopleFixture) {
         return next();
@@ -509,6 +510,25 @@ function createApp(config, remixHandler, deps = {}) {
       if (!payload) {
         return res.status(404).json({
           message: `Fixture organization data not found for ${requestedId}`
+        });
+      }
+
+      return res.json(payload);
+    });
+
+    app.get("/api/rest/organization/:organizationId/external-organizations", (req, res, next) => {
+      if (!organizationExternalSourcesFixture) {
+        return next();
+      }
+
+      const requestedId = decodeURIComponent(req.params.organizationId || "");
+      const payload = organizationExternalSourcesFixture && typeof organizationExternalSourcesFixture === "object"
+        ? organizationExternalSourcesFixture[requestedId]
+        : null;
+
+      if (!payload) {
+        return res.status(404).json({
+          message: `Fixture organization external source data not found for ${requestedId}`
         });
       }
 

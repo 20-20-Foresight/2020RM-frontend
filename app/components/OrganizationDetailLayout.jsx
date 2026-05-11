@@ -201,7 +201,7 @@ export function OrganizationDetailLayout({ data, tabs, activeTabKey, children = 
               />
               <MenuList minW="200px" shadow="lg" borderColor={BORDER_COLOR}>
                 <MenuItem icon={<FiDatabase />} onClick={onSourceOpen} fontSize="sm">
-                  View Source Data
+                  View Data Sources
                 </MenuItem>
               </MenuList>
             </Menu>
@@ -211,6 +211,11 @@ export function OrganizationDetailLayout({ data, tabs, activeTabKey, children = 
               onClose={onSourceClose}
               data={data}
               entityType="organization"
+              externalSourcesRequestPath={
+                data?.uuid
+                  ? `/api/rest/organization/${encodeURIComponent(data.uuid)}/external-organizations`
+                  : null
+              }
             />
           </Flex>
         </Box>
