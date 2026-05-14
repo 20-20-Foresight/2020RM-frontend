@@ -81,6 +81,12 @@ export const navItems = [
     ]
   },
   {
+    key: "reports",
+    label: "Reports",
+    to: "/reports",
+    icon: "table_chart"
+  },
+  {
     key: "learn",
     label: "Learn",
     to: "/learn",

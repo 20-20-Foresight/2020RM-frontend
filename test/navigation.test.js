@@ -3,38 +3,51 @@ const assert = require("node:assert/strict");
 
 test("navigation model defines the requested subsection labels", async () => {
   const { navItems } = await import("../app/models/navigation.mjs");
-  assert.deepEqual(
-    navItems
-      .filter((item) => item.key !== "design")
-      .filter((item) => Array.isArray(item.children))
-      .map((item) => ({
-        label: item.label,
-        children: item.children.map((child) => child.label)
-      })),
-    [
-      {
-        label: "Organizations",
-        children: ["Clients", "Advanced Search"]
-      },
-      {
-        label: "People",
-        children: ["Candidates", "EM Clients", "Advanced Search"]
-      },
-      {
-        label: "Jobs",
-        children: ["My Jobs", "All EM Jobs", "All ES Jobs", "Advanced Search"]
-      },
-      {
-        label: "Admin",
-        children: ["User Management"]
-      }
-    ]
-  );
+  const subsectionLabels = navItems
+    .filter((item) => item.key !== "design")
+    .filter((item) => Array.isArray(item.children))
+    .map((item) => ({
+      label: item.label,
+      children: item.children.map((child) => child.label)
+    }));
+
+  assert.deepEqual(subsectionLabels, [
+    {
+      label: "Organizations",
+      children: ["Clients", "Advanced Search"]
+    },
+    {
+      label: "People",
+      children: ["Candidates", "EM Clients", "Advanced Search"]
+    },
+    {
+      label: "Services",
+      children: ["My Services", "EM Services", "ES Services", "Advanced Search"]
+    },
+    {
+      label: "Tools",
+      children: ["Resegmentation"]
+    },
+    {
+      label: "Admin",
+      children: ["User Management"]
+    },
+    {
+      label: "Settings",
+      children: ["Research Feeds"]
+    },
+    {
+      label: "Data",
+      children: ["Segmentation"]
+    }
+  ]);
   const jobsIndex = navItems.findIndex((item) => item.key === "jobs");
+  const reportsIndex = navItems.findIndex((item) => item.key === "reports");
   const learnIndex = navItems.findIndex((item) => item.key === "learn");
   const marketingIndex = navItems.findIndex((item) => item.key === "marketing");
 
-  assert.equal(learnIndex, jobsIndex + 1);
+  assert.equal(reportsIndex, jobsIndex + 1);
+  assert.equal(learnIndex, reportsIndex + 1);
   assert.equal(marketingIndex, learnIndex + 1);
 });
 
@@ -68,7 +81,7 @@ test("isNavItemActive does not keep Admin active for the separate top-level Data
 
   assert.equal(isNavItemActive(adminItem, "/admin/data"), false);
   assert.equal(isNavItemActive(dataItem, "/admin/data"), true);
-  assert.equal(isNavItemActive(dataItem, "/admin/data/crm.data%3Acontact%20titles"), true);
+  assert.equal(isNavItemActive(dataItem, "/admin/data/segmentation"), true);
 });
 
 test("getExpandedNavItemKeys expands the matching section for subsection routes", async () => {
