@@ -57,6 +57,7 @@ export async function postResegmentationAction(intent, fields = {}) {
       "content-type": "application/json"
     };
     requestOptions.body = JSON.stringify({
+      strategy: readTrimmedString(fields.strategy) || "legacy",
       dryRun: fields.dryRun !== false,
       saveSalesforce: fields.saveSalesforce === true,
       includeExplanation: fields.includeExplanation !== false

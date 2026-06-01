@@ -56,10 +56,12 @@ import {
   applyResegmentationToRecord,
   buildAppliedResult,
   hasVisibleSegmentationSummary,
+  isV312Resegmentation,
   normalizeSegmentationVisualSummary,
   readEMIndustryValue,
   readCurrentSegmentationExplanations,
   readProposedSegmentationExplanations,
+  readSavedSegmentation312Payload,
   readPrimaryValue,
   readTrimmedString
 } from "../models/resegmentation-ui.mjs";
@@ -70,7 +72,8 @@ import {
 import {
   ApplyModal,
   ExplanationTable,
-  SegmentCompare
+  SegmentCompare,
+  Segmentation312Compare
 } from "./ResegmentationReviewContent.jsx";
 import OrganizationListImportDrawer from "./OrganizationListImportDrawer.jsx";
 
@@ -126,6 +129,7 @@ function ReviewDrawer({ isOpen, onClose, org, result, onApply, isApplied }) {
     : [];
   const currentEMIndustry = readEMIndustryValue(result?.currentEMIndustry, "");
   const proposedEMIndustry = readEMIndustryValue(result?.proposedEMIndustry, "");
+  const isV312 = isV312Resegmentation(result);
 
   return (
     <>
@@ -160,6 +164,12 @@ function ReviewDrawer({ isOpen, onClose, org, result, onApply, isApplied }) {
               currentEMIndustry={currentEMIndustry}
               proposedEMIndustry={proposedEMIndustry}
             />
+            {isV312 ? (
+              <Segmentation312Compare
+                currentV312={result?.currentV312 || null}
+                proposedV312={result?.proposedV312 || null}
+              />
+            ) : null}
             <ExplanationTable
               explanations={currentExplanations}
               heading="Current Segmentation Reasoning"
@@ -206,6 +216,7 @@ export function ResegmentationToolPage({
   initialLists = [],
   initialError = null,
 }) {
+  const [strategy, setStrategy] = useState("legacy");
   const [singleQuery, setSingleQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searchError, setSearchError] = useState("");
@@ -327,6 +338,7 @@ export function ResegmentationToolPage({
         ""
       );
   const singleProposedEMIndustry = readEMIndustryValue(singleResult?.proposedEMIndustry, "");
+  const singleIsV312 = isV312Resegmentation(singleResult);
   const singleCurrentExplanations = readCurrentSegmentationExplanations(
     selectedOrganization?.record || null,
     singleResult
@@ -395,6 +407,7 @@ export function ResegmentationToolPage({
     try {
       const payload = await postResegmentationAction("segmentOrganization", {
         uuid: selectedOrganization.summary.uuid,
+        strategy,
         dryRun: true,
         includeExplanation: true
       });
@@ -417,6 +430,7 @@ export function ResegmentationToolPage({
 
     const payload = await postResegmentationAction("segmentOrganization", {
       uuid: selectedOrganization.summary.uuid,
+      strategy,
       dryRun: false,
       saveSalesforce,
       includeExplanation: true
@@ -518,6 +532,7 @@ export function ResegmentationToolPage({
     try {
       const payload = await postResegmentationAction("segmentOrganization", {
         uuid: org.uuid,
+        strategy,
         dryRun: true,
         includeExplanation: true
       });
@@ -567,6 +582,7 @@ export function ResegmentationToolPage({
   async function handleApplyListRow(org, options) {
     const payload = await postResegmentationAction("segmentOrganization", {
       uuid: org.uuid,
+      strategy,
       dryRun: false,
       saveSalesforce: options.saveSalesforce,
       includeExplanation: true
@@ -594,8 +610,29 @@ export function ResegmentationToolPage({
         Resegmentation
       </Heading>
       <Text color="gray.500" fontSize="sm" mb={6}>
-        Re-run organization segmentation to update industry and focus classifications.
+        Re-run organization segmentation using either the current legacy engine or the new 3.12 playbook engine.
       </Text>
+
+      <Box maxW="320px" mb={6}>
+        <Text fontSize="sm" fontWeight="medium" mb={2} color="gray.700">
+          Segmentation Strategy
+        </Text>
+        <Select
+          value={strategy}
+          onChange={(event) => {
+            setStrategy(event.target.value);
+            setSingleResult(null);
+            setSingleResultMessage("");
+            setHasSinglePreviewed(false);
+            setRowResults({});
+            setSegmentAllMessage("");
+            setReviewOrg(null);
+          }}
+        >
+          <option value="legacy">Legacy Industry / Focus</option>
+          <option value="v312">3.12 Playbook</option>
+        </Select>
+      </Box>
 
       {initialError ? (
         <Alert status="warning" borderRadius="md" mb={4}>
@@ -808,6 +845,16 @@ export function ResegmentationToolPage({
                       : "Run segmentation to preview the proposed updates."
                   }
                 />
+                {singleIsV312 ? (
+                  <Segmentation312Compare
+                    currentV312={
+                      singleResult?.currentV312 ||
+                      readSavedSegmentation312Payload(selectedOrganization?.record) ||
+                      null
+                    }
+                    proposedV312={singleResult?.proposedV312 || null}
+                  />
+                ) : null}
                 <ExplanationTable
                   explanations={singleCurrentExplanations}
                   heading="Current Segmentation Reasoning"

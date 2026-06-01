@@ -6,6 +6,12 @@ const ORGANIZATION_DETAIL_TABS = [
     loadingLabel: "Loading overview..."
   },
   {
+    key: "segmentation",
+    label: "Segmentation",
+    segment: "segmentation",
+    loadingLabel: "Loading segmentation..."
+  },
+  {
     key: "contacts",
     label: "Contacts",
     segment: "people",

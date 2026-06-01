@@ -6,7 +6,7 @@ const {
 /**
  * Parses one organization detail pathname into organization and tab segments.
  * @param {string|null|undefined} pathname
- * @returns {{organizationUUID: string, tabKey: "overview"|"contacts"|"jobs"|"outreach"|"similarOrganizations"|"locations"|"notes"}|null}
+ * @returns {{organizationUUID: string, tabKey: "overview"|"segmentation"|"contacts"|"jobs"|"outreach"|"similarOrganizations"|"locations"|"notes"}|null}
  */
 function parseOrganizationDetailPath(pathname) {
   if (typeof pathname !== "string") {
@@ -52,7 +52,7 @@ function isSameOrganizationDetailNavigation(options) {
  *   navigationState: string,
  *   navigationPathname?: string|null|undefined
  * }} options
- * @returns {{activeTabKey: "overview"|"contacts"|"jobs"|"outreach"|"similarOrganizations"|"locations"|"notes", isLoading: boolean, label: string|null}}
+ * @returns {{activeTabKey: "overview"|"segmentation"|"contacts"|"jobs"|"outreach"|"similarOrganizations"|"locations"|"notes", isLoading: boolean, label: string|null}}
  */
 function getOrganizationDetailTabUiState(options) {
   const current = parseOrganizationDetailPath(options.currentPathname);

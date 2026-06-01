@@ -382,6 +382,8 @@ export function OrganizationTabShimmer({ tabKey }) {
   switch (tabKey) {
     case "overview":
       return <OverviewShimmer />;
+    case "segmentation":
+      return <CardGridShimmer />;
     case "contacts":
     case "jobs":
       return <TableShimmer />;

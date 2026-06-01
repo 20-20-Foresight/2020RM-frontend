@@ -7,6 +7,24 @@ function isObjectLike(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function readObjectField(value, ...keys) {
+  if (!isObjectLike(value)) {
+    return undefined;
+  }
+
+  for (const key of keys) {
+    if (key == null) {
+      continue;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(value, key)) {
+      return value[key];
+    }
+  }
+
+  return undefined;
+}
+
 /**
  * Reads one trimmed string value.
  * @param {unknown} value
@@ -205,6 +223,28 @@ function readLegacySegmentation(record) {
     ? record.metadata.segmentation
     : null;
   if (metadataSegmentation) {
+    const normalizedStrategy =
+      (readTrimmedString(metadataSegmentation.strategy) || "").toLowerCase();
+    if (
+      normalizedStrategy === "v312" ||
+      Array.isArray(metadataSegmentation.verticals) ||
+      isObjectLike(
+        readObjectField(
+          metadataSegmentation,
+          "compatibilityProjection",
+          "compatibilityprojection"
+        )
+      )
+    ) {
+      const compatibilityProjection = readObjectField(
+        metadataSegmentation,
+        "compatibilityProjection",
+        "compatibilityprojection"
+      );
+      return isObjectLike(compatibilityProjection)
+        ? compatibilityProjection
+        : null;
+    }
     return metadataSegmentation;
   }
 

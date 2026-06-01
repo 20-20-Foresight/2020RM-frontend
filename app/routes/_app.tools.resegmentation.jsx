@@ -144,6 +144,7 @@ export async function action({ request }) {
         const result = await runOrganizationResegmentation({
           request,
           uuid,
+          strategy: readFormString(formData, "strategy") || "legacy",
           dryRun: readFormBoolean(formData, "dryRun", true),
           saveSalesforce: readFormBoolean(formData, "saveSalesforce", false),
           includeExplanation: readFormBoolean(formData, "includeExplanation", true),

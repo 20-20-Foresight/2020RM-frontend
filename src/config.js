@@ -14,6 +14,9 @@ const path = require("node:path");
  * @property {string} redirectPath
  * @property {{ firstName: string, lastName: string, email: string }} mockUser
  * @property {string} publicDir
+ * @property {string} chatbotBaseUrl
+ * @property {string} chatbotSharedToken
+ * @property {number} chatbotTimeoutMs
  */
 
 function requireEnv(name) {
@@ -69,6 +72,9 @@ function loadConfig() {
   const redirectPath = readStringEnv("MS_REDIRECT_PATH", "/auth/callback");
 
   const publicDir = readStringEnv("PUBLIC_DIR", path.resolve(__dirname, "../public"));
+  const chatbotBaseUrl = readStringEnv("CHATBOT_BASE_URL", "http://localhost:4018");
+  const chatbotSharedToken = readStringEnv("CHATBOT_SHARED_TOKEN", "dev-chatbot-token");
+  const chatbotTimeoutMs = readIntEnv("CHATBOT_TIMEOUT_MS", 120000);
 
   const mockUser = {
     firstName: readStringEnv("AUTH_MOCK_USER_FIRST_NAME", "Test"),
@@ -88,7 +94,10 @@ function loadConfig() {
     msApiScope,
     redirectPath,
     mockUser,
-    publicDir
+    publicDir,
+    chatbotBaseUrl,
+    chatbotSharedToken,
+    chatbotTimeoutMs
   };
 }
 

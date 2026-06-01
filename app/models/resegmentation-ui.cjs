@@ -11,6 +11,118 @@ function readTrimmedString(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function readNumericConfidence(value, fallback = 1) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function readObjectField(value, ...keys) {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  for (const key of keys) {
+    if (key == null) {
+      continue;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(value, key)) {
+      return value[key];
+    }
+  }
+
+  return undefined;
+}
+
+function normalizeAssessmentItem(value) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const itemValue = readTrimmedString(value.value);
+  if (!itemValue) {
+    return null;
+  }
+
+  return {
+    value: itemValue,
+    confidence: readNumericConfidence(value.confidence, 1),
+    reason: readTrimmedString(value.reason),
+    evidence: Array.isArray(value.evidence)
+      ? value.evidence.map((entry) => readTrimmedString(entry)).filter(Boolean)
+      : []
+  };
+}
+
+function normalizeAssessmentList(values) {
+  return (Array.isArray(values) ? values : [])
+    .map((entry) => normalizeAssessmentItem(entry))
+    .filter(Boolean);
+}
+
+function isV312Resegmentation(resegmentation) {
+  return readTrimmedString(resegmentation?.strategy).toLowerCase() === "v312";
+}
+
+function normalizeSegmentation312Summary(payload) {
+  const normalizedPayload =
+    payload && typeof payload === "object"
+      ? payload
+      : {};
+
+  return {
+    sector: normalizeAssessmentItem(normalizedPayload.sector),
+    verticals: normalizeAssessmentList(normalizedPayload.verticals),
+    emailIndustry: normalizeAssessmentItem(
+      readObjectField(normalizedPayload, "emailIndustry", "emailindustry")
+    ),
+    visibleKeywords: normalizeAssessmentList(
+      readObjectField(normalizedPayload, "visibleKeywords", "visiblekeywords")
+    ),
+    allKeywords: normalizeAssessmentList(
+      readObjectField(normalizedPayload, "allKeywords", "allkeywords")
+    ),
+    overallAssessment:
+      normalizeAssessmentItem(
+        readObjectField(normalizedPayload, "overallAssessment", "overallassessment")
+      ) || {
+        value: "",
+        confidence: 1,
+        reason: "",
+        evidence: []
+      }
+  };
+}
+
+function readSavedSegmentation312Payload(record) {
+  const metadataSegmentation =
+    record?.metadata?.segmentation && typeof record.metadata.segmentation === "object"
+      ? record.metadata.segmentation
+      : null;
+  if (
+    metadataSegmentation &&
+    (readTrimmedString(metadataSegmentation.strategy).toLowerCase() === "v312" ||
+      Array.isArray(metadataSegmentation.verticals) ||
+      (readObjectField(
+        metadataSegmentation,
+        "compatibilityProjection",
+        "compatibilityprojection"
+      ) &&
+        typeof readObjectField(
+          metadataSegmentation,
+          "compatibilityProjection",
+          "compatibilityprojection"
+        ) === "object"))
+  ) {
+    return metadataSegmentation;
+  }
+
+  return record?.metadata?.segmentationV312 &&
+    typeof record.metadata.segmentationV312 === "object"
+    ? record.metadata.segmentationV312
+    : null;
+}
+
 /**
  * Normalize one segmentation summary for resegmentation visuals.
  * Sector is intentionally excluded from this UI for now.
@@ -201,6 +313,29 @@ function applyResegmentationToRecord(record, resegmentation) {
       ? JSON.parse(JSON.stringify(record))
       : {};
   nextRecord.metadata ||= {};
+  if (isV312Resegmentation(resegmentation)) {
+    const proposedPayload =
+      resegmentation?.proposedV312 && typeof resegmentation.proposedV312 === "object"
+        ? resegmentation.proposedV312
+        : null;
+    nextRecord.currentEMIndustry =
+      readTrimmedString(proposedPayload?.emailIndustry?.value) || "";
+    nextRecord.metadata.segmentation = proposedPayload;
+    delete nextRecord.metadata.segmentationV312;
+    nextRecord.entityDimensionProjection = {
+      industry: (resegmentation?.proposed?.industry || []).map((name) => ({
+        name,
+        score: 1,
+        reasons: []
+      })),
+      focus: (resegmentation?.proposed?.focus || []).map((name) => ({
+        name,
+        score: 1,
+        reasons: []
+      }))
+    };
+    return nextRecord;
+  }
   nextRecord.currentEMIndustry = readTrimmedString(resegmentation?.proposedEMIndustry) || "";
   nextRecord.metadata.segmentation = {
     sector: resegmentation?.proposed?.sector || null,
@@ -237,6 +372,23 @@ function buildAppliedResult(resegmentation) {
     return null;
   }
 
+  if (isV312Resegmentation(resegmentation)) {
+    return {
+      ...resegmentation,
+      current: resegmentation.proposed || resegmentation.current || null,
+      currentV312: resegmentation.proposedV312 || resegmentation.currentV312 || null,
+      currentEMIndustry:
+        readTrimmedString(resegmentation?.proposedV312?.emailIndustry?.value) ||
+        readTrimmedString(resegmentation?.currentV312?.emailIndustry?.value) ||
+        "",
+      currentExplanations: Array.isArray(resegmentation.explanations)
+        ? resegmentation.explanations
+        : Array.isArray(resegmentation.currentExplanations)
+          ? resegmentation.currentExplanations
+          : []
+    };
+  }
+
   return {
     ...resegmentation,
     current: resegmentation.proposed || resegmentation.current || null,
@@ -257,6 +409,8 @@ module.exports = {
   buildAppliedResult,
   buildExplanationSegmentationLabel,
   hasVisibleSegmentationSummary,
+  isV312Resegmentation,
+  normalizeSegmentation312Summary,
   normalizeSegmentationVisualSummary,
   readEMIndustryValue,
   readCurrentSegmentationExplanations,
@@ -266,6 +420,7 @@ module.exports = {
   readDisplayedExplanationScore,
   readProposedSegmentationExplanations,
   readRecordSegmentationExplanations,
+  readSavedSegmentation312Payload,
   readPrimaryValue,
   readTrimmedString
 };

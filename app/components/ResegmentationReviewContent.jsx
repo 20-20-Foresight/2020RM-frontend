@@ -36,6 +36,7 @@ import {
 } from "@chakra-ui/react";
 import {
   buildExplanationSegmentationLabel,
+  normalizeSegmentation312Summary,
   normalizeSegmentationVisualSummary,
   readEMIndustryValue,
   readDisplayedExplanations
@@ -288,6 +289,157 @@ export function SegmentCompare({
             {emptyProposedMessage}
           </Text>
         )}
+      </Box>
+    </SimpleGrid>
+  );
+}
+
+function AssessmentTagList({ items = [], colorScheme = "blue" }) {
+  if (!Array.isArray(items) || !items.length) {
+    return (
+      <Text color="gray.400" fontSize="sm">
+        Not set
+      </Text>
+    );
+  }
+
+  return (
+    <Wrap spacing={2}>
+      {items.map((item) => (
+        <WrapItem key={`${item.value}-${item.confidence}`}>
+          <Tag size="md" colorScheme={colorScheme} borderRadius="full">
+            <TagLabel>{`${item.value} (${item.confidence}/5)`}</TagLabel>
+          </Tag>
+        </WrapItem>
+      ))}
+    </Wrap>
+  );
+}
+
+/**
+ * Renders the v3.12 playbook output.
+ * @param {{currentV312?: object|null, proposedV312?: object|null}} props
+ * @returns {JSX.Element|null}
+ */
+export function Segmentation312Compare({ currentV312, proposedV312 }) {
+  const current = normalizeSegmentation312Summary(currentV312);
+  const proposed = normalizeSegmentation312Summary(proposedV312);
+  const panelBg = useColorModeValue("gray.50", "gray.700");
+  const newBg = useColorModeValue("green.50", "green.900");
+
+  if (
+    !current.sector &&
+    !proposed.sector &&
+    !current.verticals.length &&
+    !proposed.verticals.length &&
+    !current.emailIndustry &&
+    !proposed.emailIndustry
+  ) {
+    return null;
+  }
+
+  function renderAssessmentBlock(label, value, fallbackColor = "gray.400") {
+    if (!value?.value) {
+      return (
+        <Box>
+          <Text fontSize="xs" color="gray.500" mb={1}>
+            {label}
+          </Text>
+          <Text fontSize="sm" color={fallbackColor}>
+            Not set
+          </Text>
+        </Box>
+      );
+    }
+
+    return (
+      <Box>
+        <Text fontSize="xs" color="gray.500" mb={1}>
+          {label}
+        </Text>
+        <Text fontSize="sm" fontWeight="semibold">
+          {`${value.value} (${value.confidence}/5)`}
+        </Text>
+        {value.reason ? (
+          <Text fontSize="sm" color="gray.600" mt={1}>
+            {value.reason}
+          </Text>
+        ) : null}
+      </Box>
+    );
+  }
+
+  return (
+    <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={4} mt={4}>
+      <Box p={4} borderRadius="md" border="1px solid" borderColor="gray.200" bg={panelBg}>
+        <Text
+          fontSize="xs"
+          fontWeight="bold"
+          color="gray.500"
+          textTransform="uppercase"
+          letterSpacing="wide"
+          mb={3}
+        >
+          Current Playbook Output
+        </Text>
+        <Stack spacing={4}>
+          {renderAssessmentBlock("Sector", current.sector)}
+          <Box>
+            <Text fontSize="xs" color="gray.500" mb={1}>
+              Verticals
+            </Text>
+            <AssessmentTagList items={current.verticals} colorScheme="gray" />
+          </Box>
+          {renderAssessmentBlock("Email Industry", current.emailIndustry)}
+          <Box>
+            <Text fontSize="xs" color="gray.500" mb={1}>
+              Visible Keywords
+            </Text>
+            <AssessmentTagList items={current.visibleKeywords} colorScheme="gray" />
+          </Box>
+        </Stack>
+      </Box>
+
+      <Box p={4} borderRadius="md" border="1px solid" borderColor="green.200" bg={newBg}>
+        <Text
+          fontSize="xs"
+          fontWeight="bold"
+          color="green.600"
+          textTransform="uppercase"
+          letterSpacing="wide"
+          mb={3}
+        >
+          Proposed Playbook Output
+        </Text>
+        <Stack spacing={4}>
+          {renderAssessmentBlock("Sector", proposed.sector)}
+          <Box>
+            <Text fontSize="xs" color="gray.500" mb={1}>
+              Verticals
+            </Text>
+            <AssessmentTagList items={proposed.verticals} colorScheme="green" />
+          </Box>
+          {renderAssessmentBlock("Email Industry", proposed.emailIndustry)}
+          <Box>
+            <Text fontSize="xs" color="gray.500" mb={1}>
+              Visible Keywords
+            </Text>
+            <AssessmentTagList items={proposed.visibleKeywords} colorScheme="green" />
+          </Box>
+          {proposed.overallAssessment?.reason ? (
+            <Box borderWidth="1px" borderColor="green.200" borderRadius="md" bg="whiteAlpha.600" p={3}>
+              <Text fontSize="xs" color="gray.500" mb={1}>
+                Overall Assessment
+              </Text>
+              <Text fontSize="sm" fontWeight="semibold">
+                {`${proposed.overallAssessment.value || "Best Guess"} (${proposed.overallAssessment.confidence}/5)`}
+              </Text>
+              <Text fontSize="sm" color="gray.600" mt={1}>
+                {proposed.overallAssessment.reason}
+              </Text>
+            </Box>
+          ) : null}
+        </Stack>
       </Box>
     </SimpleGrid>
   );

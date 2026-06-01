@@ -32,7 +32,7 @@ function buildEntityDetailPath(entityType, uuid) {
 /**
  * Returns one organization detail-tab route for one organization UUID.
  * @param {string|null|undefined} uuid
- * @param {"overview"|"contacts"|"jobs"|"outreach"|"similarOrganizations"|"locations"|"notes"} tabKey
+ * @param {"overview"|"segmentation"|"contacts"|"jobs"|"outreach"|"similarOrganizations"|"locations"|"notes"} tabKey
  * @returns {string|null}
  */
 function buildOrganizationDetailTabPath(uuid, tabKey) {

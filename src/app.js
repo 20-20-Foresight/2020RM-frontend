@@ -557,6 +557,175 @@ function createApp(config, remixHandler, deps = {}) {
     });
   }
 
+  app.post(
+    "/api/rest/organization/:organizationId/segmentation-review/chat",
+    express.json({ limit: "2mb" }),
+    requireSessionAuth,
+    async (req, res) => {
+      const organizationId =
+        typeof req.params?.organizationId === "string"
+          ? req.params.organizationId.trim()
+          : "";
+      if (!organizationId) {
+        return res.status(400).json({
+          error: "invalid_uuid",
+          message: 'Route parameter "organizationId" is required.',
+        });
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), config.chatbotTimeoutMs);
+
+      try {
+        const target = new URL("/api/segmentation-review", config.chatbotBaseUrl);
+        const chatbotResponse = await fetch(target, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-2020rm-chatbot-token": config.chatbotSharedToken,
+            "x-2020rm-auth-disabled": config.authEnabled ? "false" : "true",
+            "x-2020rm-transport-base-url": config.backendBaseUrl,
+            ...(req.accessToken ? { "x-2020rm-access-token": req.accessToken } : {}),
+          },
+          body: JSON.stringify({
+            uuid: organizationId,
+            messages: Array.isArray(req.body?.messages) ? req.body.messages : [],
+          }),
+          signal: controller.signal,
+        });
+
+        const bodyBuffer = Buffer.from(await chatbotResponse.arrayBuffer());
+        res.status(chatbotResponse.status);
+        chatbotResponse.headers.forEach((value, key) => {
+          if (["content-encoding", "transfer-encoding"].includes(key.toLowerCase())) {
+            return;
+          }
+          res.setHeader(key, value);
+        });
+
+        return res.send(bodyBuffer);
+      } catch (error) {
+        const isAbortError =
+          error instanceof Error &&
+          (error.name === "AbortError" || /aborted/i.test(error.message));
+        const isUnavailableError =
+          error instanceof Error &&
+          (/fetch failed/i.test(error.message) ||
+            /econnrefused/i.test(error.message) ||
+            /connect/i.test(error.message));
+
+        log.error("chatbot proxy error", {
+          organizationId,
+          userEmail: req.user?.email || "unknown",
+          message: error instanceof Error ? error.message : "chatbot_proxy_error",
+        });
+
+        return res.status(isAbortError ? 504 : 502).json({
+          error: isAbortError ? "chatbot_timeout" : "chatbot_proxy_error",
+          message: isAbortError
+            ? "Chatbot request timed out."
+            : isUnavailableError
+              ? "Segmentation Review AI is not available right now."
+            : error instanceof Error
+              ? error.message
+              : "Chatbot request failed.",
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+  );
+
+  app.post(
+    "/api/rest/organization/:organizationId/segmentation-review/actions",
+    express.json({ limit: "2mb" }),
+    requireSessionAuth,
+    async (req, res) => {
+      const organizationId =
+        typeof req.params?.organizationId === "string"
+          ? req.params.organizationId.trim()
+          : "";
+      if (!organizationId) {
+        return res.status(400).json({
+          error: "invalid_uuid",
+          message: 'Route parameter "organizationId" is required.',
+        });
+      }
+
+      const action =
+        req.body && typeof req.body === "object" && req.body.action && typeof req.body.action === "object"
+          ? req.body.action
+          : null;
+      if (!action || typeof action.type !== "string" || !action.type.trim()) {
+        return res.status(400).json({
+          error: "invalid_action",
+          message: 'Body field "action.type" is required.',
+        });
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), config.chatbotTimeoutMs);
+
+      try {
+        const target = new URL("/api/segmentation-review/actions", config.chatbotBaseUrl);
+        const chatbotResponse = await fetch(target, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-2020rm-chatbot-token": config.chatbotSharedToken,
+            "x-2020rm-auth-disabled": config.authEnabled ? "false" : "true",
+            "x-2020rm-transport-base-url": config.backendBaseUrl,
+            ...(req.accessToken ? { "x-2020rm-access-token": req.accessToken } : {}),
+          },
+          body: JSON.stringify({
+            uuid: organizationId,
+            action,
+          }),
+          signal: controller.signal,
+        });
+
+        const bodyBuffer = Buffer.from(await chatbotResponse.arrayBuffer());
+        res.status(chatbotResponse.status);
+        chatbotResponse.headers.forEach((value, key) => {
+          if (["content-encoding", "transfer-encoding"].includes(key.toLowerCase())) {
+            return;
+          }
+          res.setHeader(key, value);
+        });
+
+        return res.send(bodyBuffer);
+      } catch (error) {
+        const isAbortError =
+          error instanceof Error &&
+          (error.name === "AbortError" || /aborted/i.test(error.message));
+        const isUnavailableError =
+          error instanceof Error &&
+          (/fetch failed/i.test(error.message) ||
+            /econnrefused/i.test(error.message) ||
+            /connect/i.test(error.message));
+
+        log.error("chatbot action proxy error", {
+          organizationId,
+          userEmail: req.user?.email || "unknown",
+          message: error instanceof Error ? error.message : "chatbot_action_proxy_error",
+        });
+
+        return res.status(isAbortError ? 504 : 502).json({
+          error: isAbortError ? "chatbot_timeout" : "chatbot_proxy_error",
+          message: isAbortError
+            ? "Chatbot action request timed out."
+            : isUnavailableError
+              ? "Segmentation Review AI is not available right now."
+              : error instanceof Error
+                ? error.message
+                : "Chatbot action request failed.",
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+  );
+
   app.get("/auth/login", async (req, res, next) => {
     try {
       const returnTo = normalizeReturnToPath(

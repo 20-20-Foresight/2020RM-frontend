@@ -117,6 +117,29 @@ function getAppLoadingOverlayState(options) {
     };
   }
 
+  if (
+    pendingPathname === options.currentPathname &&
+    (isAdminDataPath(pendingPathname) || isSegmentationPath(pendingPathname))
+  ) {
+    return {
+      isLoading: false,
+      isSubmitting: false,
+      label: null
+    };
+  }
+
+  if (
+    isSubmitting &&
+    isAdminDataPath(pendingPathname) &&
+    pendingPathname === options.currentPathname
+  ) {
+    return {
+      isLoading: false,
+      isSubmitting: false,
+      label: null
+    };
+  }
+
   if (isSubmitting && isAdminDataPath(pendingPathname)) {
     return {
       isLoading: true,

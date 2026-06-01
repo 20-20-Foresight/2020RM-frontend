@@ -146,7 +146,7 @@ test("loading overlay ignores same-person detail tab navigations so the page can
   );
 });
 
-test("loading overlay preserves saving copy for admin data submissions", () => {
+test("loading overlay ignores same-route admin data submissions", () => {
   assert.deepEqual(
     getAppLoadingOverlayState({
       currentPathname: "/admin/data/crm.data%3Acompany%20abbreviations",
@@ -155,9 +155,25 @@ test("loading overlay preserves saving copy for admin data submissions", () => {
       fetcherStates: []
     }),
     {
-      isLoading: true,
-      isSubmitting: true,
-      label: "Saving changes..."
+      isLoading: false,
+      isSubmitting: false,
+      label: null
+    }
+  );
+});
+
+test("loading overlay ignores same-route admin data reloads", () => {
+  assert.deepEqual(
+    getAppLoadingOverlayState({
+      currentPathname: "/admin/data/segmentation/keywords",
+      navigationState: "loading",
+      navigationPathname: "/admin/data/segmentation/keywords",
+      fetcherStates: []
+    }),
+    {
+      isLoading: false,
+      isSubmitting: false,
+      label: null
     }
   );
 });
@@ -183,7 +199,7 @@ test("loading overlay ignores inline fetcher saves on the current admin data pag
   );
 });
 
-test("loading overlay uses segmentation-specific copy for segmentation navigations and saves", () => {
+test("loading overlay uses segmentation-specific copy for navigations but not same-route segmentation saves", () => {
   assert.deepEqual(
     getAppLoadingOverlayState({
       currentPathname: "/admin/segmentation/sectors",
@@ -206,9 +222,9 @@ test("loading overlay uses segmentation-specific copy for segmentation navigatio
       fetcherStates: []
     }),
     {
-      isLoading: true,
-      isSubmitting: true,
-      label: "Saving changes..."
+      isLoading: false,
+      isSubmitting: false,
+      label: null
     }
   );
 });

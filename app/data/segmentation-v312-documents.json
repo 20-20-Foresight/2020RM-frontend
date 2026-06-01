@@ -1,0 +1,1525 @@
+[
+  {
+    "slug": "sector",
+    "title": "Sector",
+    "summary": "Top-level business definitions and decision guidance for deciding the broadest classification.",
+    "definitions": [
+      {
+        "id": "sector-real-estate",
+        "key": "real-estate",
+        "label": "Real Estate",
+        "description": "The company's primary business is owning, operating, transacting, financing, or servicing property assets. Real property is central to what the company is, not just one exposure among many.\n\n\na",
+        "examples": [
+          "Owner-operators",
+          "REITs",
+          "Brokers",
+          "Property managers",
+          "Real estate lenders"
+        ],
+        "notes": [
+          "Use this when property is clearly the business model.",
+          "Do not use this when real estate is just one exposure inside a broader capital or service platform."
+        ]
+      },
+      {
+        "id": "sector-financial-services",
+        "key": "financial-services",
+        "label": "Financial Services",
+        "description": "The company's primary business is deploying, advising on, underwriting, trading, structuring, or servicing capital and financial products. Real estate may appear in the portfolio, but property is not the main operating identity.",
+        "examples": [
+          "Asset managers",
+          "Banks",
+          "Private credit platforms",
+          "Investment advisors",
+          "Broker-dealers"
+        ],
+        "notes": [
+          "Use this when the firm feels capital-led rather than property-led.",
+          "Family office language is not enough on its own; look for what the capital is actually being deployed into."
+        ]
+      },
+      {
+        "id": "sector-recruiting",
+        "key": "recruiting",
+        "label": "Recruiting",
+        "description": "The company's primary business is talent placement, executive search, recruiting process support, or staffing. The sector may still specialize by end market, but the business model is recruiting.",
+        "examples": [
+          "Executive search firms",
+          "Recruiters focused on real estate",
+          "Recruiters focused on finance"
+        ],
+        "notes": [
+          "Treat end-market specialization as a downstream clue, not the top-level sector.",
+          "A real estate company hiring aggressively is still Real Estate, not Recruiting."
+        ]
+      },
+      {
+        "id": "sector-other",
+        "key": "other",
+        "label": "Other",
+        "description": "The company does not fit one of the primary marketed sectors with enough confidence, or the available evidence is too weak or too mixed to place it cleanly elsewhere.",
+        "examples": [
+          "Universities",
+          "Media companies",
+          "Legal services",
+          "Generic holding companies with weak evidence"
+        ],
+        "notes": [
+          "This is a fallback, not a target state.",
+          "Return it with an explicit reason when the available evidence is genuinely weak or conflicting."
+        ]
+      }
+    ],
+    "rules": [
+      {
+        "id": "sector-business-model",
+        "name": "Start With The Primary Business Model",
+        "directive": "Before you look at isolated keywords, decide whether the company primarily makes money by owning property, deploying capital, or placing talent. Use that operating model as the first sector decision.",
+        "why": "This reduces false positives created by websites that mention many adjacent services or markets.",
+        "signals": [
+          "Revenue model language",
+          "Company about page",
+          "Service list",
+          "Leadership titles"
+        ],
+        "examples": [
+          "\"We acquire and operate\" points toward Real Estate.",
+          "\"We invest across credit and equity strategies\" points toward Financial Services."
+        ],
+        "stopCondition": "If the company's business model is explicit and consistent across multiple fields, stop sector analysis."
+      },
+      {
+        "id": "sector-property-led",
+        "name": "Favor Property-Led Identity Over Loose Real Estate Exposure",
+        "directive": "Do not classify a company as Real Estate just because it mentions property, lenders, or portfolio exposure. Choose Real Estate only when property is central to what the company actually is.",
+        "why": "Many finance, legal, and recruiting firms use real-estate-heavy language without being real estate companies.",
+        "signals": [
+          "Ownership language",
+          "Property operations",
+          "Development pipeline",
+          "Asset-class specialization"
+        ],
+        "examples": [
+          "A credit fund with a real estate sleeve can still be Financial Services.",
+          "A law firm serving developers is not Real Estate."
+        ],
+        "stopCondition": ""
+      },
+      {
+        "id": "sector-entity-separation",
+        "name": "Use Entity Separation As An Override",
+        "directive": "When the company JSON represents a distinct legal or branded entity, classify that entity on its own merits even if the parent group operates in another sector.",
+        "why": "The business wants each marketed entity classified on what it actually is.",
+        "signals": [
+          "Separate brand",
+          "Separate website copy",
+          "Separate legal entity context"
+        ],
+        "examples": [
+          "A recruiting affiliate inside an investment platform can still be Recruiting.",
+          "A capital markets subsidiary can still be Financial Services even if the parent touches property."
+        ],
+        "stopCondition": ""
+      },
+      {
+        "id": "sector-title-tiebreaker",
+        "name": "Let Leadership Titles Break Ties",
+        "directive": "If the website copy is broad or fuzzy, use the subset of people and titles to infer the operating center of gravity. Investment titles support capital-led models, brokerage titles support service-led real estate, and search titles support recruiting.",
+        "why": "Titles often clarify the business model when marketing copy is vague.",
+        "signals": [
+          "Chief Investment Officer",
+          "Managing Director, Acquisitions",
+          "Broker",
+          "Managing Partner, Search"
+        ],
+        "examples": [
+          "A team dominated by acquisitions and asset-management roles supports Real Estate.",
+          "A team dominated by recruiters and talent-partner titles supports Recruiting."
+        ],
+        "stopCondition": ""
+      },
+      {
+        "id": "sector-best-guess",
+        "name": "Return Best Guess With Confidence",
+        "directive": "Always return a sector, even when evidence is incomplete. Lower the confidence score and explain the missing or conflicting evidence instead of refusing to classify.",
+        "why": "The product decision is to prefer best guesses with confidence over blanks.",
+        "signals": [
+          "Sparse website",
+          "Mixed signals",
+          "Conflicting service descriptions"
+        ],
+        "examples": [
+          "\"Best guess: Financial Services because debt and capital-markets language dominates, but confidence is 2/5 because property language is also present.\""
+        ],
+        "stopCondition": ""
+      }
+    ]
+  },
+  {
+    "slug": "vertical",
+    "title": "Vertical",
+    "summary": "Primary operating identities inside each sector, with the guidance for deciding which one wins.",
+    "definitions": [
+      {
+        "id": "vertical-re-investment-company",
+        "key": "re-investment-company",
+        "label": "Real Estate Investment Company",
+        "description": "A principal business that owns, acquires, develops, or operates property on its own balance sheet or on behalf of an investment vehicle. The company is acting as owner or sponsor rather than agent.",
+        "examples": [
+          "REIT",
+          "Owner-operator",
+          "Sponsor",
+          "Private equity real estate platform"
+        ],
+        "notes": [
+          "Signals include acquisitions, asset management, portfolio ownership, capital deployment, and development under ownership."
+        ]
+      },
+      {
+        "id": "vertical-re-services",
+        "key": "re-services",
+        "label": "Real Estate Services",
+        "description": "A service-led real estate business that represents clients, manages assets for others, advises on transactions, or provides operating support without being the principal owner of the underlying properties.",
+        "examples": [
+          "Commercial brokerage",
+          "Third-party property management",
+          "Tenant rep",
+          "Appraisal",
+          "Advisory"
+        ],
+        "notes": [
+          "The key distinction is agency or client service rather than principal ownership."
+        ]
+      },
+      {
+        "id": "vertical-re-finance",
+        "key": "re-finance",
+        "label": "Real Estate Finance",
+        "description": "A real estate-focused capital provider or finance platform. The firm lends against property, structures debt, or operates primarily on the financing side of the asset rather than the ownership or brokerage side.",
+        "examples": [
+          "Bridge lender",
+          "Mortgage REIT",
+          "Debt fund",
+          "Real estate credit platform"
+        ],
+        "notes": [
+          "Use this when the company's core identity is lending or structured real estate finance."
+        ]
+      },
+      {
+        "id": "vertical-financial-platform",
+        "key": "financial-platform",
+        "label": "Financial Services Platform",
+        "description": "A finance-led company whose clearest identity is investing, advising, underwriting, structuring, or managing financial products rather than property or recruiting services.",
+        "examples": [
+          "Asset manager",
+          "Investment bank",
+          "Private credit fund",
+          "Wealth platform"
+        ],
+        "notes": [
+          "This is a starter vertical until the finance playbook expands."
+        ]
+      },
+      {
+        "id": "vertical-recruiting-firm",
+        "key": "recruiting-firm",
+        "label": "Recruiting Firm",
+        "description": "A company primarily engaged in search, staffing, or placement. Sector specialization should be reflected in keywords and email industry, not by changing the core vertical away from recruiting.",
+        "examples": [
+          "Executive recruiter",
+          "Search boutique",
+          "Talent advisory firm"
+        ],
+        "notes": [
+          "Use specialization clues such as real estate or finance downstream."
+        ]
+      },
+      {
+        "id": "vertical-other",
+        "key": "other",
+        "label": "Other / Unclear",
+        "description": "A fallback vertical when the company cannot be cleanly placed from the available evidence, or when the sector is weakly supported and no specific operating model stands out.",
+        "examples": [
+          "Mixed holding companies",
+          "Very sparse websites",
+          "Unclear shell entities"
+        ],
+        "notes": [
+          "Return with low confidence and explain what evidence was missing."
+        ]
+      }
+    ],
+    "rules": [
+      {
+        "id": "vertical-re-core-split",
+        "name": "Inside Real Estate, Decide Principal vs Service vs Lender",
+        "directive": "If the sector is Real Estate, determine whether the company is primarily a principal owner or investor, a service or advisory firm, or a finance platform. This distinction should drive the vertical more than asset-class keywords.",
+        "why": "This is the core structural distinction in the guidebook.",
+        "signals": [
+          "Owns and operates",
+          "Represents clients",
+          "Provides loans",
+          "Debt capital",
+          "Third-party management"
+        ],
+        "examples": [
+          "\"Own, acquire, and develop\" points to Real Estate Investment Company.",
+          "\"Tenant representation\" points to Real Estate Services.",
+          "\"Bridge lending\" points to Real Estate Finance."
+        ],
+        "stopCondition": "If principal, service, or lender identity is explicit, stop further vertical debate."
+      },
+      {
+        "id": "vertical-one-winner",
+        "name": "Choose One Primary Vertical Even If Multiple Are Plausible",
+        "directive": "Return one winning vertical. You may mention alternatives in the reason, but the visible output should still have one primary answer.",
+        "why": "The product direction is that users expect one vertical to win in the wash.",
+        "signals": [
+          "Strongest business-model evidence",
+          "Repeated role titles",
+          "Service-line prominence"
+        ],
+        "examples": [
+          "A brokerage-investment hybrid can still resolve to Real Estate Services if agency work is the dominant public identity."
+        ],
+        "stopCondition": ""
+      },
+      {
+        "id": "vertical-title-resolution",
+        "name": "Use Titles To Resolve Fuzzy Marketing Copy",
+        "directive": "When the homepage is generic, inspect leadership titles and personnel clues. Acquisitions, investments, and asset management lean principal; brokers and tenant reps lean services; lending and originations lean finance; search titles lean recruiting.",
+        "why": "The product will deliberately send person name and title subsets for this purpose.",
+        "signals": [
+          "Acquisitions",
+          "Originations",
+          "Broker",
+          "Search consultant"
+        ],
+        "examples": [
+          "A firm with generic copy but multiple Managing Directors of Originations should resolve to Real Estate Finance."
+        ],
+        "stopCondition": ""
+      },
+      {
+        "id": "vertical-sector-respect",
+        "name": "Keep Vertical Consistent With The Sector Decision",
+        "directive": "Do not let a single keyword drag the company into an incompatible vertical. Once the sector is decided, choose from the verticals that actually fit that sector unless the sector itself should be reconsidered.",
+        "why": "This keeps the hierarchy coherent and easier for users to understand.",
+        "signals": [
+          "Sector confidence",
+          "Dominant business model",
+          "Cross-check against titles"
+        ],
+        "examples": [
+          "A finance-led company mentioning acquisitions should still resolve to a finance-oriented vertical if ownership evidence is weak."
+        ],
+        "stopCondition": ""
+      }
+    ]
+  },
+  {
+    "slug": "keywords",
+    "title": "Keywords",
+    "summary": "Business phrases used as evidence, output, and user-facing explanation, including what gets shown versus held internally.",
+    "definitions": [
+      {
+        "id": "keyword-acquisitions",
+        "key": "acquisitions",
+        "label": "Acquisitions",
+        "visible": false,
+        "description": "Signals buying, sourcing, or underwriting assets, businesses, or portfolios.",
+        "examples": [
+          "Acquisition team",
+          "Portfolio acquisitions",
+          "Deal sourcing"
+        ],
+        "notes": [
+          "Strong support for principal investment models when paired with ownership language."
+        ]
+      },
+      {
+        "id": "keyword-asset-management",
+        "key": "asset-management",
+        "label": "Asset Management",
+        "description": "Signals active management of owned or invested assets to improve returns, occupancy, operations, or performance.",
+        "examples": [
+          "Asset management",
+          "Portfolio management",
+          "Value creation"
+        ],
+        "notes": [
+          "Often supports Real Estate Investment or Financial Services depending on the rest of the context."
+        ]
+      },
+      {
+        "id": "keyword-bridge-loan",
+        "key": "bridge-loan",
+        "label": "Bridge Loan",
+        "description": "Signals short-term real estate lending or transitional financing.",
+        "examples": [
+          "Bridge lending",
+          "Bridge debt",
+          "Transitional financing"
+        ],
+        "notes": [
+          "Strong signal toward Real Estate Finance."
+        ]
+      },
+      {
+        "id": "keyword-commercial-brokerage",
+        "key": "commercial-brokerage",
+        "label": "Commercial Brokerage",
+        "description": "Signals brokerage activity representing landlords, tenants, buyers, or sellers in commercial property.",
+        "examples": [
+          "Investment sales",
+          "Tenant representation",
+          "Leasing brokerage"
+        ],
+        "notes": [
+          "Strong signal toward Real Estate Services or Big Brokerage email industry."
+        ]
+      },
+      {
+        "id": "keyword-development",
+        "key": "development",
+        "label": "Development",
+        "description": "Signals creating or materially repositioning property or platforms from planning through execution.",
+        "examples": [
+          "Ground-up development",
+          "Redevelopment",
+          "Entitlements"
+        ],
+        "notes": [
+          "Can support Real Estate Investment or broader finance-led ownership strategies depending on who owns the risk."
+        ]
+      },
+      {
+        "id": "keyword-family-office",
+        "key": "family-office",
+        "label": "Family Office",
+        "description": "Signals capital managed on behalf of one or more families, often with long hold periods and flexible mandates.",
+        "examples": [
+          "Single-family office",
+          "Multi-family office",
+          "Direct family capital"
+        ],
+        "notes": [
+          "Treat carefully. It becomes stronger when paired with clear asset-class language."
+        ]
+      },
+      {
+        "id": "keyword-multifamily",
+        "key": "multifamily",
+        "label": "Multi-Family",
+        "description": "Signals apartments or housing assets with multiple units.",
+        "examples": [
+          "Apartments",
+          "Multi-family housing",
+          "Workforce housing"
+        ],
+        "notes": [
+          "Useful for RE Residential, PE RE, and visible keyword output."
+        ]
+      },
+      {
+        "id": "keyword-private-credit",
+        "key": "private-credit",
+        "label": "Private Credit",
+        "description": "Signals private lending, debt investing, or credit-focused capital strategies.",
+        "examples": [
+          "Private lender",
+          "Debt fund",
+          "Direct lending"
+        ],
+        "notes": [
+          "Often supports Financial Services or Real Estate Finance."
+        ]
+      },
+      {
+        "id": "keyword-proptech",
+        "key": "proptech",
+        "label": "PropTech",
+        "description": "Signals software, data, or technology products serving the property ecosystem.",
+        "examples": [
+          "Property technology",
+          "Real estate analytics",
+          "Automation for operators"
+        ],
+        "notes": [
+          "May support Real Estate Services, Services, or Prop Tech-style email industries depending on the company model."
+        ]
+      },
+      {
+        "id": "keyword-third-party-pm",
+        "key": "third-party-property-management",
+        "label": "3rd Party Property Management",
+        "description": "Signals management of buildings on behalf of clients rather than management of the company's own portfolio.",
+        "examples": [
+          "Third-party property management",
+          "Client portfolio operations",
+          "Management services"
+        ],
+        "notes": [
+          "Explicitly distinguish from owner-led in-house property management."
+        ]
+      },
+      {
+        "id": "keyword-reit",
+        "key": "reit",
+        "label": "REIT",
+        "description": "Signals a publicly traded or private real estate investment trust structure owning, financing, or operating income-producing property.",
+        "examples": [
+          "Equity REIT",
+          "Public REIT",
+          "Listed real estate trust"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-private-equity",
+        "key": "private-equity",
+        "label": "Private Equity",
+        "description": "Signals sponsor-led private equity capital pursuing control, platform building, or value creation investments.",
+        "examples": [
+          "Private equity sponsor",
+          "Control investments",
+          "Value creation platform"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-institutional",
+        "key": "institutional",
+        "label": "Institutional",
+        "description": "Signals an institutional-grade investment, ownership, or client profile tied to pensions, endowments, sovereign capital, or large asset managers.",
+        "examples": [
+          "Institutional capital",
+          "Pension clients",
+          "Endowment-backed strategy"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-leasing",
+        "key": "leasing",
+        "label": "Leasing",
+        "description": "Signals a leasing-focused business line involving tenanting, occupancy growth, or representation around lease transactions.",
+        "examples": [
+          "Agency leasing",
+          "Lease-up strategy",
+          "Occupancy growth"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-transactions",
+        "key": "transactions",
+        "label": "Transactions",
+        "description": "Signals deal execution work around purchases, sales, financings, recapitalizations, or other transaction events.",
+        "examples": [
+          "Transaction advisory",
+          "Deal execution",
+          "Recapitalization activity"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-investment-management",
+        "key": "investment-management",
+        "label": "Investment Management",
+        "description": "Signals discretionary or advisory management of investment portfolios, funds, or capital programs.",
+        "examples": [
+          "Fund management",
+          "Portfolio oversight",
+          "Discretionary capital management"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-property-management",
+        "key": "property-management",
+        "label": "Property Management",
+        "description": "Signals day-to-day building or portfolio operations, tenant service, maintenance oversight, and performance management.",
+        "examples": [
+          "On-site operations",
+          "Tenant relations",
+          "Portfolio operations"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-hospitality",
+        "key": "hospitality",
+        "label": "Hospitality",
+        "description": "Signals a hospitality operating or investing focus centered on lodging, guest experience, or hotel-like real estate.",
+        "examples": [
+          "Hospitality platform",
+          "Guest operations",
+          "Lodging strategy"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-hotels",
+        "key": "hotels",
+        "label": "Hotels",
+        "description": "Signals ownership, operation, development, brokerage, or financing tied specifically to hotel assets.",
+        "examples": [
+          "Hotel portfolio",
+          "Select-service hotels",
+          "Hotel acquisitions"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-resorts",
+        "key": "resorts",
+        "label": "Resorts",
+        "description": "Signals ownership, operation, development, or financing tied specifically to resort assets and destinations.",
+        "examples": [
+          "Destination resorts",
+          "Resort operations",
+          "Leisure hospitality assets"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-vacation-rentals",
+        "key": "vacation-rentals",
+        "label": "Vacation Rentals",
+        "description": "Signals short-term rental inventory, management, software, brokerage, or investment tied to vacation stays.",
+        "examples": [
+          "Short-term rentals",
+          "Vacation home management",
+          "STR platform"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-affordable-homes",
+        "key": "affordable-homes",
+        "label": "Affordable Housing",
+        "description": "Signals affordable housing ownership, development, preservation, financing, or services.",
+        "examples": [
+          "Affordable housing",
+          "LIHTC housing",
+          "Income-restricted communities"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-workforce-housing",
+        "key": "workforce-housing",
+        "label": "Workforce Housing",
+        "description": "Signals workforce housing ownership, development, financing, or services aimed at middle-income renters.",
+        "examples": [
+          "Workforce housing",
+          "Middle-income housing",
+          "Attainable rental housing"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-self-storage",
+        "key": "self-storage",
+        "label": "Self-Storage",
+        "description": "Signals ownership, operation, brokerage, financing, or technology tied to self-storage facilities.",
+        "examples": [
+          "Self-storage facilities",
+          "Storage portfolio",
+          "Storage operations"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-data-centers",
+        "key": "data-centers",
+        "label": "Data Centers",
+        "description": "Signals ownership, development, operation, financing, or services tied to data center real estate.",
+        "examples": [
+          "Data center campuses",
+          "Colocation facilities",
+          "Digital infrastructure real estate"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-senior-housing",
+        "key": "senior-housing",
+        "label": "Senior Housing",
+        "description": "Signals ownership, operation, development, or financing tied to senior living or age-restricted housing.",
+        "examples": [
+          "Senior living",
+          "Independent living",
+          "Assisted living communities"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-esg",
+        "key": "esg",
+        "label": "ESG",
+        "description": "Signals environmental, social, and governance positioning, sustainability priorities, or impact-oriented operating language.",
+        "examples": [
+          "Sustainability strategy",
+          "Impact investing",
+          "Green building priorities"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-single-family",
+        "key": "single-family",
+        "label": "Single-Family",
+        "description": "Signals single-family housing, rental homes, build-for-rent communities, or related investment activity.",
+        "examples": [
+          "Single-family rentals",
+          "Build-to-rent",
+          "Detached housing communities"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-industrial",
+        "key": "industrial",
+        "label": "Industrial",
+        "description": "Signals industrial property such as warehouses, logistics facilities, flex, or light manufacturing space.",
+        "examples": [
+          "Warehouse portfolio",
+          "Logistics real estate",
+          "Industrial development"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-office",
+        "key": "office",
+        "label": "Office",
+        "description": "Signals office property ownership, leasing, development, financing, or workplace-oriented services.",
+        "examples": [
+          "Office leasing",
+          "Workplace portfolio",
+          "Office development"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-land",
+        "key": "land",
+        "label": "Land",
+        "description": "Signals land ownership, entitlement, development, brokerage, or financing before vertical improvements.",
+        "examples": [
+          "Land assemblage",
+          "Entitled land",
+          "Raw land investments"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-manufactured-homes",
+        "key": "manufactured-homes",
+        "label": "Manufactured Homes",
+        "description": "Signals manufactured housing communities, modular housing, or related investment and operations.",
+        "examples": [
+          "Manufactured housing communities",
+          "Mobile home parks",
+          "MH portfolio"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-medical-office",
+        "key": "medical-office",
+        "label": "Medical Office",
+        "description": "Signals medical office buildings, outpatient facilities, or healthcare-oriented office real estate.",
+        "examples": [
+          "Medical office buildings",
+          "MOB portfolio",
+          "Outpatient real estate"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-mixed-use",
+        "key": "mixed-use",
+        "label": "Mixed-Use",
+        "description": "Signals assets or developments combining multiple uses such as residential, retail, office, or hospitality.",
+        "examples": [
+          "Mixed-use district",
+          "Live-work-play project",
+          "Retail and residential blend"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-residential",
+        "key": "residential",
+        "label": "Residential",
+        "description": "Signals housing-oriented ownership, operation, development, financing, or services across living asset types.",
+        "examples": [
+          "Residential platform",
+          "Housing portfolio",
+          "Living sector strategy"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-commercial",
+        "key": "commercial",
+        "label": "Commercial",
+        "description": "Signals non-residential property or business activity centered on income-producing commercial real estate.",
+        "examples": [
+          "Commercial real estate",
+          "Income-producing property",
+          "CRE investment strategy"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-investment-advisory",
+        "key": "investment-advisory",
+        "label": "Investment Advisory",
+        "description": "Signals investment advice, capital placement, portfolio guidance, or strategic recommendations to investors.",
+        "examples": [
+          "Investment advisor",
+          "Capital allocation guidance",
+          "Portfolio strategy"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-capital-markets",
+        "key": "capital-markets",
+        "label": "Capital Markets",
+        "description": "Signals capital raising, debt placement, structured finance, or markets execution around investment transactions.",
+        "examples": [
+          "Debt placement",
+          "Equity raising",
+          "Structured capital execution"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-investment-services",
+        "key": "investment-services",
+        "label": "Investment Services",
+        "description": "Signals investor-facing services supporting capital allocation, execution, reporting, or portfolio administration.",
+        "examples": [
+          "Investor reporting",
+          "Fund administration",
+          "Capital support services"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-tenant-representation",
+        "key": "tenant-representation",
+        "label": "Tenant Representation",
+        "description": "Signals tenant-side advisory or brokerage work for occupiers in site selection, negotiation, or workplace strategy.",
+        "examples": [
+          "Tenant rep",
+          "Occupier advisory",
+          "Site selection"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-landlord-representation",
+        "key": "landlord-representation",
+        "label": "Landlord Representation",
+        "description": "Signals owner-side leasing or advisory work representing landlords in marketing and negotiation.",
+        "examples": [
+          "Landlord rep",
+          "Owner leasing strategy",
+          "Agency representation"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-auctions",
+        "key": "auctions",
+        "label": "Auctions",
+        "description": "Signals auction-based disposition, bidding, or sale execution for assets, property, or portfolios.",
+        "examples": [
+          "Auction sales",
+          "Bidding process",
+          "Auction disposition"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-automation",
+        "key": "automation",
+        "label": "Automation",
+        "description": "Signals automation of workflows, operations, or repetitive tasks through software, systems, or robotics.",
+        "examples": [
+          "Workflow automation",
+          "Process automation",
+          "Automated operations"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-analytics",
+        "key": "analytics",
+        "label": "Analytics",
+        "description": "Signals data analysis, benchmarking, forecasting, or decision support as a core offering or differentiator.",
+        "examples": [
+          "Portfolio analytics",
+          "Market analytics",
+          "Forecasting tools"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-predictive-ai",
+        "key": "predictive-ai",
+        "label": "Predictive AI",
+        "description": "Signals predictive AI, machine learning, or modeled forecasting used to improve decisions or operations.",
+        "examples": [
+          "Predictive models",
+          "Machine learning forecasts",
+          "AI-driven underwriting"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-digital-tools",
+        "key": "digital-tools",
+        "label": "Digital Tools",
+        "description": "Signals software tools, digital workflows, or online platforms used to power a business line or product.",
+        "examples": [
+          "Digital platform",
+          "Workflow software",
+          "Online operating tools"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-mortgage-reit",
+        "key": "mortgage-reit",
+        "label": "Mortgage REIT",
+        "description": "Signals a mortgage REIT strategy focused on mortgage-backed assets, real estate debt, or interest income.",
+        "examples": [
+          "Mortgage REIT",
+          "Real estate debt trust",
+          "Interest-income strategy"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-debt-financing",
+        "key": "debt-financing",
+        "label": "Debt Financing",
+        "description": "Signals debt capital provision, debt placement, or financing structures centered on borrowing.",
+        "examples": [
+          "Debt placement",
+          "Loan structuring",
+          "Debt capital solutions"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-investment-structuring",
+        "key": "investment-structuring",
+        "label": "Investment Structuring",
+        "description": "Signals legal, tax, or capital structuring work shaping how investments or deals are organized.",
+        "examples": [
+          "Fund structuring",
+          "Deal structuring",
+          "Capital stack design"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-cmbs",
+        "key": "cmbs",
+        "label": "CMBS",
+        "description": "Signals commercial mortgage-backed securities activity, products, or investment focus.",
+        "examples": [
+          "CMBS lending",
+          "Commercial securitization",
+          "CMBS investing"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-rmbs",
+        "key": "rmbs",
+        "label": "RMBS",
+        "description": "Signals residential mortgage-backed securities activity, products, or investment focus.",
+        "examples": [
+          "RMBS investing",
+          "Residential securitization",
+          "RMBS strategy"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-mbs",
+        "key": "mbs",
+        "label": "MBS",
+        "description": "Signals mortgage-backed securities activity, products, or investment focus more generally.",
+        "examples": [
+          "MBS portfolio",
+          "Mortgage securities",
+          "Agency MBS"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-loans",
+        "key": "loans",
+        "label": "Loans",
+        "description": "Signals loan origination, underwriting, servicing, brokering, or investing as a core activity.",
+        "examples": [
+          "Loan origination",
+          "Lending platform",
+          "Loan servicing"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-financing",
+        "key": "financing",
+        "label": "Financing",
+        "description": "Signals financing solutions, capital sourcing, or funding support without limiting to one specific instrument.",
+        "examples": [
+          "Capital solutions",
+          "Financing support",
+          "Funding advisory"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-mortgage",
+        "key": "mortgage",
+        "label": "Mortgage",
+        "description": "Signals mortgage lending, servicing, brokerage, banking, or mortgage-focused investing.",
+        "examples": [
+          "Mortgage lending",
+          "Mortgage servicing",
+          "Mortgage banking"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-real-estate-investments",
+        "key": "real-estate-investments",
+        "label": "Real Estate Investments",
+        "description": "Signals a broad real estate investment mandate spanning acquisitions, ownership, asset management, or portfolio building.",
+        "examples": [
+          "Real estate investments",
+          "Property acquisitions",
+          "Portfolio growth"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-wealth-advisory",
+        "key": "wealth-advisory",
+        "label": "Wealth Advisory",
+        "description": "Signals advisory work for high-net-worth clients on wealth planning, asset allocation, or portfolio strategy.",
+        "examples": [
+          "Wealth planning",
+          "Private wealth advisory",
+          "High-net-worth guidance"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-private-banking",
+        "key": "private-banking",
+        "label": "Private Banking",
+        "description": "Signals bank-led wealth, lending, and relationship services for affluent or ultra-high-net-worth clients.",
+        "examples": [
+          "Private banking",
+          "UHNW lending",
+          "Relationship banking"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-alternative-investing",
+        "key": "alternative-investing",
+        "label": "Alternative Investing",
+        "description": "Signals alternatives such as private markets, hedge funds, real assets, or non-traditional strategies.",
+        "examples": [
+          "Alternative investments",
+          "Private markets",
+          "Real asset exposure"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-hedge-funds",
+        "key": "hedge-funds",
+        "label": "Hedge Funds",
+        "description": "Signals hedge fund management, hedge fund investing, or related capital allocation services.",
+        "examples": [
+          "Hedge fund platform",
+          "Absolute return",
+          "Fund-of-funds"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-retirement-services",
+        "key": "retirement-services",
+        "label": "Retirement Services",
+        "description": "Signals retirement planning, retirement administration, or retirement-focused advisory services.",
+        "examples": [
+          "Retirement planning",
+          "Retirement administration",
+          "Retirement income advice"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-401k",
+        "key": "401k",
+        "label": "401k",
+        "description": "Signals 401(k) plan administration, advisory, recordkeeping, or retirement benefits support.",
+        "examples": [
+          "401(k) advisory",
+          "Defined contribution plans",
+          "Plan administration"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-annuities",
+        "key": "annuities",
+        "label": "Annuities",
+        "description": "Signals annuity products, annuity advisory, or insurance-linked retirement income solutions.",
+        "examples": [
+          "Fixed annuities",
+          "Variable annuities",
+          "Retirement income products"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-stocks",
+        "key": "stocks",
+        "label": "Stocks",
+        "description": "Signals public equity investing, trading, research, or brokerage tied to stocks.",
+        "examples": [
+          "Equity research",
+          "Public equities",
+          "Stock trading"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-bonds",
+        "key": "bonds",
+        "label": "Bonds",
+        "description": "Signals fixed-income investing, trading, advisory, or research tied to bonds.",
+        "examples": [
+          "Fixed income",
+          "Bond trading",
+          "Credit strategy"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-etfs",
+        "key": "etfs",
+        "label": "ETFs",
+        "description": "Signals exchange-traded fund products, investing, trading, or advisory services.",
+        "examples": [
+          "ETF strategies",
+          "Exchange-traded funds",
+          "ETF advisory"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-blockchain",
+        "key": "blockchain",
+        "label": "Blockchain",
+        "description": "Signals blockchain infrastructure, products, or strategy as a meaningful part of the business model.",
+        "examples": [
+          "Blockchain infrastructure",
+          "Distributed ledger",
+          "On-chain products"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-cryptocurrency",
+        "key": "cryptocurrency",
+        "label": "Cryptocurrency",
+        "description": "Signals cryptocurrency investing, trading, infrastructure, payments, or treasury exposure.",
+        "examples": [
+          "Crypto investing",
+          "Digital assets",
+          "Token infrastructure"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-defi",
+        "key": "defi",
+        "label": "DeFi",
+        "description": "Signals decentralized finance products, protocols, investing, or infrastructure.",
+        "examples": [
+          "Decentralized finance",
+          "On-chain lending",
+          "Protocol investing"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-digital-only-banks",
+        "key": "digital-only-banks",
+        "label": "Digital-Only Banking",
+        "description": "Signals banking products delivered without traditional branch infrastructure through digital-first channels.",
+        "examples": [
+          "Digital banking",
+          "Neobank platform",
+          "Branchless banking"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-payment-systems",
+        "key": "payment-systems",
+        "label": "Payment Systems",
+        "description": "Signals payments infrastructure, money movement, merchant processing, or transaction rails.",
+        "examples": [
+          "Payments rails",
+          "Merchant processing",
+          "Money movement platform"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-credit-rating",
+        "key": "credit-rating",
+        "label": "Credit Rating",
+        "description": "Signals credit ratings, credit analysis, or risk-scoring products and services.",
+        "examples": [
+          "Credit scoring",
+          "Ratings analysis",
+          "Credit opinions"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-fraud-prevention",
+        "key": "fraud-prevention",
+        "label": "Fraud Prevention",
+        "description": "Signals fraud detection, fraud prevention, or trust-and-safety controls around financial activity.",
+        "examples": [
+          "Fraud detection",
+          "Transaction monitoring",
+          "Identity verification controls"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-aml",
+        "key": "aml",
+        "label": "AML",
+        "description": "Signals anti-money laundering controls, compliance operations, or regulatory screening.",
+        "examples": [
+          "AML compliance",
+          "KYC screening",
+          "Sanctions monitoring"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-retail",
+        "key": "retail",
+        "label": "Retail",
+        "description": "Signals retail property, retail tenants, shopping centers, or consumer-facing commerce environments.",
+        "examples": [
+          "Retail centers",
+          "Shopping centers",
+          "Retail tenants"
+        ],
+        "notes": []
+      },
+      {
+        "id": "keyword-vc",
+        "key": "vc",
+        "label": "VC",
+        "description": "Signals venture capital investing, startup backing, or early-stage portfolio management.",
+        "examples": [
+          "Venture capital",
+          "Early-stage investing",
+          "Startup portfolio"
+        ],
+        "notes": []
+      }
+    ],
+    "rules": [
+      {
+        "id": "keywords-evidence-first",
+        "name": "Use Keywords As Evidence, Not As The Whole Decision",
+        "directive": "Keywords should support the larger company interpretation. Do not let one isolated phrase outweigh an obviously different business model unless the phrase is highly specific.",
+        "why": "A fuzzy website can mention many adjacent concepts without actually being that kind of company.",
+        "signals": [
+          "Repeated keyword use",
+          "Where the phrase appears",
+          "Whether titles and services align"
+        ],
+        "examples": [
+          "\"Development\" alone is not enough to force Real Estate Investment if everything else points elsewhere."
+        ],
+        "stopCondition": ""
+      },
+      {
+        "id": "keywords-visible-subset",
+        "name": "Visible Keywords Must Be A Subset Of All Keywords",
+        "directive": "Only show keywords that were actually detected or inferred with support. Never invent a visible keyword that is not represented somewhere in the underlying evidence set.",
+        "why": "Visible Keywords must be explainable back to All Keywords.",
+        "signals": [
+          "Matched keywords",
+          "Inferred keywords with strong textual support"
+        ],
+        "examples": [
+          "If All Keywords includes Multi-Family and Acquisitions, Visible Keywords can show one or both if they are confidence-worthy."
+        ],
+        "stopCondition": ""
+      },
+      {
+        "id": "keywords-specificity",
+        "name": "Prefer Specific Business Phrases Over Generic Context",
+        "directive": "Choose visible keywords that tell a human what kind of company this is, not merely what broad market it touches. Avoid showing weak context words when stronger phrases are available.",
+        "why": "The output should read like a useful explanation, not matcher debris.",
+        "signals": [
+          "Specific asset class",
+          "Specific service line",
+          "Specific financing term"
+        ],
+        "examples": [
+          "Show Bridge Loan instead of just Financing.",
+          "Show Commercial Brokerage instead of just Transactions."
+        ],
+        "stopCondition": ""
+      },
+      {
+        "id": "keywords-ordering",
+        "name": "Order Visible Keywords By Confidence And Explanatory Value",
+        "directive": "Sort visible keywords from strongest and most explanatory to weakest. Do not overload the surface with low-confidence extras if the top few already explain the result.",
+        "why": "A short clean list is more useful than a noisy wall of tags.",
+        "signals": [
+          "Strong keyword confidence",
+          "Support for the winning vertical",
+          "User-facing clarity"
+        ],
+        "examples": [
+          "For a PE real estate firm, Private Equity, Acquisitions, and Multi-Family may be enough even if many weaker keywords also matched."
+        ],
+        "stopCondition": ""
+      },
+      {
+        "id": "keywords-top-enough",
+        "name": "Call Out When The Top Keywords Were Enough",
+        "directive": "If you intentionally stopped adding visible keywords because the top terms already explain the classification, say that in the reason text.",
+        "why": "The team wants stop-language reflected back in plain English.",
+        "signals": [
+          "Clear top keywords",
+          "Redundant weaker keywords"
+        ],
+        "examples": [
+          "\"We stopped after the top three visible keywords because they already explained the winning profile.\""
+        ],
+        "stopCondition": ""
+      }
+    ]
+  },
+  {
+    "slug": "email-industry",
+    "title": "Email Industry",
+    "summary": "Current downstream campaign buckets and the guidance for translating richer classification into those familiar labels.",
+    "definitions": [
+      {
+        "id": "email-industry-pe-re",
+        "key": "pe-re",
+        "label": "PE RE",
+        "description": "Real estate investment groups whose identity is private-equity-style capital deployment into property assets.",
+        "examples": [
+          "Real estate private equity",
+          "Sponsors",
+          "Institutional real estate investors"
+        ],
+        "notes": []
+      },
+      {
+        "id": "email-industry-re-commercial",
+        "key": "re-commercial",
+        "label": "RE Commercial",
+        "description": "Commercial real estate owners, operators, developers, or service providers not better captured by a narrower override.",
+        "examples": [
+          "Office",
+          "Industrial",
+          "Hospitality",
+          "Mixed-use"
+        ],
+        "notes": []
+      },
+      {
+        "id": "email-industry-re-residential",
+        "key": "re-residential",
+        "label": "RE Residential",
+        "description": "Residential real estate companies focused on apartments, single-family rentals, home communities, or other housing-centric asset types.",
+        "examples": [
+          "Multi-family",
+          "Affordable housing",
+          "Single-family",
+          "Manufactured housing"
+        ],
+        "notes": []
+      },
+      {
+        "id": "email-industry-re-finance",
+        "key": "re-finance",
+        "label": "RE Finance",
+        "description": "Real estate lenders and finance platforms whose identity is debt, structured finance, or capital provision into property.",
+        "examples": [
+          "Bridge lenders",
+          "Mortgage platforms",
+          "Debt funds"
+        ],
+        "notes": []
+      },
+      {
+        "id": "email-industry-big-brokerage",
+        "key": "big-brokerage",
+        "label": "Big Brokerage",
+        "description": "Large-scale brokerage and transaction-oriented real estate service organizations.",
+        "examples": [
+          "Investment sales brokerages",
+          "Tenant rep",
+          "Landlord rep"
+        ],
+        "notes": []
+      },
+      {
+        "id": "email-industry-financial",
+        "key": "financial",
+        "label": "Financial",
+        "description": "General financial-services firms when a more specific real-estate or recruiting bucket does not apply.",
+        "examples": [
+          "Asset management",
+          "Banking",
+          "Investment services"
+        ],
+        "notes": []
+      },
+      {
+        "id": "email-industry-re-recruiters",
+        "key": "re-recruiters",
+        "label": "RE Recruiters",
+        "description": "Recruiting firms whose clearest end-market specialization is real estate.",
+        "examples": [
+          "Real estate search",
+          "Property talent placement"
+        ],
+        "notes": []
+      },
+      {
+        "id": "email-industry-recruiters-financial",
+        "key": "recruiters-financial",
+        "label": "Recruiters Financial",
+        "description": "Recruiting firms whose clearest end-market specialization is financial services.",
+        "examples": [
+          "Financial-services search",
+          "Capital-markets recruiting"
+        ],
+        "notes": []
+      },
+      {
+        "id": "email-industry-services",
+        "key": "services",
+        "label": "Services",
+        "description": "A broad services fallback for business models that are service-led but not cleanly mapped to a narrower current bucket.",
+        "examples": [
+          "Advisory",
+          "Service companies",
+          "Consulting-like real estate support"
+        ],
+        "notes": []
+      },
+      {
+        "id": "email-industry-other",
+        "key": "other",
+        "label": "Other",
+        "description": "Final fallback when nothing more specific is defensible.",
+        "examples": [
+          "Weak evidence",
+          "Mixed signals",
+          "Out-of-scope company"
+        ],
+        "notes": []
+      }
+    ],
+    "rules": [
+      {
+        "id": "email-industry-translate-after",
+        "name": "Translate After Sector And Vertical Are Stable",
+        "directive": "Do not guess Email Industry from keywords alone. First decide sector and vertical, then use keywords to refine the translation into an existing email-industry bucket.",
+        "why": "The same keyword can mean different things depending on whether the company is principal, service-led, or finance-led.",
+        "signals": [
+          "Final sector",
+          "Final vertical",
+          "Supporting keywords"
+        ],
+        "examples": [
+          "Private Equity plus Real Estate cues should translate toward PE RE, not generic Financial."
+        ],
+        "stopCondition": ""
+      },
+      {
+        "id": "email-industry-existing-buckets",
+        "name": "Favor Existing CRM Buckets",
+        "directive": "Use the current recognizable CRM bucket names when the choice is close. Preserve continuity for reporting, campaigns, and human expectations.",
+        "why": "This keeps the system aligned with downstream operational workflows.",
+        "signals": [
+          "Current Industry labels",
+          "Current EM Industry labels"
+        ],
+        "examples": [
+          "Commercial brokerage should map to Big Brokerage rather than inventing a new brokerage bucket."
+        ],
+        "stopCondition": ""
+      },
+      {
+        "id": "email-industry-specific-overrides",
+        "name": "Apply Specific Overrides Before Broad Fallbacks",
+        "directive": "Apply specific overrides such as Family Office, RE Finance, RE Recruiters, or Recruiters Financial before falling back to broad labels like RE Commercial, Financial, Services, or Other.",
+        "why": "Specific buckets are more useful when the evidence supports them.",
+        "signals": [
+          "Family office phrase",
+          "Recruiting specialization",
+          "Debt-oriented cues"
+        ],
+        "examples": [
+          "A recruiter focused on financial services should land in Recruiters Financial, not generic Recruiting or Financial."
+        ],
+        "stopCondition": "If a clear specific override applies, stop translation there."
+      },
+      {
+        "id": "email-industry-other-last",
+        "name": "Use Other Only As A True Last Resort",
+        "directive": "Choose Other only when no stable current bucket is defensible. If you land on Other, explain exactly what evidence was missing or too mixed.",
+        "why": "Other is operationally necessary but low-value unless the reasoning is explicit.",
+        "signals": [
+          "Weak evidence",
+          "Mixed sectors",
+          "No stable bucket match"
+        ],
+        "examples": [
+          "A generic holding page with thin evidence can return Other at 1/5 confidence."
+        ],
+        "stopCondition": ""
+      }
+    ]
+  }
+]

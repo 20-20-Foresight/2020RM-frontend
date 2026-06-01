@@ -5,6 +5,8 @@ export const {
   buildAppliedResult,
   buildExplanationSegmentationLabel,
   hasVisibleSegmentationSummary,
+  isV312Resegmentation,
+  normalizeSegmentation312Summary,
   normalizeSegmentationVisualSummary,
   readEMIndustryValue,
   readCurrentSegmentationExplanations,
@@ -13,6 +15,7 @@ export const {
   readDisplayedExplanations,
   readDisplayedExplanationScore,
   readProposedSegmentationExplanations,
+  readSavedSegmentation312Payload,
   readPrimaryValue,
   readTrimmedString
 } = resegmentationUiModule;

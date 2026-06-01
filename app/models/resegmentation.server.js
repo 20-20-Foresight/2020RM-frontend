@@ -190,6 +190,7 @@ async function searchResegmentationOrganizations(options) {
  * @param {{
  *   request: Request,
  *   uuid: string,
+ *   strategy?: string,
  *   dryRun?: boolean,
  *   saveSalesforce?: boolean,
  *   includeExplanation?: boolean,
@@ -204,6 +205,7 @@ async function runOrganizationResegmentation(options) {
     path: `/api/rest/resegmentation/organizations/${encodeURIComponent(readTrimmedString(options.uuid))}/segment`,
     method: "POST",
     body: {
+      strategy: readTrimmedString(options.strategy) || "legacy",
       dryRun: options.dryRun !== false,
       saveSalesforce: options.saveSalesforce === true,
       includeExplanation: options.includeExplanation !== false,

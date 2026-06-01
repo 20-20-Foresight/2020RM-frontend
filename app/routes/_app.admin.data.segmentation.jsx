@@ -1,36 +1,18 @@
 import {
-  Alert,
-  AlertDescription,
-  AlertIcon,
+  Badge,
   Box,
   Button,
   Flex,
   Heading,
+  LinkBox,
+  LinkOverlay,
   SimpleGrid,
   Text,
   VStack
 } from "@chakra-ui/react";
 import { json } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
-import { AdminDataApiError } from "../models/admin-data.server";
 import { sortAdminDataItems } from "../models/admin-data-list.mjs";
-
-/**
- * Builds one stable route error payload.
- * @param {unknown} error
- * @returns {{message: string}}
- */
-function buildRouteError(error) {
-  if (error instanceof AdminDataApiError) {
-    return {
-      message: error.message
-    };
-  }
-
-  return {
-    message: error instanceof Error ? error.message : "Unable to load segmentation data."
-  };
-}
 
 /**
  * Builds the route pathname for one admin data record.
@@ -52,33 +34,27 @@ async function loadSegmentationDocumentModule() {
   return import("../models/segmentation-document.server.js");
 }
 
+async function loadSegmentationV312DocumentModule() {
+  const module = await import("../models/segmentation-v312-documents.server.js");
+  return module.default || module;
+}
+
 export async function loader({ request }) {
-  try {
-    const { loadCategoryDocuments, loadSegmentationDocuments } = await loadSegmentationDocumentModule();
-    const [categoryDocuments, crosswalkDocuments] = await Promise.all([
-      loadCategoryDocuments({ request }),
-      loadSegmentationDocuments({ request })
-    ]);
+  const { loadCategoryDocuments, loadSegmentationDocuments } = await loadSegmentationDocumentModule();
+  const { loadSegmentationDocuments: loadSegmentationV312Documents } = await loadSegmentationV312DocumentModule();
+  const [categoryResult, crosswalkResult] = await Promise.allSettled([
+    loadCategoryDocuments({ request }),
+    loadSegmentationDocuments({ request })
+  ]);
 
-    return json({
-      categoryDocuments: sortAdminDataItems(categoryDocuments),
-      crosswalkDocuments: sortAdminDataItems(crosswalkDocuments),
-      error: null
-    });
-  } catch (error) {
-    const status = error instanceof AdminDataApiError ? error.statusCode : 500;
+  const documentsResult = await loadSegmentationV312Documents({ request });
 
-    return json(
-      {
-        categoryDocuments: [],
-        crosswalkDocuments: [],
-        error: buildRouteError(error)
-      },
-      {
-        status
-      }
-    );
-  }
+  return json({
+    documents: Array.isArray(documentsResult?.documents) ? documentsResult.documents : [],
+    syncStatus: documentsResult?.syncStatus || null,
+    categoryDocuments: categoryResult.status === "fulfilled" ? sortAdminDataItems(categoryResult.value) : [],
+    crosswalkDocuments: crosswalkResult.status === "fulfilled" ? sortAdminDataItems(crosswalkResult.value) : []
+  });
 }
 
 /**
@@ -86,20 +62,21 @@ export async function loader({ request }) {
  * @param {{
  *   item: {
  *     id: string|null,
- *     name: string,
- *     description: string
+ *     name?: string,
+ *     title?: string,
+ *     description?: string,
+ *     summary?: string
  *   }
  * }} props
  * @returns {JSX.Element}
  */
 function SegmentationDocumentCard({ item }) {
-  const itemPath = buildAdminDataPath(item.id);
+  const itemPath = item.path || buildAdminDataPath(item.id);
+  const heading = item.name || item.title || "Untitled data";
+  const description = item.description || item.summary || "";
 
   return (
-    <Box
-      as={Link}
-      to={itemPath}
-      display="block"
+    <LinkBox
       textDecoration="none"
       borderWidth="1px"
       borderColor="gray.200"
@@ -116,13 +93,15 @@ function SegmentationDocumentCard({ item }) {
     >
       <VStack align="stretch" spacing={3}>
         <Heading size="sm" color="gray.900">
-          {item.name || "Untitled data"}
+          <LinkOverlay as={Link} to={itemPath}>
+            {heading}
+          </LinkOverlay>
         </Heading>
-        <Text color={item.description ? "gray.700" : "gray.400"} noOfLines={4}>
-          {item.description || "No description"}
+        <Text color={description ? "gray.700" : "gray.400"} noOfLines={4}>
+          {description || "No description"}
         </Text>
       </VStack>
-    </Box>
+    </LinkBox>
   );
 }
 
@@ -172,6 +151,19 @@ function SegmentationSection({
 
 export default function AdminDataSegmentationRoute() {
   const data = useLoaderData();
+  const syncStatus = data.syncStatus || null;
+  const syncTone =
+    syncStatus?.status === "failed"
+      ? "red"
+      : syncStatus?.status === "syncing"
+        ? "blue"
+        : syncStatus?.status === "scheduled"
+          ? "orange"
+      : syncStatus?.dirty === true
+        ? "orange"
+        : syncStatus?.status === "synced"
+          ? "green"
+          : "gray";
 
   return (
     <Box bg="white" h="100%" minH="0" display="flex" flexDirection="column">
@@ -180,7 +172,7 @@ export default function AdminDataSegmentationRoute() {
           <Box>
             <Heading size="md">Segmentation</Heading>
             <Text color="gray.600" mt={2}>
-              Open category and crosswalk data documents for segmentation editing.
+              Open the sector, vertical, keyword, and email industry reference pages for segmentation.
             </Text>
           </Box>
 
@@ -191,26 +183,61 @@ export default function AdminDataSegmentationRoute() {
       </Box>
 
       <Box px={{ base: 4, md: 6 }} py={{ base: 4, md: 5 }} flex="1" minH="0" overflow="auto">
-        {data.error?.message ? (
-          <Alert status="error" borderRadius="md" mb={5}>
-            <AlertIcon />
-            <AlertDescription>{data.error.message}</AlertDescription>
-          </Alert>
-        ) : null}
-
         <VStack align="stretch" spacing={8}>
+          <Flex justify="space-between" align={{ base: "start", md: "center" }} gap={3} wrap="wrap">
+            <Box>
+              <Text fontSize="sm" fontWeight="semibold" color="gray.600">
+                AI Knowledge Base
+              </Text>
+              <Text color="gray.500" mt={1}>
+                {syncStatus?.status === "failed"
+                  ? syncStatus.lastErrorMessage || "Last sync failed."
+                  : syncStatus?.status === "syncing"
+                    ? "AI sync is running in the background."
+                    : syncStatus?.status === "scheduled" && syncStatus?.nextScheduledAt
+                      ? `Sync scheduled for ${new Date(syncStatus.nextScheduledAt).toLocaleString()}.`
+                  : syncStatus?.dirty === true
+                    ? "Playbook edits have been saved and are waiting for AI sync."
+                    : syncStatus?.lastSyncedAt
+                      ? `Last synced ${new Date(syncStatus.lastSyncedAt).toLocaleString()}.`
+                      : "No sync has run yet."}
+              </Text>
+            </Box>
+            <Badge colorScheme={syncTone} borderRadius="full" px={3} py={1}>
+              {syncStatus?.status === "failed"
+                ? "Sync Failed"
+                : syncStatus?.status === "syncing"
+                  ? "Syncing"
+                  : syncStatus?.status === "scheduled"
+                    ? "Sync Scheduled"
+                : syncStatus?.dirty === true
+                  ? "Sync Pending"
+                  : syncStatus?.status === "synced"
+                    ? "Synced"
+                    : "Idle"}
+            </Badge>
+          </Flex>
+
+          <SegmentationSection
+            id="documents"
+            title="Definitions And Rules"
+            description="Each page combines definitions and rules, with tabs to switch between them."
+            items={data.documents}
+            columns={{ base: 1, md: 2, xl: 2 }}
+          />
+
           <SegmentationSection
             id="categories"
-            title="Categories"
-            description="Category documents used by the segmentation editors."
+            title="Legacy Categories"
+            description="Existing category documents used by the current segmentation editors."
             items={data.categoryDocuments}
             columns={{ base: 1, md: 2 }}
           />
 
           <SegmentationSection
             id="crosswalks"
-            title="Crosswalks"
-            description="Segmentation mapping documents and editable crosswalk data."
+            title="Legacy Crosswalks"
+            description="Existing segmentation mapping documents and editable crosswalk data."
             items={data.crosswalkDocuments}
             columns={{ base: 1, md: 2, xl: 3 }}
           />

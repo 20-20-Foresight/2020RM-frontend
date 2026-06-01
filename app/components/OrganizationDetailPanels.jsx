@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Badge,
   Box,
@@ -24,10 +24,9 @@ import {
   Th,
   Thead,
   Tr,
-  useDisclosure,
   VStack
 } from "@chakra-ui/react";
-import { Link as RemixLink, useRevalidator } from "@remix-run/react";
+import { Link as RemixLink } from "@remix-run/react";
 import { FaLinkedin } from "react-icons/fa";
 import {
   FiArrowUpRight,
@@ -58,8 +57,7 @@ import {
   getSearchResultFieldValue,
   resolveSchemaFieldPath
 } from "../models/search-result.mjs";
-import { buildEntityDetailPath } from "../models/entity-route.mjs";
-import { OrganizationResegmentationFlyout } from "./OrganizationResegmentationFlyout.jsx";
+import { buildEntityDetailPath, buildOrganizationDetailTabPath } from "../models/entity-route.mjs";
 
 const BRAND_BLUE = "#0F4C81";
 const BORDER_COLOR = "#D7DFEC";
@@ -335,20 +333,13 @@ function filterContacts(options) {
  * @returns {JSX.Element}
  */
 export function OrganizationOverviewPanel({ organizationDetail }) {
-  const revalidator = useRevalidator();
-  const { isOpen, onOpen, onClose } = useDisclosure();
-  const [recordOverride, setRecordOverride] = useState(null);
   const organizationUUID =
     typeof organizationDetail?.uuid === "string" && organizationDetail.uuid.trim()
       ? organizationDetail.uuid.trim()
       : typeof organizationDetail?.record?.uuid === "string" && organizationDetail.record.uuid.trim()
         ? organizationDetail.record.uuid.trim()
         : "";
-  const effectiveRecord = recordOverride || organizationDetail?.record || null;
-
-  useEffect(() => {
-    setRecordOverride(null);
-  }, [organizationUUID]);
+  const effectiveRecord = organizationDetail?.record || null;
 
   const overview = buildOrganizationOverviewViewModel({
     record: effectiveRecord,
@@ -436,13 +427,14 @@ export function OrganizationOverviewPanel({ organizationDetail }) {
             <Flex justify="space-between" align="center" gap={3} mb={5}>
               <Heading size="md">Industry &amp; Expertise</Heading>
               <Button
-                variant="link"
-                colorScheme="blue"
+                as={RemixLink}
+                to={buildOrganizationDetailTabPath(organizationUUID, "segmentation") || "#"}
+                variant="outline"
+                borderColor={BORDER_COLOR}
                 size="sm"
-                onClick={onOpen}
                 isDisabled={!organizationUUID}
               >
-                explain
+                view segmentation
               </Button>
             </Flex>
             <Flex wrap="wrap" gap={3}>
@@ -462,22 +454,6 @@ export function OrganizationOverviewPanel({ organizationDetail }) {
               ))}
             </Flex>
           </SurfaceCard>
-
-          <OrganizationResegmentationFlyout
-            isOpen={isOpen}
-            onClose={onClose}
-            organizationUUID={organizationUUID}
-            organizationName={
-              typeof effectiveRecord?.name === "string" && effectiveRecord.name.trim()
-                ? effectiveRecord.name.trim()
-                : "Organization"
-            }
-            record={effectiveRecord}
-            onApplied={async ({ record: nextRecord }) => {
-              setRecordOverride(nextRecord || null);
-              revalidator.revalidate();
-            }}
-          />
         </Stack>
       </GridItem>
     </Grid>
