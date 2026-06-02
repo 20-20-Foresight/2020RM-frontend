@@ -468,6 +468,7 @@ export async function action({ request, params }) {
       shape,
       columns: Array.isArray(columns) ? columns : [],
       rows: Array.isArray(rows) ? rows : [],
+      metadata: metadata && typeof metadata === "object" ? metadata : null,
       document
     });
 

@@ -1,4 +1,5 @@
 import { designPages } from "./design-pages.mjs";
+import { listAdminDataCategories } from "./admin-data-categories.mjs";
 import { toolsConfig } from "./tools-config.mjs";
 
 /**
@@ -147,13 +148,13 @@ export const navItems = [
     label: "Data",
     to: "/admin/data",
     icon: "table_chart",
-    children: [
-      {
-        key: "data-segmentation",
-        label: "Segmentation",
-        to: "/admin/data/segmentation"
-      }
-    ]
+    children: listAdminDataCategories()
+      .filter((category) => category.slug !== "view-all")
+      .map((category) => ({
+        key: `data-${category.slug}`,
+        label: category.title,
+        to: category.to
+      }))
   }
 ];
 

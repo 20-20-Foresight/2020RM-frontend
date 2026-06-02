@@ -1,7 +1,6 @@
 import {
   Badge,
   Box,
-  Button,
   Checkbox,
   Divider,
   Flex,
@@ -628,18 +627,12 @@ export default function AdminDataSegmentationDocumentRoute() {
     return (
       <Box bg="white" h="100%" minH="0" display="flex" flexDirection="column">
         <Box px={{ base: 4, md: 6 }} py={{ base: 4, md: 5 }} borderBottomWidth="1px" bg="white">
-          <Flex justify="space-between" align={{ base: "start", md: "center" }} gap={4} wrap="wrap">
-            <Box>
-              <Heading size="md">Segmentation</Heading>
-              <Text color="gray.600" mt={2}>
-                This page is reloading.
-              </Text>
-            </Box>
-
-            <Button as={Link} to="/admin/data/segmentation" variant="outline">
-              Back To Segmentation
-            </Button>
-          </Flex>
+          <Box>
+            <Heading size="md">Segmentation</Heading>
+            <Text color="gray.600" mt={2}>
+              This page is reloading.
+            </Text>
+          </Box>
         </Box>
       </Box>
     );
@@ -648,50 +641,44 @@ export default function AdminDataSegmentationDocumentRoute() {
   return (
     <Box bg="white" h="100%" minH="0" display="flex" flexDirection="column">
       <Box px={{ base: 4, md: 6 }} py={{ base: 4, md: 5 }} borderBottomWidth="1px" bg="white">
-        <Flex justify="space-between" align={{ base: "start", md: "center" }} gap={4} wrap="wrap">
-          <Box>
-            <Heading size="md">{document.title}</Heading>
-            <Text color="gray.600" mt={2}>
-              {document.summary}
+        <Box>
+          <Heading size="md">{document.title}</Heading>
+          <Text color="gray.600" mt={2}>
+            {document.summary}
+          </Text>
+          <Flex align="center" gap={3} wrap="wrap" mt={3}>
+            <Badge colorScheme={syncTone} borderRadius="full" px={3} py={1}>
+              {isSavingDocument
+                ? "Saving Document"
+                : syncStatus?.status === "failed"
+                ? "AI Sync Failed"
+                : syncStatus?.status === "syncing"
+                  ? "AI Syncing"
+                  : syncStatus?.status === "scheduled"
+                    ? "AI Sync Scheduled"
+                : syncStatus?.dirty === true
+                  ? "AI Sync Pending"
+                  : syncStatus?.status === "synced"
+                    ? "AI Synced"
+                    : "AI Sync Idle"}
+            </Badge>
+            <Text color="gray.500" fontSize="sm">
+              {isSavingDocument
+                ? "Saving document. AI sync scheduling will update automatically."
+                : syncStatus?.status === "failed"
+                ? syncStatus.lastErrorMessage || "The last AI sync failed."
+                : syncStatus?.status === "syncing"
+                  ? "AI sync is running in the background while you keep editing."
+                  : syncStatus?.status === "scheduled" && syncStatus?.nextScheduledAt
+                    ? `AI sync scheduled for ${new Date(syncStatus.nextScheduledAt).toLocaleString()}.`
+                : syncStatus?.dirty === true
+                  ? "Recent playbook changes are saved and waiting for AI sync."
+                  : syncStatus?.lastSyncedAt
+                    ? `Last synced ${new Date(syncStatus.lastSyncedAt).toLocaleString()}.`
+                    : "No AI sync has run yet."}
             </Text>
-            <Flex align="center" gap={3} wrap="wrap" mt={3}>
-              <Badge colorScheme={syncTone} borderRadius="full" px={3} py={1}>
-                {isSavingDocument
-                  ? "Saving Document"
-                  : syncStatus?.status === "failed"
-                  ? "AI Sync Failed"
-                  : syncStatus?.status === "syncing"
-                    ? "AI Syncing"
-                    : syncStatus?.status === "scheduled"
-                      ? "AI Sync Scheduled"
-                  : syncStatus?.dirty === true
-                    ? "AI Sync Pending"
-                    : syncStatus?.status === "synced"
-                      ? "AI Synced"
-                      : "AI Sync Idle"}
-              </Badge>
-              <Text color="gray.500" fontSize="sm">
-                {isSavingDocument
-                  ? "Saving document. AI sync scheduling will update automatically."
-                  : syncStatus?.status === "failed"
-                  ? syncStatus.lastErrorMessage || "The last AI sync failed."
-                  : syncStatus?.status === "syncing"
-                    ? "AI sync is running in the background while you keep editing."
-                    : syncStatus?.status === "scheduled" && syncStatus?.nextScheduledAt
-                      ? `AI sync scheduled for ${new Date(syncStatus.nextScheduledAt).toLocaleString()}.`
-                  : syncStatus?.dirty === true
-                    ? "Recent playbook changes are saved and waiting for AI sync."
-                    : syncStatus?.lastSyncedAt
-                      ? `Last synced ${new Date(syncStatus.lastSyncedAt).toLocaleString()}.`
-                      : "No AI sync has run yet."}
-              </Text>
-            </Flex>
-          </Box>
-
-          <Button as={Link} to="/admin/data/segmentation" variant="outline">
-            Back To Segmentation
-          </Button>
-        </Flex>
+          </Flex>
+        </Box>
       </Box>
 
       <Box px={{ base: 4, md: 6 }} py={{ base: 4, md: 5 }} flex="1" minH="0" overflow="auto">

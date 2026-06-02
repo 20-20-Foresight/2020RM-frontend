@@ -187,6 +187,12 @@ test("admin data detail loader calls the normalized admin data detail route", as
           target: "robert"
         }
       ]
+    },
+    metadata: {
+      type: "crosswalk",
+      name: "Nicknames",
+      description: "Nickname crosswalk for person matching",
+      shape: "crosswalk"
     }
   });
 });
@@ -218,6 +224,12 @@ test("admin data detail normalization can reuse a raw payload without refetching
           target: "robert"
         }
       ]
+    },
+    metadata: {
+      type: "crosswalk",
+      name: "Nicknames",
+      description: "Nickname crosswalk for person matching",
+      shape: "crosswalk"
     }
   });
 
@@ -248,6 +260,12 @@ test("admin data detail normalization can reuse a raw payload without refetching
           target: "robert"
         }
       ]
+    },
+    metadata: {
+      type: "crosswalk",
+      name: "Nicknames",
+      description: "Nickname crosswalk for person matching",
+      shape: "crosswalk"
     }
   });
 });
@@ -529,6 +547,45 @@ test("admin data detail infers a keyed object editor from wrapped crosswalk maps
   });
 });
 
+test("admin data detail normalizes skills values into a flat table editor", () => {
+  const detail = normalizeLoadedAdminDataDocument({
+    id: "crm.data:skills",
+    namespace: "crm.data",
+    key: "skills",
+    type: "list",
+    name: "Skills",
+    description: "Canonical skills list",
+    shape: "list",
+    version: 2,
+    document: {
+      values: [
+        {
+          id: "skill-react",
+          label: "React",
+          domains: ["any", "linkedin"],
+          alsoKnownAs: ["ReactJS", "React.js", "React JS"],
+          description: "The library for web and native user interfaces.",
+          commonality: 1
+        }
+      ]
+    }
+  });
+
+  assert.deepEqual(detail.editor, {
+    columns: ["id", "label", "domains", "also known as", "description", "commonality"],
+    rows: [
+      {
+        id: "skill-react",
+        label: "React",
+        domains: "any, linkedin",
+        "also known as": "ReactJS, React.js, React JS",
+        description: "The library for web and native user interfaces.",
+        commonality: "1"
+      }
+    ]
+  });
+});
+
 test("buildDocumentFromEditor rewrites crosswalk rows into the canonical document shape", () => {
   assert.deepEqual(
     buildDocumentFromEditor({
@@ -569,6 +626,41 @@ test("buildDocumentFromEditor rewrites crosswalk rows into the canonical documen
           values: ["elizabeth"]
         }
       }
+    }
+  );
+});
+
+test("buildDocumentFromEditor rewrites skills table rows into the canonical values shape", () => {
+  assert.deepEqual(
+    buildDocumentFromEditor({
+      id: "crm.data:skills",
+      shape: "list",
+      columns: ["id", "label", "domains", "also known as", "description", "commonality"],
+      rows: [
+        {
+          id: "skill-react",
+          label: "React",
+          domains: "any, linkedin",
+          "also known as": "ReactJS, React.js, React JS",
+          description: "The library for web and native user interfaces.",
+          commonality: "1"
+        }
+      ],
+      document: {
+        values: []
+      }
+    }),
+    {
+      values: [
+        {
+          id: "skill-react",
+          label: "React",
+          domains: ["any", "linkedin"],
+          alsoKnownAs: ["ReactJS", "React.js", "React JS"],
+          description: "The library for web and native user interfaces.",
+          commonality: 1
+        }
+      ]
     }
   );
 });

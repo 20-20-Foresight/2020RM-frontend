@@ -10,13 +10,15 @@ import {
   Heading,
   HStack,
   Input,
+  InputGroup,
+  InputLeftElement,
   Select,
   Switch,
   Text,
   Textarea,
   VStack
 } from "@chakra-ui/react";
-import { EditIcon } from "@chakra-ui/icons";
+import { EditIcon, SearchIcon } from "@chakra-ui/icons";
 import { useLocation } from "@remix-run/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { InlineSaveStatus } from "./InlineSaveStatus";
@@ -149,6 +151,7 @@ export function CategoryEditorPage({ data, actionData }) {
   const [metadata, setMetadata] = useState(() => (data.metadata && typeof data.metadata === "object" ? { ...data.metadata } : {}));
   const [description, setDescription] = useState(data.description || "");
   const [rows, setRows] = useState(() => cloneRows(data.categoryEditor?.rows));
+  const [searchQuery, setSearchQuery] = useState("");
   const [showRetired, setShowRetired] = useState(false);
   const [editingRowKey, setEditingRowKey] = useState("");
   const [draftRow, setDraftRow] = useState(null);
@@ -206,6 +209,7 @@ export function CategoryEditorPage({ data, actionData }) {
     setMetadata(data.metadata && typeof data.metadata === "object" ? { ...data.metadata } : {});
     setDescription(data.description || "");
     setRows(cloneRows(data.categoryEditor?.rows));
+    setSearchQuery("");
     setEditingRowKey("");
     setDraftRow(null);
     setIsDraftNew(false);
@@ -229,7 +233,19 @@ export function CategoryEditorPage({ data, actionData }) {
     [dimensionOptions]
   );
 
-  const visibleRows = showRetired ? rows : rows.filter((row) => !isRetiredRow(row));
+  const visibleRows = (showRetired ? rows : rows.filter((row) => !isRetiredRow(row))).filter((row) => {
+    const query = readTrimmedString(searchQuery).toLowerCase();
+    if (!query) {
+      return true;
+    }
+
+    return [
+      row.label,
+      row.description,
+      row.examplesText,
+      dimensionNameById.get(row.dimensionId) || ""
+    ].some((value) => readTrimmedString(value).toLowerCase().includes(query));
+  });
   const displayName = readTrimmedString(metadata?.name) || data.name;
 
   /**
@@ -380,9 +396,25 @@ export function CategoryEditorPage({ data, actionData }) {
 
         <VStack align="stretch" spacing={4} flex="1" minH="0">
           <Flex justify="space-between" align={{ base: "stretch", md: "center" }} gap={4} wrap="wrap">
-            <HStack spacing={3}>
-              <Switch isChecked={showRetired} onChange={(event) => setShowRetired(event.target.checked)} />
-              <Text color="gray.600">Show retired</Text>
+            <HStack spacing={3} align="end" flexWrap="wrap">
+              <FormControl maxW={{ base: "100%", md: "360px" }}>
+                <FormLabel mb={2}>Search</FormLabel>
+                <InputGroup>
+                  <InputLeftElement pointerEvents="none">
+                    <SearchIcon color="gray.400" />
+                  </InputLeftElement>
+                  <Input
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Filter by category, dimension, description, or example"
+                  />
+                </InputGroup>
+              </FormControl>
+
+              <HStack spacing={3} pb={1}>
+                <Switch isChecked={showRetired} onChange={(event) => setShowRetired(event.target.checked)} />
+                <Text color="gray.600">Show retired</Text>
+              </HStack>
             </HStack>
 
             <Button colorScheme="blue" onClick={startAddingRow} isDisabled={Boolean(editingRowKey)}>
@@ -432,7 +464,9 @@ export function CategoryEditorPage({ data, actionData }) {
               })
             ) : (
               <Box borderWidth="1px" borderColor="gray.200" borderRadius="xl" px={5} py={6} bg="white">
-                <Text color="gray.500">No categories are defined yet.</Text>
+                <Text color="gray.500">
+                  {rows.length ? "No categories matched the current filters." : "No categories are defined yet."}
+                </Text>
               </Box>
             )}
           </VStack>

@@ -1,15 +1,4 @@
-import {
-  Badge,
-  Box,
-  Button,
-  Flex,
-  Heading,
-  LinkBox,
-  LinkOverlay,
-  SimpleGrid,
-  Text,
-  VStack
-} from "@chakra-ui/react";
+import { Badge, Box, Flex, Heading, LinkBox, LinkOverlay, SimpleGrid, Text, VStack } from "@chakra-ui/react";
 import { json } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
 import { sortAdminDataItems } from "../models/admin-data-list.mjs";
@@ -168,18 +157,12 @@ export default function AdminDataSegmentationRoute() {
   return (
     <Box bg="white" h="100%" minH="0" display="flex" flexDirection="column">
       <Box px={{ base: 4, md: 6 }} py={{ base: 4, md: 5 }} borderBottomWidth="1px" bg="white">
-        <Flex justify="space-between" align={{ base: "start", md: "center" }} gap={4} wrap="wrap">
-          <Box>
-            <Heading size="md">Segmentation</Heading>
-            <Text color="gray.600" mt={2}>
-              Open the sector, vertical, keyword, and email industry reference pages for segmentation.
-            </Text>
-          </Box>
-
-          <Button as={Link} to="/admin/data" variant="outline">
-            Back To Data
-          </Button>
-        </Flex>
+        <Box>
+          <Heading size="md">Segmentation</Heading>
+          <Text color="gray.600" mt={2}>
+            Open the sector, vertical, keyword, and email industry reference pages for segmentation.
+          </Text>
+        </Box>
       </Box>
 
       <Box px={{ base: 4, md: 6 }} py={{ base: 4, md: 5 }} flex="1" minH="0" overflow="auto">

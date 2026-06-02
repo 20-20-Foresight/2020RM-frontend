@@ -38,7 +38,16 @@ test("navigation model defines the requested subsection labels", async () => {
     },
     {
       label: "Data",
-      children: ["Segmentation"]
+      children: [
+        "Organization Segmentation",
+        "Person Transformations",
+        "Places",
+        "Company Transformations",
+        "Position Levels",
+        "Email Scanning",
+        "Internet",
+        "Reference Material"
+      ]
     }
   ]);
   const jobsIndex = navItems.findIndex((item) => item.key === "jobs");

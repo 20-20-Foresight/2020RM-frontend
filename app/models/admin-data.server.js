@@ -15,6 +15,7 @@ class AdminDataApiError extends Error {
 }
 
 const KNOWN_EDITOR_SHAPES = new Set(["crosswalk", "list", "keyvalue", "object"]);
+const SKILLS_EDITOR_COLUMNS = ["id", "label", "domains", "also known as", "description", "commonality"];
 
 /**
  * Returns whether a value is a plain object.
@@ -37,6 +38,95 @@ function readTrimmedString(value) {
 
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
+}
+
+/**
+ * Returns whether the current context describes the Skills document.
+ * @param {{id?: unknown, key?: unknown, name?: unknown}} [context]
+ * @returns {boolean}
+ */
+function isSkillsDocument(context = {}) {
+  const candidates = [context.id, context.key, context.name]
+    .map((value) => readTrimmedString(value)?.toLowerCase())
+    .filter(Boolean);
+
+  return candidates.some((value) => value === "skills" || value === "crm.data:skills" || value.endsWith(":skills"));
+}
+
+/**
+ * Returns a stable fallback row id for one skill row.
+ * @param {string} label
+ * @param {string} primaryAlias
+ * @returns {string}
+ */
+function buildSkillRowId(label, primaryAlias = "") {
+  const basis = (primaryAlias || label || "skill")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return `skill-${basis || "row"}`;
+}
+
+/**
+ * Normalizes a delimited string or array into a unique string list.
+ * @param {unknown} value
+ * @returns {string[]}
+ */
+function normalizeDelimitedValues(value) {
+  const parts = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/[\n,]+/)
+      : [];
+
+  /** @type {string[]} */
+  const normalized = [];
+  const seen = new Set();
+  for (const part of parts) {
+    const trimmed = readTrimmedString(part);
+    const key = trimmed?.toLowerCase();
+    if (!trimmed || !key || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    normalized.push(trimmed);
+  }
+
+  return normalized;
+}
+
+/**
+ * Converts the Skills values list into a flat table editor.
+ * @param {unknown} document
+ * @returns {{columns: string[], rows: Record<string, string>[]}}
+ */
+function buildSkillsEditor(document) {
+  if (Array.isArray(document?.values)) {
+    return {
+      columns: [...SKILLS_EDITOR_COLUMNS],
+      rows: document.values
+        .filter((entry) => isPlainObject(entry))
+        .map((entry) => ({
+          id: readTrimmedString(entry.id) || buildSkillRowId(readTrimmedString(entry.label) || "skill"),
+          label: readTrimmedString(entry.label) || "",
+          domains: normalizeDelimitedValues(entry.domains).join(", "),
+          "also known as": normalizeDelimitedValues(entry.alsoKnownAs).join(", "),
+          description: readTrimmedString(entry.description) || "",
+          commonality:
+            readTrimmedString(entry.commonality) ||
+            (typeof entry.commonality === "number" && Number.isFinite(entry.commonality)
+              ? String(entry.commonality)
+              : "")
+        }))
+    };
+  }
+
+  return {
+    columns: [...SKILLS_EDITOR_COLUMNS],
+    rows: []
+  };
 }
 
 /**
@@ -483,6 +573,13 @@ function normalizeColumns(editor) {
  * @returns {{columns: string[], rows: Record<string, string>[]}}
  */
 function normalizeEditor(editor, options = {}) {
+  if (isSkillsDocument(options)) {
+    const skillsEditor = buildSkillsEditor(options.document);
+    if (skillsEditor.rows.length) {
+      return skillsEditor;
+    }
+  }
+
   const columns = normalizeColumns(editor);
   const rows = Array.isArray(editor?.rows)
     ? editor.rows
@@ -555,6 +652,10 @@ function renameEditorColumn(editor, sourceColumn, targetColumn) {
  * @returns {{columns: string[], rows: Record<string, string>[]}}
  */
 function applyDocumentEditorLabels(editor, context = {}) {
+  if (isSkillsDocument(context)) {
+    return editor;
+  }
+
   const shape = readTrimmedString(context.shape);
   const normalizedName = readTrimmedString(context.name)?.toLowerCase() || "";
   const normalizedKey = readTrimmedString(context.key)?.toLowerCase() || "";
@@ -653,6 +754,39 @@ function applyDocumentWrapper(document, nextValue, options = {}) {
  * @returns {unknown}
  */
 function buildDocumentFromEditor(options) {
+  if (isSkillsDocument(options)) {
+    /** @type {Array<Record<string, unknown>>} */
+    const values = [];
+    const rows = Array.isArray(options?.rows) ? options.rows.filter((row) => isPlainObject(row)) : [];
+
+    for (const row of rows) {
+      const label = readEditorCell(row.label);
+      if (!label) {
+        continue;
+      }
+
+      const configuredDomains = normalizeDelimitedValues(row.domains);
+      const domains = configuredDomains.length ? configuredDomains : ["any"];
+      const alsoKnownAs = normalizeDelimitedValues(row["also known as"]);
+      const rowId = readEditorCell(row.id) || buildSkillRowId(label, alsoKnownAs[0] || label);
+      const description = readEditorCell(row.description);
+      const commonality = readEditorCell(row.commonality);
+      values.push({
+        id: rowId,
+        label,
+        domains,
+        alsoKnownAs,
+        ...(description ? { description } : {}),
+        ...(commonality && Number.isFinite(Number(commonality)) ? { commonality: Number(commonality) } : {}),
+        ...(!commonality || Number.isFinite(Number(commonality)) ? {} : { commonality })
+      });
+    }
+
+    return applyDocumentWrapper(options?.document, values, {
+      preferredKey: "values"
+    });
+  }
+
   const shape = readTrimmedString(options?.shape);
   const columns = Array.isArray(options?.columns)
     ? options.columns.map((column) => readTrimmedString(column)).filter(Boolean)
@@ -855,7 +989,10 @@ function normalizeLoadedAdminDataDocument(result) {
   const editor = applyDocumentEditorLabels(
     normalizeEditor(result?.editor, {
       shape,
-      document: result?.document
+      document: result?.document,
+      id: result?.id,
+      key: result?.key,
+      name: result?.name
     }),
     {
       name: result?.name,
@@ -869,7 +1006,8 @@ function normalizeLoadedAdminDataDocument(result) {
     ...normalizeSummary(result),
     shape,
     document: result?.document ?? null,
-    editor
+    editor,
+    metadata: extractRawMetadata(result)
   };
 }
 
@@ -918,6 +1056,7 @@ async function loadRawAdminDataDocument(options) {
  *   shape?: string|null,
  *   columns?: string[],
  *   rows?: Record<string, unknown>[],
+ *   metadata?: Record<string, unknown>|null,
  *   document?: unknown,
  *   fetchImpl?: typeof fetch
  * }} options
@@ -930,7 +1069,8 @@ async function saveAdminDataDocument(options) {
     shape: options.shape,
     columns,
     rows,
-    document: options.document
+    document: options.document,
+    id: options.id
   });
 
   const payload = await requestAdminDataApi({
@@ -938,6 +1078,7 @@ async function saveAdminDataDocument(options) {
     pathname: `/api/rest/admin/data/${encodeURIComponent(options.id)}`,
     method: "PUT",
     body: {
+      ...(isPlainObject(options.metadata) ? { metadata: options.metadata } : {}),
       description: typeof options.description === "string" ? options.description : "",
       expectedVersion: Number.isFinite(options.expectedVersion) ? Number(options.expectedVersion) : null,
       document: nextDocument,

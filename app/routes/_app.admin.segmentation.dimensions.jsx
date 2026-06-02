@@ -1,7 +1,7 @@
 import { redirect } from "@remix-run/node";
 
 export async function loader() {
-  return redirect("/admin/data?type=dimension-definition");
+  return redirect("/admin/data/all?type=dimension-definition");
 }
 
 export default function AdminSegmentationDimensionsRoute() {

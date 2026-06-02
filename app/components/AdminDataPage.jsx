@@ -6,6 +6,13 @@ import {
   Badge,
   Box,
   Button,
+  Drawer,
+  DrawerBody,
+  DrawerCloseButton,
+  DrawerContent,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerOverlay,
   Flex,
   FormControl,
   FormLabel,
@@ -14,6 +21,10 @@ import {
   Input,
   InputGroup,
   InputLeftElement,
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuList,
   Select,
   Table,
   Tbody,
@@ -23,16 +34,21 @@ import {
   Th,
   Thead,
   Tr,
+  useDisclosure,
   VStack
 } from "@chakra-ui/react";
-import { SearchIcon } from "@chakra-ui/icons";
-import { Form, Link, useLocation } from "@remix-run/react";
+import { SearchIcon, SettingsIcon } from "@chakra-ui/icons";
+import { useLocation } from "@remix-run/react";
 import {
   filterAdminDataItems,
   listAdminDataTypes,
   sortAdminDataItems
 } from "../models/admin-data-list.mjs";
+import { rowMatchesColumnFilters } from "../models/admin-data-page.mjs";
 import { RegexBuilder, RegexTokenDisplay, parseRegexToTokens } from "./ui/molecules/RegexBuilder";
+import { ColumnFilterHeader } from "./ui/molecules/ColumnFilterHeader";
+import { InlineSaveStatus } from "./InlineSaveStatus";
+import { useQueuedDocumentSave } from "../hooks/useQueuedDocumentSave";
 
 /**
  * Builds the route pathname for one admin data record.
@@ -73,6 +89,29 @@ function buildEmptyRow(columns) {
   return Object.fromEntries(columns.map((column) => [column, ""]));
 }
 
+function isSkillsDocument(data) {
+  const candidates = [data?.id, data?.key, data?.name]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter(Boolean);
+
+  return candidates.some((value) => value === "skills" || value === "crm.data:skills" || value.endsWith(":skills"));
+}
+
+function createEditorRowId(prefix = "row") {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function splitEditorList(value) {
+  return String(value || "")
+    .split(/[\n,]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
 /**
  * Clones the current editor rows into mutable state.
  * @param {Record<string, string>[]} rows
@@ -93,8 +132,22 @@ function cloneRows(rows) {
  * @param {Record<string, string>[]} rows
  * @returns {boolean}
  */
-function isRegexColumn(columnName, rows, shape, allColumns) {
-  const lcName = columnName.toLowerCase();
+function isRegexColumn(columnName, rows, shape, allColumns, documentContext = {}) {
+  const lcName = String(columnName || "").trim().toLowerCase();
+  const normalizedDocumentContext = [
+    documentContext?.name,
+    documentContext?.key,
+    documentContext?.id
+  ]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter(Boolean);
+
+  if (
+    lcName === "name" &&
+    normalizedDocumentContext.some((value) => value === "countries" || value.endsWith(":countries"))
+  ) {
+    return false;
+  }
   if (lcName.includes("regex") || lcName.includes("pattern") || lcName.includes("regexp")) {
     return true;
   }
@@ -121,19 +174,46 @@ function isRegexColumn(columnName, rows, shape, allColumns) {
  * @returns {JSX.Element}
  */
 function AdminDataPageHeader({ title, description, children }) {
+  const hasHeading = Boolean(String(title || "").trim());
+  const hasDescription = Boolean(String(description || "").trim());
+
   return (
     <Box px={{ base: 4, md: 6 }} py={{ base: 4, md: 5 }} borderBottomWidth="1px" bg="white">
       <Flex justify="space-between" align={{ base: "start", md: "center" }} gap={4} wrap="wrap">
-        <Box>
-          <Heading size="md">{title}</Heading>
-          <Text color="gray.600" mt={2}>
-            {description}
-          </Text>
-        </Box>
+        {hasHeading || hasDescription ? (
+          <Box>
+            {hasHeading ? <Heading size="md">{title}</Heading> : null}
+            {hasDescription ? (
+              <Text color="gray.600" mt={2}>
+                {description}
+              </Text>
+            ) : null}
+          </Box>
+        ) : null}
         {children}
       </Flex>
     </Box>
   );
+}
+
+function getDocumentPresentation(data) {
+  if (isSkillsDocument(data)) {
+    return {
+      visibleColumns: ["label", "domains", "also known as", "description"],
+      hiddenColumns: ["id", "commonality"],
+      badgeColumns: new Set(["domains"]),
+      textareaColumns: new Set(["description", "also known as"]),
+      wrappedColumns: new Set(["description"])
+    };
+  }
+
+  return {
+    visibleColumns: data.editor.columns,
+    hiddenColumns: [],
+    badgeColumns: new Set(),
+    textareaColumns: new Set(),
+    wrappedColumns: new Set()
+  };
 }
 
 /**
@@ -418,24 +498,105 @@ function AdminDataEditorFallback({ data }) {
  * @returns {JSX.Element}
  */
 export function AdminDataDetailEditor({ data, actionData, isSaving = false }) {
+  const location = useLocation();
+  const documentPresentation = useMemo(() => getDocumentPresentation(data), [data]);
+  const [metadata, setMetadata] = useState(() => (data.metadata && typeof data.metadata === "object" ? { ...data.metadata } : {}));
+  const [draftMetadata, setDraftMetadata] = useState(() => (data.metadata && typeof data.metadata === "object" ? { ...data.metadata } : {}));
+  const [draftDescription, setDraftDescription] = useState(data.description || "");
   const [description, setDescription] = useState(data.description || "");
   const [rows, setRows] = useState(() => cloneRows(data.editor.rows));
   const [editingRowIndex, setEditingRowIndex] = useState(null);
   const [editingRow, setEditingRow] = useState(null);
   const [pendingRegex, setPendingRegex] = useState({});
+  const [filters, setFilters] = useState({});
+  const [draftFilters, setDraftFilters] = useState({});
+  const [openFilterKeys, setOpenFilterKeys] = useState({});
+  const skipDescriptionAutoSaveRef = useRef(true);
+  const {
+    isOpen: isRowDrawerOpen,
+    onOpen: openRowDrawer,
+    onClose: closeRowDrawer
+  } = useDisclosure();
+  const {
+    isOpen: isMetadataDrawerOpen,
+    onOpen: openMetadataDrawerState,
+    onClose: closeMetadataDrawerState
+  } = useDisclosure();
+  const {
+    saveSummary,
+    isSaving: isQueuedSaving,
+    savedVisible,
+    saveError,
+    requestSave
+  } = useQueuedDocumentSave({
+    pathname: location.pathname,
+    initialSummary: data,
+    buildFormData(summary) {
+      const formData = new FormData();
+      formData.set("shape", data.shape || "");
+      formData.set("description", description);
+      formData.set("metadata", JSON.stringify(metadata));
+      formData.set("expectedVersion", summary.version == null ? "" : String(summary.version));
+      formData.set("columns", JSON.stringify(data.editor.columns));
+      formData.set("rows", JSON.stringify(rows));
+      formData.set("document", JSON.stringify(data.document ?? null));
+      return formData;
+    }
+  });
 
   const regexColumns = useMemo(
-    () => new Set(data.editor.columns.filter((c) => isRegexColumn(c, data.editor.rows, data.shape, data.editor.columns))),
-    [data.editor.columns, data.editor.rows, data.shape]
+    () =>
+      new Set(
+        data.editor.columns.filter((c) =>
+          isRegexColumn(c, data.editor.rows, data.shape, data.editor.columns, {
+            id: data.id,
+            key: data.key,
+            name: data.name
+          })
+        )
+      ),
+    [data.editor.columns, data.editor.rows, data.shape, data.id, data.key, data.name]
   );
 
   useEffect(() => {
+    setMetadata(data.metadata && typeof data.metadata === "object" ? { ...data.metadata } : {});
+    setDraftMetadata(data.metadata && typeof data.metadata === "object" ? { ...data.metadata } : {});
     setDescription(data.description || "");
+    setDraftDescription(data.description || "");
     setRows(cloneRows(data.editor.rows));
     setEditingRowIndex(null);
     setEditingRow(null);
     setPendingRegex({});
+    setFilters({});
+    setDraftFilters({});
+    setOpenFilterKeys({});
+    skipDescriptionAutoSaveRef.current = true;
   }, [data.description, data.editor.rows, data.id, data.version]);
+
+  useEffect(() => {
+    if (skipDescriptionAutoSaveRef.current) {
+      skipDescriptionAutoSaveRef.current = false;
+      return undefined;
+    }
+
+    const timer = setTimeout(() => {
+      requestSave();
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [description]);
+
+  function buildSaveFormData(summary, nextRows = rows, nextDescription = description, nextMetadata = metadata) {
+    const formData = new FormData();
+    formData.set("shape", data.shape || "");
+    formData.set("description", nextDescription);
+    formData.set("metadata", JSON.stringify(nextMetadata));
+    formData.set("expectedVersion", summary.version == null ? "" : String(summary.version));
+    formData.set("columns", JSON.stringify(data.editor.columns));
+    formData.set("rows", JSON.stringify(nextRows));
+    formData.set("document", JSON.stringify(data.document ?? null));
+    return formData;
+  }
 
   function handleStartEdit(rowIndex) {
     const editRow = { ...rows[rowIndex] };
@@ -446,12 +607,14 @@ export function AdminDataDetailEditor({ data, actionData, isSaving = false }) {
     setEditingRowIndex(rowIndex);
     setEditingRow(editRow);
     setPendingRegex(pending);
+    openRowDrawer();
   }
 
   function handleCancelEdit() {
     setEditingRowIndex(null);
     setEditingRow(null);
     setPendingRegex({});
+    closeRowDrawer();
   }
 
   function handleEditRowChange(column, value) {
@@ -459,71 +622,182 @@ export function AdminDataDetailEditor({ data, actionData, isSaving = false }) {
   }
 
   function handleEditDone() {
-    setRows((currentRows) =>
-      currentRows.map((row, index) =>
-        index === editingRowIndex ? { ...editingRow, ...pendingRegex } : row
-      )
-    );
+    const nextRow = { ...editingRow, ...pendingRegex };
+    if (isSkillsDocument(data)) {
+      nextRow.id = String(nextRow.id || createEditorRowId("skill"));
+    }
+    const nextRows =
+      editingRowIndex == null || editingRowIndex >= rows.length
+        ? [...rows, nextRow]
+        : rows.map((row, index) => (index === editingRowIndex ? nextRow : row));
+    setRows(nextRows);
     setEditingRowIndex(null);
     setEditingRow(null);
     setPendingRegex({});
+    requestSave((summary) => buildSaveFormData(summary, nextRows));
+    closeRowDrawer();
   }
 
   function handleAddRow() {
-    setRows((currentRows) => [...currentRows, buildEmptyRow(data.editor.columns)]);
+    const nextRow = buildEmptyRow(data.editor.columns);
+    if (isSkillsDocument(data)) {
+      nextRow.id = createEditorRowId("skill");
+    }
+    const pending = {};
+    for (const col of regexColumns) {
+      pending[col] = nextRow[col] || "";
+    }
+    setEditingRowIndex(rows.length);
+    setEditingRow(nextRow);
+    setPendingRegex(pending);
+    openRowDrawer();
   }
 
   function handleRemoveRow(rowIndex) {
-    setRows((currentRows) => currentRows.filter((_, index) => index !== rowIndex));
+    const nextRows = rows.filter((_, index) => index !== rowIndex);
+    setRows(nextRows);
+    requestSave((summary) => buildSaveFormData(summary, nextRows));
+    if (editingRowIndex === rowIndex) {
+      handleCancelEdit();
+    }
+  }
+
+  function toggleFilter(key) {
+    setOpenFilterKeys((currentKeys) => ({
+      ...currentKeys,
+      [key]: !currentKeys[key]
+    }));
+  }
+
+  function updateDraftFilter(key, value) {
+    setDraftFilters((currentFilters) => ({
+      ...currentFilters,
+      [key]: value
+    }));
+  }
+
+  function applyFilter(key, explicitValue) {
+    const nextValue = String(typeof explicitValue === "string" ? explicitValue : draftFilters[key] || "").trim();
+
+    setFilters((currentFilters) => {
+      if (!nextValue) {
+        const nextFilters = { ...currentFilters };
+        delete nextFilters[key];
+        return nextFilters;
+      }
+
+      return {
+        ...currentFilters,
+        [key]: nextValue
+      };
+    });
+
+    setOpenFilterKeys((currentKeys) => ({
+      ...currentKeys,
+      [key]: false
+    }));
+  }
+
+  function clearFilter(key) {
+    setFilters((currentFilters) => {
+      const nextFilters = { ...currentFilters };
+      delete nextFilters[key];
+      return nextFilters;
+    });
+
+    setDraftFilters((currentFilters) => ({
+      ...currentFilters,
+      [key]: ""
+    }));
+  }
+
+  function openMetadataDrawer() {
+    setDraftMetadata(metadata && typeof metadata === "object" ? { ...metadata } : {});
+    setDraftDescription(description);
+    openMetadataDrawerState();
+  }
+
+  function closeMetadataDrawer() {
+    setDraftMetadata(metadata && typeof metadata === "object" ? { ...metadata } : {});
+    setDraftDescription(description);
+    closeMetadataDrawerState();
+  }
+
+  function updateMetadataField(key, value) {
+    setDraftMetadata((currentValue) => ({
+      ...(currentValue && typeof currentValue === "object" ? currentValue : {}),
+      [key]: value
+    }));
+  }
+
+  function saveMetadataChanges() {
+    const nextMetadata = draftMetadata && typeof draftMetadata === "object" ? { ...draftMetadata } : {};
+    const nextDescription = draftDescription;
+    skipDescriptionAutoSaveRef.current = true;
+    setMetadata(nextMetadata);
+    setDescription(nextDescription);
+    requestSave((summary) => buildSaveFormData(summary, rows, nextDescription, nextMetadata));
+    closeMetadataDrawerState();
   }
 
   const isEditing = editingRowIndex !== null;
-  const colCount = data.editor.columns.length + 1;
-  const nonRegexColumns = data.editor.columns.filter((c) => !regexColumns.has(c));
+  const visibleColumns = documentPresentation.visibleColumns.filter((column) => data.editor.columns.includes(column));
+  const colCount = visibleColumns.length + 1;
+  const nonRegexColumns = visibleColumns.filter((c) => !regexColumns.has(c));
   const regexColumnsArr = [...regexColumns];
+  const filteredRows = rows.filter((row) => rowMatchesColumnFilters(row, filters));
+  const displayName = String(metadata?.name || data.name || "").trim() || data.name;
+  const displayDescription = String(description || "").trim();
 
   return (
     <Box bg="white" h="100%" minH="0" display="flex" flexDirection="column">
       <AdminDataPageHeader
-        title={data.name}
-        description={`${data.id || "Unknown id"}${data.lastmodifiedby ? ` • Last modified ${formatTimestamp(data.lastmodifieddate)} by ${data.lastmodifiedby}` : ""}`}
+        title=""
+        description=""
       >
-        <HStack spacing={3} align="center" flexWrap="wrap">
-          <Link
-            to="/admin/data"
-            style={{
-              color: "#2B6CB0",
-              fontWeight: 600,
-              textDecoration: "none"
-            }}
-          >
-            Back To Data Sets
-          </Link>
-          {data.shape ? <Badge colorScheme="blue">{data.shape}</Badge> : null}
-          {data.version != null ? <Badge colorScheme="gray">Version {data.version}</Badge> : null}
-        </HStack>
+        <Flex justify="space-between" align={{ base: "start", md: "center" }} gap={4} wrap="wrap" w="full">
+          <Box>
+            <HStack spacing={3} align="center" flexWrap="wrap">
+              <Heading size="md">{displayName}</Heading>
+              {data.version != null ? <Badge colorScheme="gray">Version {data.version}</Badge> : null}
+            </HStack>
+            {displayDescription ? (
+              <Text color="gray.600" mt={2}>
+                {displayDescription}
+              </Text>
+            ) : null}
+          </Box>
+
+          <HStack spacing={2} align="center">
+            <Menu placement="bottom-end">
+              <MenuButton
+                as={Button}
+                variant="ghost"
+                size="sm"
+                minW="auto"
+                px={2}
+                aria-label="Editor actions"
+              >
+                <SettingsIcon />
+              </MenuButton>
+              <MenuList>
+                <MenuItem onClick={openMetadataDrawer}>Edit Metadata</MenuItem>
+              </MenuList>
+            </Menu>
+          </HStack>
+        </Flex>
       </AdminDataPageHeader>
 
       <Box px={{ base: 4, md: 6 }} py={{ base: 4, md: 5 }} flex="1" minH="0" display="flex" flexDirection="column">
-        {actionData?.error?.message ? (
+        {saveError?.message || actionData?.error?.message ? (
           <Alert status="error" borderRadius="md" mb={4}>
             <AlertIcon />
-            <AlertDescription>{actionData.error.message}</AlertDescription>
-          </Alert>
-        ) : null}
-
-        {actionData?.ok ? (
-          <Alert status="success" borderRadius="md" mb={4}>
-            <AlertIcon />
-            <AlertDescription>
-              Saved version {actionData.saved?.version != null ? actionData.saved.version : "updated"} successfully.
-            </AlertDescription>
+            <AlertDescription>{saveError?.message || actionData.error.message}</AlertDescription>
           </Alert>
         ) : null}
 
         {data.editor.columns.length ? (
-          <Form
-            method="post"
+          <Box
             style={{
               display: "flex",
               flexDirection: "column",
@@ -531,37 +805,12 @@ export function AdminDataDetailEditor({ data, actionData, isSaving = false }) {
               minHeight: 0
             }}
           >
-            <input type="hidden" name="shape" value={data.shape || ""} />
-            <input type="hidden" name="expectedVersion" value={data.version == null ? "" : String(data.version)} />
-            <input type="hidden" name="columns" value={JSON.stringify(data.editor.columns)} />
-            <input type="hidden" name="rows" value={JSON.stringify(rows)} />
-            <input type="hidden" name="document" value={JSON.stringify(data.document ?? null)} />
-
             <VStack align="stretch" spacing={4} h="100%" minH="0">
               <Flex justify="space-between" align={{ base: "stretch", xl: "end" }} gap={4} wrap="wrap">
-                <FormControl maxW={{ base: "100%", xl: "420px" }}>
-                  <FormLabel>Description</FormLabel>
-                  <Textarea
-                    name="description"
-                    value={description}
-                    onChange={(event) => setDescription(event.target.value)}
-                    resize="vertical"
-                    minH="112px"
-                  />
-                </FormControl>
-
+                <Box />
                 <HStack spacing={3} align="center" flexWrap="wrap">
                   <Button type="button" variant="outline" onClick={handleAddRow} isDisabled={isEditing}>
                     Add Row
-                  </Button>
-                  <Button
-                    type="submit"
-                    colorScheme="blue"
-                    isLoading={isSaving}
-                    loadingText="Saving"
-                    isDisabled={isEditing}
-                  >
-                    Save Changes
                   </Button>
                 </HStack>
               </Flex>
@@ -571,7 +820,7 @@ export function AdminDataDetailEditor({ data, actionData, isSaving = false }) {
                   <Table size="sm" variant="simple">
                     <Thead bg="gray.50">
                       <Tr>
-                        {data.editor.columns.map((column) => (
+                        {visibleColumns.map((column) => (
                           <Th
                             key={column}
                             position="sticky"
@@ -580,7 +829,17 @@ export function AdminDataDetailEditor({ data, actionData, isSaving = false }) {
                             color={regexColumns.has(column) ? "blue.700" : undefined}
                             zIndex={1}
                           >
-                            {column}
+                            <ColumnFilterHeader
+                              columnKey={column}
+                              label={column}
+                              isOpen={Boolean(openFilterKeys[column])}
+                              activeValue={filters[column] || ""}
+                              draftValue={draftFilters[column] || ""}
+                              onToggle={() => toggleFilter(column)}
+                              onDraftChange={(value) => updateDraftFilter(column, value)}
+                              onApply={() => applyFilter(column)}
+                              onClear={() => clearFilter(column)}
+                            />
                           </Th>
                         ))}
                         <Th position="sticky" top={0} bg="gray.50" zIndex={1} textAlign="right">
@@ -589,165 +848,73 @@ export function AdminDataDetailEditor({ data, actionData, isSaving = false }) {
                       </Tr>
                     </Thead>
                     <Tbody>
-                      {rows.length ? (
-                        rows.map((row, rowIndex) => {
-                          const isThisRowEditing = editingRowIndex === rowIndex;
+                      {filteredRows.length ? (
+                        filteredRows.map((row) => {
+                          const rowIndex = rows.indexOf(row);
                           return (
-                            <React.Fragment key={`${data.id || "row"}-${rowIndex}`}>
-                              {/* View row */}
-                              <Tr bg={isThisRowEditing ? "blue.50" : undefined}>
-                                {data.editor.columns.map((column) => (
-                                  <Td key={`${rowIndex}-${column}`} verticalAlign="middle" py={isThisRowEditing ? 2 : undefined}>
+                            <Tr key={`${data.id || "row"}-${rowIndex}`}>
+                                {visibleColumns.map((column) => (
+                                  <Td key={`${rowIndex}-${column}`} verticalAlign="middle">
                                     {regexColumns.has(column) ? (
-                                      <RegexTokenDisplay
-                                        pattern={
-                                          isThisRowEditing
-                                            ? (pendingRegex[column] ?? row[column])
-                                            : row[column]
-                                        }
-                                      />
+                                      <RegexTokenDisplay pattern={row[column]} />
+                                    ) : documentPresentation.badgeColumns.has(column) ? (
+                                      row[column] ? (
+                                        <HStack spacing={2} flexWrap="wrap">
+                                          {splitEditorList(row[column]).map((item) => (
+                                            <Badge key={`${rowIndex}-${column}-${item}`} colorScheme="blue" variant="subtle" textTransform="none">
+                                              {item}
+                                            </Badge>
+                                          ))}
+                                        </HStack>
+                                      ) : (
+                                        <Text fontSize="sm" color="gray.400">
+                                          —
+                                        </Text>
+                                      )
                                     ) : (
                                       <Text
                                         fontSize="sm"
-                                        color={
-                                          (isThisRowEditing ? editingRow[column] : row[column])
-                                            ? "gray.800"
-                                            : "gray.400"
-                                        }
+                                        color={row[column] ? "gray.800" : "gray.400"}
+                                        whiteSpace={documentPresentation.wrappedColumns.has(column) ? "pre-wrap" : "normal"}
                                       >
-                                        {(isThisRowEditing ? editingRow[column] : row[column]) || "—"}
+                                        {row[column] || "—"}
                                       </Text>
                                     )}
                                   </Td>
                                 ))}
                                 <Td textAlign="right" whiteSpace="nowrap" verticalAlign="middle">
-                                  {isThisRowEditing ? (
-                                    <HStack spacing={1} justify="flex-end">
-                                      <Button
-                                        type="button"
-                                        size="xs"
-                                        variant="ghost"
-                                        onClick={handleCancelEdit}
-                                      >
-                                        Cancel
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        size="xs"
-                                        colorScheme="blue"
-                                        onClick={handleEditDone}
-                                      >
-                                        Done
-                                      </Button>
-                                    </HStack>
-                                  ) : (
-                                    <HStack spacing={1} justify="flex-end">
-                                      <Button
-                                        type="button"
-                                        size="xs"
-                                        variant="ghost"
-                                        colorScheme="blue"
-                                        onClick={() => handleStartEdit(rowIndex)}
-                                        isDisabled={isEditing}
-                                      >
-                                        Edit
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        size="xs"
-                                        variant="ghost"
-                                        colorScheme="red"
-                                        onClick={() => handleRemoveRow(rowIndex)}
-                                        isDisabled={isEditing}
-                                      >
-                                        Remove
-                                      </Button>
-                                    </HStack>
-                                  )}
+                                  <HStack spacing={1} justify="flex-end">
+                                    <Button
+                                      type="button"
+                                      size="xs"
+                                      variant="ghost"
+                                      colorScheme="blue"
+                                      onClick={() => handleStartEdit(rowIndex)}
+                                      isDisabled={isEditing}
+                                    >
+                                      Edit
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      size="xs"
+                                      variant="ghost"
+                                      colorScheme="red"
+                                      onClick={() => handleRemoveRow(rowIndex)}
+                                      isDisabled={isEditing}
+                                    >
+                                      Remove
+                                    </Button>
+                                  </HStack>
                                 </Td>
                               </Tr>
-
-                              {/* Edit expansion row */}
-                              {isThisRowEditing && (
-                                <Tr>
-                                  <Td colSpan={colCount} py={3} px={4} bg="blue.50" borderTop="none">
-                                    <Box
-                                      bg="white"
-                                      border="1px solid"
-                                      borderColor="blue.100"
-                                      borderRadius="lg"
-                                      p={4}
-                                    >
-                                      <VStack align="stretch" spacing={4}>
-                                        {/* Non-regex columns */}
-                                        {nonRegexColumns.length > 0 && (
-                                          <HStack align="flex-start" spacing={4} flexWrap="wrap">
-                                            {nonRegexColumns.map((column) => (
-                                              <FormControl key={column} flex="1" minW="160px" maxW="320px">
-                                                <FormLabel fontSize="xs" mb={1}>{column}</FormLabel>
-                                                <Input
-                                                  size="sm"
-                                                  value={editingRow[column] || ""}
-                                                  onChange={(e) => handleEditRowChange(column, e.target.value)}
-                                                  bg="white"
-                                                />
-                                              </FormControl>
-                                            ))}
-                                          </HStack>
-                                        )}
-
-                                        {/* Regex columns */}
-                                        {regexColumnsArr.map((column) => {
-                                          const currentPattern = pendingRegex[column] || "";
-                                          const parsed = (() => {
-                                            try { return parseRegexToTokens(currentPattern); }
-                                            catch { return null; }
-                                          })();
-                                          return (
-                                            <Box key={column}>
-                                              <Text
-                                                fontSize="xs"
-                                                fontWeight="semibold"
-                                                color="gray.500"
-                                                mb={2}
-                                                textTransform="uppercase"
-                                                letterSpacing="wide"
-                                              >
-                                                {column}
-                                              </Text>
-                                              {parsed === null && currentPattern && (
-                                                <Alert status="warning" borderRadius="md" mb={3} py={2}>
-                                                  <AlertIcon boxSize={4} />
-                                                  <AlertDescription fontSize="xs">
-                                                    Pattern uses constructs that can't be shown visually. Editing will replace it.
-                                                  </AlertDescription>
-                                                </Alert>
-                                              )}
-                                              <RegexBuilder
-                                                key={`edit-${rowIndex}-${column}`}
-                                                compact
-                                                initialTokens={parsed?.tokens ?? []}
-                                                initialAnchorStart={parsed?.anchorStart ?? false}
-                                                initialAnchorEnd={parsed?.anchorEnd ?? false}
-                                                onPatternChange={(p) =>
-                                                  setPendingRegex((prev) => ({ ...prev, [column]: p }))
-                                                }
-                                              />
-                                            </Box>
-                                          );
-                                        })}
-                                      </VStack>
-                                    </Box>
-                                  </Td>
-                                </Tr>
-                              )}
-                            </React.Fragment>
                           );
                         })
                       ) : (
                         <Tr>
                           <Td colSpan={colCount}>
-                            <Text color="gray.500">No rows yet. Add the first row above.</Text>
+                            <Text color="gray.500">
+                              {rows.length ? "No rows matched the current column filters." : "No rows yet. Add the first row above."}
+                            </Text>
                           </Td>
                         </Tr>
                       )}
@@ -755,12 +922,135 @@ export function AdminDataDetailEditor({ data, actionData, isSaving = false }) {
                   </Table>
                 </Box>
               </Box>
+
+              <InlineSaveStatus
+                isSaving={isQueuedSaving || isSaving}
+                savedVisible={savedVisible}
+                lastmodifieddate={saveSummary.lastmodifieddate || data.lastmodifieddate}
+                lastmodifiedby={saveSummary.lastmodifiedby || data.lastmodifiedby}
+              />
             </VStack>
-          </Form>
+          </Box>
         ) : (
           <AdminDataEditorFallback data={data} />
         )}
       </Box>
+
+      <Drawer isOpen={isRowDrawerOpen} onClose={handleCancelEdit} placement="right" size="lg">
+        <DrawerOverlay />
+        <DrawerContent>
+          <DrawerCloseButton />
+          <DrawerHeader>{editingRowIndex == null || editingRowIndex >= rows.length ? "Add Row" : "Edit Row"}</DrawerHeader>
+          <DrawerBody pb={6}>
+            <VStack align="stretch" spacing={4}>
+              {nonRegexColumns.map((column) => (
+                <FormControl key={column}>
+                  <FormLabel>{column}</FormLabel>
+                  {documentPresentation.textareaColumns.has(column) ? (
+                    <Textarea
+                      value={editingRow?.[column] || ""}
+                      onChange={(event) => handleEditRowChange(column, event.target.value)}
+                      bg="white"
+                      minH={column === "description" ? "140px" : "96px"}
+                    />
+                  ) : (
+                    <Input
+                      value={editingRow?.[column] || ""}
+                      onChange={(event) => handleEditRowChange(column, event.target.value)}
+                      bg="white"
+                    />
+                  )}
+                </FormControl>
+              ))}
+
+              {regexColumnsArr.map((column) => {
+                const currentPattern = pendingRegex[column] || "";
+                const parsed = (() => {
+                  try {
+                    return parseRegexToTokens(currentPattern);
+                  } catch {
+                    return null;
+                  }
+                })();
+
+                return (
+                  <Box key={column}>
+                    <Text fontSize="sm" fontWeight="semibold" color="gray.800" mb={2}>
+                      {column}
+                    </Text>
+                    {parsed === null && currentPattern ? (
+                      <Alert status="warning" borderRadius="md" mb={3} py={2}>
+                        <AlertIcon boxSize={4} />
+                        <AlertDescription fontSize="xs">
+                          Pattern uses constructs that cannot be shown visually. Editing will replace it.
+                        </AlertDescription>
+                      </Alert>
+                    ) : null}
+                    <RegexBuilder
+                      compact
+                      initialTokens={parsed?.tokens ?? []}
+                      initialAnchorStart={parsed?.anchorStart ?? false}
+                      initialAnchorEnd={parsed?.anchorEnd ?? false}
+                      onPatternChange={(pattern) => setPendingRegex((currentValue) => ({ ...currentValue, [column]: pattern }))}
+                    />
+                  </Box>
+                );
+              })}
+            </VStack>
+          </DrawerBody>
+          <DrawerFooter>
+            <HStack spacing={3}>
+              <Button type="button" variant="ghost" onClick={handleCancelEdit}>
+                Cancel
+              </Button>
+              <Button type="button" colorScheme="blue" onClick={handleEditDone} isLoading={isSaving}>
+                Save Row
+              </Button>
+            </HStack>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+
+      <Drawer isOpen={isMetadataDrawerOpen} onClose={closeMetadataDrawer} placement="right" size="md">
+        <DrawerOverlay />
+        <DrawerContent>
+          <DrawerCloseButton />
+          <DrawerHeader>Metadata</DrawerHeader>
+          <DrawerBody pb={6}>
+            <VStack align="stretch" spacing={4}>
+              <FormControl>
+                <FormLabel>Name</FormLabel>
+                <Input value={String(draftMetadata?.name || "")} onChange={(event) => updateMetadataField("name", event.target.value)} bg="white" />
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Type</FormLabel>
+                <Input value={String(draftMetadata?.type || "")} onChange={(event) => updateMetadataField("type", event.target.value)} bg="white" />
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Shape</FormLabel>
+                <Input value={data.shape || ""} isReadOnly bg="gray.50" />
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Description</FormLabel>
+                <Textarea value={draftDescription} onChange={(event) => setDraftDescription(event.target.value)} minH="120px" bg="white" />
+              </FormControl>
+            </VStack>
+          </DrawerBody>
+          <DrawerFooter>
+            <HStack spacing={3}>
+              <Button type="button" variant="ghost" onClick={closeMetadataDrawer}>
+                Cancel
+              </Button>
+              <Button type="button" colorScheme="blue" onClick={saveMetadataChanges} isLoading={isSaving}>
+                Save
+              </Button>
+            </HStack>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
     </Box>
   );
 }

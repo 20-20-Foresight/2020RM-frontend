@@ -16,6 +16,8 @@ import {
   FormLabel,
   Heading,
   HStack,
+  InputGroup,
+  InputLeftElement,
   IconButton,
   Input,
   Select,
@@ -36,7 +38,7 @@ import {
   Wrap,
   WrapItem
 } from "@chakra-ui/react";
-import { DeleteIcon, EditIcon } from "@chakra-ui/icons";
+import { DeleteIcon, EditIcon, SearchIcon } from "@chakra-ui/icons";
 import { useLocation } from "@remix-run/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MdDescription } from "react-icons/md";
@@ -586,6 +588,7 @@ export function FocusToIndustryEditorPage({ data, actionData }) {
   const [metadata, setMetadata] = useState(() => (data.metadata && typeof data.metadata === "object" ? { ...data.metadata } : {}));
   const [description, setDescription] = useState(data.description || "");
   const [rows, setRows] = useState(() => cloneRows(data.focusToIndustry?.rows));
+  const [searchQuery, setSearchQuery] = useState("");
   const [editingRowKey, setEditingRowKey] = useState("");
   const [draftRow, setDraftRow] = useState(null);
   const [isDraftNew, setIsDraftNew] = useState(false);
@@ -631,6 +634,7 @@ export function FocusToIndustryEditorPage({ data, actionData }) {
     setMetadata(data.metadata && typeof data.metadata === "object" ? { ...data.metadata } : {});
     setDescription(data.description || "");
     setRows(cloneRows(data.focusToIndustry?.rows));
+    setSearchQuery("");
     setEditingRowKey("");
     setDraftRow(null);
     setIsDraftNew(false);
@@ -690,6 +694,22 @@ export function FocusToIndustryEditorPage({ data, actionData }) {
     });
   }, [draftRow?.focusSlugs, focusOptions, focusSlugByToken]);
   const displayName = readTrimmedString(metadata?.name) || data.name;
+  const visibleRows = rows.filter((row) => {
+    const query = readTrimmedString(searchQuery).toLowerCase();
+    if (!query) {
+      return true;
+    }
+
+    const haystack = [
+      ...row.focusSlugs.map((value) => focusMetaByToken.get(value)?.label || value),
+      ...summarizeIndustryTargets(row.industryTargets),
+      row.notes
+    ]
+      .map((value) => readTrimmedString(value).toLowerCase())
+      .join(" ");
+
+    return haystack.includes(query);
+  });
 
   useEffect(() => {
     if (!selectedFocusSlug && filteredFocusOptions[0]?.slug) {
@@ -945,13 +965,27 @@ export function FocusToIndustryEditorPage({ data, actionData }) {
 
         <VStack align="stretch" spacing={4} flex="1" minH="0">
           <Flex justify="space-between" align={{ base: "stretch", md: "center" }} gap={4} wrap="wrap">
+            <FormControl maxW={{ base: "100%", md: "360px" }}>
+              <FormLabel mb={2}>Search</FormLabel>
+              <InputGroup>
+                <InputLeftElement pointerEvents="none">
+                  <SearchIcon color="gray.400" />
+                </InputLeftElement>
+                <Input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Filter by focus, industry output, or note"
+                />
+              </InputGroup>
+            </FormControl>
+
             <Button colorScheme="blue" onClick={startAddingRow} isDisabled={Boolean(editingRowKey)}>
               Add Pattern
             </Button>
           </Flex>
 
           <Box overflow="auto" pb={1}>
-            {rows.length ? (
+            {visibleRows.length ? (
               <Table size="sm" variant="simple">
                 <Thead>
                   <Tr>
@@ -961,7 +995,7 @@ export function FocusToIndustryEditorPage({ data, actionData }) {
                   </Tr>
                 </Thead>
                 <Tbody>
-                  {rows.map((row) => {
+                  {visibleRows.map((row) => {
                     const notes = readTrimmedString(row.notes);
                     const highlightState = rowHighlightStateByKey[row.__clientKey];
                     const rowBackground =
@@ -1032,7 +1066,9 @@ export function FocusToIndustryEditorPage({ data, actionData }) {
               </Table>
             ) : (
               <Box borderWidth="1px" borderColor="gray.200" borderRadius="xl" px={5} py={6} bg="white">
-                <Text color="gray.500">No Focus to Industry patterns are defined yet.</Text>
+                <Text color="gray.500">
+                  {rows.length ? "No Focus to Industry patterns matched the current search." : "No Focus to Industry patterns are defined yet."}
+                </Text>
               </Box>
             )}
           </Box>
