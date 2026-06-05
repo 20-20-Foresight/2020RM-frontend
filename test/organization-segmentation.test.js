@@ -105,7 +105,7 @@ test("buildOrganizationSegmentationViewModel uses nested projection reasons when
           name: "PE RE",
           score: 8,
           sourceDocumentId: "segmentation.description-rules",
-          sourceDocumentName: "Description Rules",
+          sourceDocumentName: "Phrases",
           reasons: [
             {
               reason: {
@@ -114,7 +114,7 @@ test("buildOrganizationSegmentationViewModel uses nested projection reasons when
                 phrase: "Public REIT platform with private real estate investments"
               },
               crosswalkDocumentId: "segmentation.description-rules",
-              crosswalkDocumentName: "Description Rules",
+              crosswalkDocumentName: "Phrases",
               rule: "row-reit-1"
             }
           ]
@@ -131,7 +131,7 @@ test("buildOrganizationSegmentationViewModel uses nested projection reasons when
                 description: "Derived from existing data, awaiting fresh segmentation"
               },
               crosswalkDocumentId: "segmentation.description-rules",
-              crosswalkDocumentName: "Description Rules",
+              crosswalkDocumentName: "Phrases",
               rule: "row-reit-1"
             }
           ]
@@ -150,7 +150,7 @@ test("buildOrganizationSegmentationViewModel uses nested projection reasons when
     value: "PE RE",
     score: 8,
     crosswalkDocumentId: "segmentation.description-rules",
-    crosswalkDocumentName: "Description Rules",
+    crosswalkDocumentName: "Phrases",
     rule: "row-reit-1",
     reasonHtml:
       "&ldquo;Public <mark>REIT</mark> platform with private real estate investments...&rdquo;"

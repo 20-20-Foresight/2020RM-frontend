@@ -48,6 +48,7 @@ export function FilterableDataTable({
   getRowKey,
   getRowProps,
   tableSize = "sm",
+  showSectionHeaders = true,
 }) {
   const [filters, setFilters] = React.useState({});
   const [draftFilters, setDraftFilters] = React.useState({});
@@ -187,6 +188,9 @@ export function FilterableDataTable({
                 letterSpacing="wider"
                 w={column.width}
                 textAlign={column.align === "right" ? "right" : undefined}
+                borderRightWidth={column.dividerAfter ? "3px" : undefined}
+                borderRightStyle={column.dividerAfter || undefined}
+                borderRightColor={column.dividerAfter ? "gray.200" : undefined}
               >
                 {column.filter && column.filter.type !== "none" ? (
                   <ColumnFilterHeader
@@ -212,25 +216,27 @@ export function FilterableDataTable({
         <Tbody>
           {filteredSections.map((section) => (
             <React.Fragment key={section.key}>
-              <Tr bg="gray.50">
-                <Td colSpan={resolvedColumns.length} py={4}>
-                  <VStack align="start" spacing={1}>
-                    <HStack spacing={2}>
-                      <Text fontSize="sm" fontWeight="semibold" color="gray.900">
-                        {section.title}
-                      </Text>
-                      <Badge colorScheme="gray" variant="subtle" fontSize="xs">
-                        {section.filteredRows.length}
-                      </Badge>
-                    </HStack>
-                    {section.description ? (
-                      <Text fontSize="xs" color="gray.500">
-                        {section.description}
-                      </Text>
-                    ) : null}
-                  </VStack>
-                </Td>
-              </Tr>
+              {showSectionHeaders ? (
+                <Tr bg="gray.50">
+                  <Td colSpan={resolvedColumns.length} py={4}>
+                    <VStack align="start" spacing={1}>
+                      <HStack spacing={2}>
+                        <Text fontSize="sm" fontWeight="semibold" color="gray.900">
+                          {section.title}
+                        </Text>
+                        <Badge colorScheme="gray" variant="subtle" fontSize="xs">
+                          {section.filteredRows.length}
+                        </Badge>
+                      </HStack>
+                      {section.description ? (
+                        <Text fontSize="xs" color="gray.500">
+                          {section.description}
+                        </Text>
+                      ) : null}
+                    </VStack>
+                  </Td>
+                </Tr>
+              ) : null}
               {section.filteredRows.length > 0 ? (
                 section.filteredRows.map((row) => {
                   const rowProps = typeof getRowProps === "function" ? getRowProps(row, section) : {};
@@ -242,6 +248,9 @@ export function FilterableDataTable({
                           key={`${getRowKey(row)}:${column.key}`}
                           py={3}
                           textAlign={column.align === "right" ? "right" : undefined}
+                          borderRightWidth={column.dividerAfter ? "3px" : undefined}
+                          borderRightStyle={column.dividerAfter || undefined}
+                          borderRightColor={column.dividerAfter ? "gray.200" : undefined}
                         >
                           {column.renderCell(row, section)}
                         </Td>

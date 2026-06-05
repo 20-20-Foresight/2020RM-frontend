@@ -58,6 +58,13 @@ function normalizeText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function slugifyText(value) {
+  return normalizeText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 function normalizeTextList(value) {
   return String(value || "")
     .split("\n")
@@ -602,6 +609,53 @@ async function updateDefinition({
   });
 }
 
+async function addDefinition({
+  request,
+  slug,
+  label,
+  description,
+  examplesText,
+  notesText,
+  visible,
+}) {
+  const normalizedLabel = normalizeText(label) || "New Definition";
+  let addedDefinitionId = "";
+  const result = await saveDocument({
+    request,
+    slug,
+    mutate(document) {
+      const definitions = Array.isArray(document.definitions) ? document.definitions : [];
+      const keyBase = slugifyText(normalizedLabel) || randomUUID();
+      const slugPrefix = normalizeText(slug) || "definition";
+      const usedIds = new Set(definitions.map((definition) => normalizeText(definition?.id)).filter(Boolean));
+      const usedKeys = new Set(definitions.map((definition) => normalizeText(definition?.key)).filter(Boolean));
+      let suffix = 0;
+      let nextKey = keyBase;
+      let nextId = `${slugPrefix}-${nextKey}`;
+      while (usedIds.has(nextId) || usedKeys.has(nextKey)) {
+        suffix += 1;
+        nextKey = `${keyBase}-${suffix}`;
+        nextId = `${slugPrefix}-${nextKey}`;
+      }
+      addedDefinitionId = nextId;
+      definitions.push({
+        id: addedDefinitionId,
+        key: nextKey,
+        label: normalizedLabel,
+        description: normalizeText(description),
+        examples: normalizeTextList(examplesText),
+        notes: normalizeTextList(notesText),
+        ...(slug === "keywords" ? { visible: visible !== false } : {}),
+      });
+      document.definitions = definitions;
+    },
+  });
+  return {
+    ...result,
+    addedDefinitionId,
+  };
+}
+
 async function updateRule({
   request,
   slug,
@@ -674,6 +728,7 @@ async function addRule({
 }
 
 module.exports = {
+  addDefinition,
   addRule,
   buildSegmentationDocumentPath,
   loadSegmentationDocument,

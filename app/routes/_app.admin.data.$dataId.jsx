@@ -1,11 +1,14 @@
-import { json } from "@remix-run/node";
+import { json, redirect } from "@remix-run/node";
 import { useActionData, useLoaderData, useNavigation } from "@remix-run/react";
 import { Alert, AlertDescription, AlertIcon } from "@chakra-ui/react";
 import { AdminDataDetailEditor } from "../components/AdminDataPage";
 import { CategoryEditorPage } from "../components/CategoryEditorPage";
+import { CompiledCrosswalkViewerPage } from "../components/CompiledCrosswalkViewerPage";
 import { DimensionDefinitionEditorPage } from "../components/DimensionDefinitionEditorPage";
 import { FocusToIndustryEditorPage } from "../components/FocusToIndustryEditorPage";
+import { PhrasesEditorPage } from "../components/PhrasesEditorPage";
 import { SegmentationDefaultEditorPage } from "../components/SegmentationDefaultEditorPage";
+import { TemplateCrosswalkEditorPage } from "../components/TemplateCrosswalkEditorPage";
 import { resolveLockedDimensionId } from "../models/category-editor-page.mjs";
 import { buildCreatedFocusRow, findExistingFocusRow } from "../models/focus-shortcut.mjs";
 import {
@@ -21,10 +24,21 @@ import {
   buildCategoryViewModel
 } from "../models/segmentation-category-document.mjs";
 import {
+  buildPhrasesDocument,
+  buildPhrasesViewModel
+} from "../models/phrases-document.mjs";
+import {
   buildSegmentationDefaultDocument,
   buildSegmentationDefaultViewModel,
   resolveSegmentationDefaultEditorType
 } from "../models/segmentation-default-editor.mjs";
+import {
+  buildTemplateCrosswalkDocument,
+  buildTemplateCrosswalkViewModel,
+  looksLikeCompiledCrosswalkDocument,
+  looksLikeTemplateCrosswalkDocument,
+  readCompiledPreviewRows
+} from "../models/template-crosswalk-document.mjs";
 
 const CUSTOM_SEGMENTATION_EDITOR_TYPES = new Set(["segmentation.default", "segmentation.code", "segmentation.list"]);
 const FOCUS_TO_INDUSTRY_DOCUMENT_KEY = "focus_to_industry";
@@ -140,6 +154,22 @@ function isFocusToIndustryDocument(data) {
   return key === FOCUS_TO_INDUSTRY_DOCUMENT_KEY || metadataKey === FOCUS_TO_INDUSTRY_DOCUMENT_KEY;
 }
 
+function isTemplateCrosswalkDocument(data) {
+  return looksLikeTemplateCrosswalkDocument(data?.document);
+}
+
+function isCompiledCrosswalkDocument(data) {
+  return looksLikeCompiledCrosswalkDocument(data?.document);
+}
+
+function isPhrasesDocument(data) {
+  return readTrimmedString(data?.key) === "phrases";
+}
+
+function readTrimmedString(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 export async function loader({ request, params }) {
   const id = typeof params.dataId === "string" ? params.dataId : "";
   const { loadRawAdminDataDocument, normalizeLoadedAdminDataDocument } = await loadAdminDataServerModule();
@@ -149,8 +179,83 @@ export async function loader({ request, params }) {
       request,
       id
     });
+    if (readTrimmedString(rawData?.key) === "phrases-authored") {
+      return redirect("/admin/data/crm.data%3Aphrases");
+    }
     const documentType = rawData.metadata?.type;
     const editorType = resolveSegmentationDefaultEditorType(rawData.editor, rawData.document, rawData.metadata?.type);
+
+    if (isPhrasesDocument(rawData)) {
+      const { loadSegmentationCategoryCatalog } = await loadSegmentationCategoryCatalogModule();
+      const categoryCatalog = await loadSegmentationCategoryCatalog({
+        request
+      });
+
+      return json({
+        data: {
+          ...rawData,
+          phrases: buildPhrasesViewModel({
+            document: rawData.document
+          }),
+          categoryCatalog
+        },
+        error: null
+      });
+    }
+
+    if (isCompiledCrosswalkDocument(rawData)) {
+      return json({
+        data: {
+          ...rawData,
+          compiledCrosswalk: {
+            authoredDocumentId:
+              readTrimmedString(rawData?.document?.authoredDocumentId) || "",
+            authoredDocumentName:
+              readTrimmedString(rawData?.document?.authoredDocumentName) || ""
+          }
+        },
+        error: null
+      });
+    }
+
+    if (isTemplateCrosswalkDocument(rawData)) {
+      const templateCrosswalk = buildTemplateCrosswalkViewModel({
+        document: rawData.document,
+        authoredKey: rawData.key
+      });
+
+      let compiledPreview = null;
+      const compiledPreviewId =
+        templateCrosswalk.compiledTargetNamespace && templateCrosswalk.compiledTargetKey
+          ? `${templateCrosswalk.compiledTargetNamespace}:${templateCrosswalk.compiledTargetKey}`
+          : "";
+
+      if (compiledPreviewId) {
+        try {
+          const compiledRawData = await loadRawAdminDataDocument({
+            request,
+            id: compiledPreviewId
+          });
+          compiledPreview = {
+            id: compiledPreviewId,
+            rows: readCompiledPreviewRows(compiledRawData?.document)
+          };
+        } catch (error) {
+          if (!(error?.name === "AdminDataApiError" && error?.statusCode === 404)) {
+            throw error;
+          }
+        }
+      }
+
+      return json({
+        data: {
+          ...rawData,
+          templateCrosswalk,
+          compiledPreview
+        },
+        error: null
+      });
+    }
 
     if (isFocusToIndustryDocument(rawData)) {
       const { loadFocusToIndustryCatalog } = await loadFocusToIndustryCatalogModule();
@@ -265,6 +370,12 @@ export async function action({ request, params }) {
   const dimensionDefinitionRows = parseJsonField(formData, "dimensionDefinitionRows", []);
   const categoryRows = parseJsonField(formData, "categoryRows", []);
   const focusToIndustryRows = parseJsonField(formData, "focusToIndustryRows", []);
+  const templateCrosswalkSets = parseJsonField(formData, "templateCrosswalkSets", []);
+  const templateCrosswalkKeywords = parseJsonField(formData, "templateCrosswalkKeywords", []);
+  const templateCrosswalkTemplates = parseJsonField(formData, "templateCrosswalkTemplates", []);
+  const phrasesRows = parseJsonField(formData, "phrasesRows", []);
+  const compiledTargetNamespace = readFormString(formData, "compiledTargetNamespace").trim();
+  const compiledTargetKey = readFormString(formData, "compiledTargetKey").trim();
   const customDocumentType = readFormString(formData, "customDocumentType").trim();
   const supportsPreference = readFormString(formData, "supportsPreference").trim() === "true";
 
@@ -438,6 +549,54 @@ export async function action({ request, params }) {
       });
     }
 
+    if (customDocumentType === "template-crosswalk") {
+      const saved = await saveRawAdminDataDocument({
+        request,
+        id,
+        metadata: metadata && typeof metadata === "object" ? metadata : null,
+        description,
+        expectedVersion,
+        editor: editor && typeof editor === "object" ? editor : null,
+        document: buildTemplateCrosswalkDocument({
+          authoredKey: id.includes(":") ? id.split(":").slice(1).join(":") : id,
+          sourceDocument: document,
+          compiledTargetNamespace,
+          compiledTargetKey,
+          sets: Array.isArray(templateCrosswalkSets) ? templateCrosswalkSets : [],
+          keywords: Array.isArray(templateCrosswalkKeywords) ? templateCrosswalkKeywords : [],
+          templates: Array.isArray(templateCrosswalkTemplates) ? templateCrosswalkTemplates : []
+        })
+      });
+
+      return json({
+        ok: true,
+        saved,
+        error: null
+      });
+    }
+
+    if (customDocumentType === "phrases") {
+      const saved = await saveRawAdminDataDocument({
+        request,
+        id,
+        type: "segmentation",
+        metadata: metadata && typeof metadata === "object" ? metadata : null,
+        description,
+        expectedVersion,
+        editor: editor && typeof editor === "object" ? editor : null,
+        document: buildPhrasesDocument({
+          sourceDocument: document,
+          rows: Array.isArray(phrasesRows) ? phrasesRows : []
+        })
+      });
+
+      return json({
+        ok: true,
+        saved,
+        error: null
+      });
+    }
+
     if (CUSTOM_SEGMENTATION_EDITOR_TYPES.has(editorType)) {
       const saved = await saveRawAdminDataDocument({
         request,
@@ -511,6 +670,30 @@ export default function AdminDataDetailRoute() {
   if (data.focusToIndustry) {
     return (
       <FocusToIndustryEditorPage
+        data={data}
+        actionData={actionData}
+        isSaving={navigation.state === "submitting"}
+      />
+    );
+  }
+
+  if (data.compiledCrosswalk) {
+    return <CompiledCrosswalkViewerPage data={data} />;
+  }
+
+  if (data.phrases) {
+    return (
+      <PhrasesEditorPage
+        data={data}
+        actionData={actionData}
+        isSaving={navigation.state === "submitting"}
+      />
+    );
+  }
+
+  if (data.templateCrosswalk) {
+    return (
+      <TemplateCrosswalkEditorPage
         data={data}
         actionData={actionData}
         isSaving={navigation.state === "submitting"}

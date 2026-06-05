@@ -258,6 +258,64 @@ function DefinitionCard({
   );
 }
 
+function AddDefinitionCard({
+  documentSlug,
+  activeTab,
+  isKeywordDocument = false,
+  onCancel,
+}) {
+  return (
+    <Box borderWidth="1px" borderColor="red.200" bg="white" borderRadius="xl" px={{ base: 4, md: 5 }} py={{ base: 4, md: 5 }} boxShadow="sm">
+      <Form method="post">
+        <VStack align="stretch" spacing={4}>
+          <input type="hidden" name="intent" value="add-definition" />
+          <input type="hidden" name="documentSlug" value={documentSlug} />
+          <input type="hidden" name="redirectTab" value={activeTab} />
+
+          <Heading size="md">Add Definition</Heading>
+
+          <FormControl>
+            <FormLabel>Name</FormLabel>
+            <Textarea name="label" minH="72px" />
+          </FormControl>
+
+          <FormControl>
+            <FormLabel>Description</FormLabel>
+            <Textarea name="description" minH="200px" />
+          </FormControl>
+
+          <FormControl>
+            <FormLabel>Examples</FormLabel>
+            <Textarea name="examplesText" minH="160px" placeholder="One example per line" />
+          </FormControl>
+
+          <FormControl>
+            <FormLabel>Notes</FormLabel>
+            <Textarea name="notesText" minH="160px" placeholder="One note per line" />
+          </FormControl>
+
+          {isKeywordDocument ? (
+            <FormControl>
+              <Checkbox name="visible" value="true" defaultChecked colorScheme="red">
+                Can appear in Visible Keywords
+              </Checkbox>
+            </FormControl>
+          ) : null}
+
+          <HStack justify="flex-end">
+            <Button type="button" variant="ghost" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button colorScheme="red" type="submit">
+              Add Definition
+            </Button>
+          </HStack>
+        </VStack>
+      </Form>
+    </Box>
+  );
+}
+
 function RuleCard({ documentSlug, rule, activeTab, isSaving = false, isSaved = false }) {
   const [isEditing, setIsEditing] = useState(false);
   const signals = readList(rule.signals);
@@ -484,7 +542,7 @@ export async function loader({ request, params }) {
 
 export async function action({ request, params }) {
   const documentSlug = typeof params.documentSlug === "string" ? params.documentSlug : "";
-  const { updateDefinition, updateRule, addRule } = await loadSegmentationDocumentModule();
+  const { updateDefinition, updateRule, addDefinition, addRule } = await loadSegmentationDocumentModule();
   const formData = await request.formData();
   const intent = readFormString(formData, "intent").trim();
   const redirectTab = readFormString(formData, "redirectTab").trim() || "definitions";
@@ -507,6 +565,17 @@ export async function action({ request, params }) {
       visible: readFormBoolean(formData, "visible"),
     });
     savedMarker = `definition:${definitionId}`;
+  } else if (intent === "add-definition") {
+    const result = await addDefinition({
+      request,
+      slug: documentSlug,
+      label: readFormString(formData, "label"),
+      description: readFormString(formData, "description"),
+      examplesText: readFormString(formData, "examplesText"),
+      notesText: readFormString(formData, "notesText"),
+      visible: readFormBoolean(formData, "visible"),
+    });
+    savedMarker = `definition:${result?.addedDefinitionId}`;
   } else if (intent === "save-rule") {
     const ruleId = readFormString(formData, "ruleId").trim();
     await updateRule({
@@ -558,13 +627,14 @@ export default function AdminDataSegmentationDocumentRoute() {
   const location = useLocation();
   const navigation = useNavigation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(() => (searchParams.get("tab") === "rules" ? "rules" : "definitions"));
+  const [isAddingDefinition, setIsAddingDefinition] = useState(false);
   const [isAddingRule, setIsAddingRule] = useState(false);
   const [savedMarker, setSavedMarker] = useState(() => parseSavedMarker(searchParams.get("saved")));
   const document = data?.document || null;
   const isKeywordDocument = document?.slug === "keywords";
   const reloadToken = data?.reloadToken || 0;
   const syncStatus = data?.syncStatus || null;
-  const activeTab = searchParams.get("tab") === "rules" ? "rules" : "definitions";
   const tabIndex = activeTab === "rules" ? 1 : 0;
   const definitionCards = useMemo(() => (Array.isArray(document?.definitions) ? document.definitions : []), [document?.definitions]);
   const ruleCards = useMemo(() => (Array.isArray(document?.rules) ? document.rules : []), [document?.rules]);
@@ -576,7 +646,7 @@ export default function AdminDataSegmentationDocumentRoute() {
   const pendingRuleId = isSameDocumentSubmission ? readFormString(navigation.formData || new FormData(), "ruleId").trim() : "";
   const isSavingDocument =
     isSameDocumentSubmission &&
-    ["save-definition", "save-rule", "add-rule"].includes(pendingIntent);
+    ["save-definition", "add-definition", "save-rule", "add-rule"].includes(pendingIntent);
   const syncTone =
     isSavingDocument
       ? "blue"
@@ -593,11 +663,20 @@ export default function AdminDataSegmentationDocumentRoute() {
           : "gray";
 
   useEffect(() => {
+    setIsAddingDefinition(false);
     setIsAddingRule(false);
   }, [reloadToken]);
 
   useEffect(() => {
     setSavedMarker(parseSavedMarker(searchParams.get("saved")));
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!searchParams.get("saved")) {
+      return;
+    }
+
+    setActiveTab(searchParams.get("tab") === "rules" ? "rules" : "definitions");
   }, [searchParams]);
 
   useEffect(() => {
@@ -616,12 +695,14 @@ export default function AdminDataSegmentationDocumentRoute() {
   }, [savedMarker, searchParams, setSearchParams]);
 
   function handleTabChange(index) {
-    if (index === 1) {
-      setSearchParams({ tab: "rules" });
-      return;
+    const nextTab = index === 1 ? "rules" : "definitions";
+    setActiveTab(nextTab);
+    if (nextTab !== "rules") {
+      setIsAddingRule(false);
     }
-
-    setSearchParams({});
+    if (nextTab !== "definitions") {
+      setIsAddingDefinition(false);
+    }
   }
 
   if (!document) {
@@ -694,7 +775,19 @@ export default function AdminDataSegmentationDocumentRoute() {
               <VStack align="stretch" spacing={4}>
                 <Flex justify="space-between" align="center" gap={4} wrap="wrap">
                   <Heading size="sm">Definitions</Heading>
+                  <Button colorScheme="red" onClick={() => setIsAddingDefinition(true)}>
+                    Add Definition
+                  </Button>
                 </Flex>
+
+                {isAddingDefinition ? (
+                  <AddDefinitionCard
+                    documentSlug={document.slug}
+                    activeTab={activeTab}
+                    isKeywordDocument={isKeywordDocument}
+                    onCancel={() => setIsAddingDefinition(false)}
+                  />
+                ) : null}
 
                 <SimpleGrid columns={{ base: 1, xl: 2 }} spacing={4}>
                   {definitionCards.map((entry) => (

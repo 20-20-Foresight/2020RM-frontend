@@ -1100,6 +1100,7 @@ async function saveAdminDataDocument(options) {
  * @param {{
  *   request: Request,
  *   id: string,
+ *   type?: string|null,
  *   metadata?: Record<string, unknown>|null,
  *   description?: string,
  *   expectedVersion?: number|null,
@@ -1115,6 +1116,7 @@ async function saveRawAdminDataDocument(options) {
     pathname: `/api/rest/admin/data/${encodeURIComponent(options.id)}`,
     method: "PUT",
     body: {
+      ...(readTrimmedString(options.type) ? { type: readTrimmedString(options.type) } : {}),
       ...(isPlainObject(options.metadata) ? { metadata: options.metadata } : {}),
       description: typeof options.description === "string" ? options.description : "",
       expectedVersion: Number.isFinite(options.expectedVersion) ? Number(options.expectedVersion) : null,
