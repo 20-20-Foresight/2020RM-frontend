@@ -181,7 +181,7 @@ test("readDisplayedSegmentationExplanations replaces current reasons with previe
         dimension: "Industry",
         value: "fintech",
         score: 5,
-        crosswalkDocumentName: "Phrases",
+        crosswalkDocumentName: "Description Rules",
         reasonHtml: "Derived from fresh description text"
       }
     ]

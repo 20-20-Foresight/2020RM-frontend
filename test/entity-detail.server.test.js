@@ -85,7 +85,7 @@ test("entity detail loader calls the organization detail REST endpoint and retur
                     score: 7,
                     reasons: [
                       {
-                        crosswalk: "Phrases",
+                        crosswalk: "Description Rules",
                         rule: "row-1",
                         reason: {
                           description: "Keyword match"
@@ -172,7 +172,7 @@ test("entity detail loader calls the organization detail REST endpoint and retur
             score: 7,
             reasons: [
               {
-                crosswalk: "Phrases",
+                crosswalk: "Description Rules",
                 rule: "row-1",
                 reason: {
                   description: "Keyword match"
