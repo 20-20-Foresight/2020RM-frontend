@@ -100,11 +100,11 @@ function hasPersonaKeyword(meta, keyword) {
  * @returns {boolean}
  */
 function isLearnAdmin(meta) {
-  const adminActions = Array.isArray(meta?.permissions?.admin_access?.system)
-    ? meta.permissions.admin_access.system
+  const dataSettingsActions = Array.isArray(meta?.permissions?.admin_access?.data_settings)
+    ? meta.permissions.admin_access.data_settings
     : [];
 
-  return adminActions.includes("object_editing") || hasPersonaKeyword(meta, "admin");
+  return dataSettingsActions.includes("access") || hasPersonaKeyword(meta, "admin");
 }
 
 /**

@@ -107,7 +107,8 @@ test("session meta loader can read a local fixture when SESSION_META_FIXTURE_PAT
       },
       permissions: {
         admin_access: {
-          system: ["access_control", "object_editing"]
+          configuration: ["access"],
+          data_settings: ["access"]
         }
       }
     }),

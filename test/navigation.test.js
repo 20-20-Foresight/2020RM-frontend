@@ -26,15 +26,11 @@ test("navigation model defines the requested subsection labels", async () => {
     },
     {
       label: "Tools",
-      children: ["Resegmentation"]
+      children: ["Company Research", "Resegmentation"]
     },
     {
       label: "Admin",
-      children: ["User Management"]
-    },
-    {
-      label: "Settings",
-      children: ["Research Feeds"]
+      children: ["Roles", "User Management"]
     },
     {
       label: "Data",
@@ -106,7 +102,7 @@ test("getNavigationItems hides admin children when the session lacks admin permi
       entity_access: {
         organization: ["read"]
       },
-      options_access: {},
+      tools_access: {},
       admin_access: {}
     }
   });
@@ -120,26 +116,26 @@ test("getNavigationItems exposes only the allowed admin subsections", async () =
   const items = getNavigationItems({
     permissions: {
       entity_access: {},
-      options_access: {},
+      tools_access: {},
       admin_access: {
-        system: ["access_control"]
+        configuration: ["access"]
       }
     }
   });
   const adminItem = items.find((item) => item.key === "admin");
 
-  assert.deepEqual(adminItem.children.map((child) => child.label), ["User Management"]);
+  assert.deepEqual(adminItem.children.map((child) => child.label), ["Roles", "User Management"]);
   assert.equal(items.some((item) => item.key === "data"), false);
 });
 
-test("getNavigationItems exposes Data as a top-level item for object-editing users", async () => {
+test("getNavigationItems exposes Data as a top-level item for data-settings users", async () => {
   const { getNavigationItems } = await import("../app/models/navigation.mjs");
   const items = getNavigationItems({
     permissions: {
       entity_access: {},
-      options_access: {},
+      tools_access: {},
       admin_access: {
-        system: ["object_editing"]
+        data_settings: ["access"]
       }
     }
   });

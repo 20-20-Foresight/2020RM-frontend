@@ -116,6 +116,11 @@ export const navItems = [
     dividerAbove: true,
     children: [
       {
+        key: "admin-roles",
+        label: "Roles",
+        to: "/admin/roles"
+      },
+      {
         key: "admin-user-management",
         label: "User Management",
         to: "/admin/user-management"
@@ -207,18 +212,21 @@ export function getExpandedNavItemKeys(pathname) {
 
 /**
  * Returns the navigation model filtered by the current permission payload.
- * @param {{permissions?: {admin_access?: {system?: string[]}}}|null|undefined} meta
+ * @param {{permissions?: {admin_access?: {configuration?: string[], data_settings?: string[]}}}|null|undefined} meta
  * @returns {typeof navItems}
  */
 export function getNavigationItems(meta) {
-  const adminActions = Array.isArray(meta?.permissions?.admin_access?.system)
-    ? meta.permissions.admin_access.system
+  const adminActions = Array.isArray(meta?.permissions?.admin_access?.configuration)
+    ? meta.permissions.admin_access.configuration
+    : [];
+  const dataSettingsActions = Array.isArray(meta?.permissions?.admin_access?.data_settings)
+    ? meta.permissions.admin_access.data_settings
     : [];
 
   return navItems
     .map((item) => {
       if (item.key === "data") {
-        return adminActions.includes("object_editing") ? item : null;
+        return dataSettingsActions.includes("access") ? item : null;
       }
 
       if (item.key !== "admin") {
@@ -226,8 +234,12 @@ export function getNavigationItems(meta) {
       }
 
       const children = (item.children || []).filter((child) => {
+        if (child.key === "admin-roles") {
+          return adminActions.includes("access");
+        }
+
         if (child.key === "admin-user-management") {
-          return adminActions.includes("access_control");
+          return adminActions.includes("access");
         }
 
         return false;

@@ -15,11 +15,14 @@
     "entity_access": {
       "organization": ["read"],
       "person": ["read"],
-      "job": ["read"]
+      "service": ["read"]
     },
-    "options_access": {},
+    "tools_access": {
+      "resegmentation": ["access"]
+    },
     "admin_access": {
-      "system": ["access_control", "object_editing"]
+      "configuration": ["access"],
+      "data_settings": ["access"]
     }
   },
   "links": {
