@@ -154,14 +154,7 @@ export const navItems = [
     key: "settings",
     label: "Settings",
     to: "/settings",
-    icon: "settings",
-    children: [
-      {
-        key: "settings-feeds",
-        label: "Research Feeds",
-        to: "/settings/feeds"
-      }
-    ]
+    icon: "settings"
   },
   {
     key: "design",

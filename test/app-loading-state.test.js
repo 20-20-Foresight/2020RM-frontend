@@ -199,6 +199,27 @@ test("loading overlay ignores inline fetcher saves on the current admin data pag
   );
 });
 
+test("loading overlay ignores embedded company research drawer fetchers", () => {
+  assert.deepEqual(
+    getAppLoadingOverlayState({
+      currentPathname: "/tools/company-research/feeds",
+      navigationState: "idle",
+      fetchers: [
+        {
+          state: "submitting",
+          formMethod: "post",
+          formAction: "/tools/company-research/feeds/new"
+        }
+      ]
+    }),
+    {
+      isLoading: false,
+      isSubmitting: false,
+      label: null
+    }
+  );
+});
+
 test("loading overlay uses segmentation-specific copy for navigations but not same-route segmentation saves", () => {
   assert.deepEqual(
     getAppLoadingOverlayState({

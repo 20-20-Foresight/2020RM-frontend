@@ -110,7 +110,7 @@ function getLatestRefreshText(feed) {
   return feed.last_run_completed_at ? formatDate(feed.last_run_completed_at) || "" : "";
 }
 
-function buildFeedTableColumns() {
+function buildFeedTableColumns(basePath = "/settings/feeds") {
   return [
     {
       key: "name",
@@ -122,7 +122,7 @@ function buildFeedTableColumns() {
       },
       renderCell: (feed, section) => (
         <VStack align="start" spacing={0.5}>
-          <Link to={`/settings/feeds/${feed.id}`}>
+          <Link to={`${basePath}/${feed.id}`}>
             <Text
               fontWeight="medium"
               fontSize="sm"
@@ -157,7 +157,7 @@ function buildFeedTableColumns() {
     },
     {
       key: "priority",
-      label: "Priority",
+      label: "Percentage",
       width: "10%",
       filter: {
         type: "text",
@@ -165,7 +165,7 @@ function buildFeedTableColumns() {
       },
       renderCell: (feed) => (
         <Text fontSize="sm" color="gray.800" fontWeight="semibold">
-          {normalizePriority(feed.priority)}
+          {`${normalizePriority(feed.priority)}%`}
         </Text>
       ),
     },
@@ -219,7 +219,7 @@ function buildFeedTableColumns() {
       renderCell: (feed) => (
         <Button
           as={Link}
-          to={`/settings/feeds/${feed.id}`}
+          to={`${basePath}/${feed.id}`}
           size="sm"
           leftIcon={<EditIcon />}
           variant="outline"
@@ -232,7 +232,7 @@ function buildFeedTableColumns() {
   ];
 }
 
-function NewFeedMenu() {
+function NewFeedMenu({ createBasePath = "/settings/feeds/new" }) {
   return (
     <Menu>
       <MenuButton
@@ -249,7 +249,7 @@ function NewFeedMenu() {
           <MenuItem
             key={source}
             as={Link}
-            to={`/settings/feeds/new?source=${source}`}
+            to={`${createBasePath}?source=${source}`}
             fontSize="sm"
           >
             <HStack spacing={2}>
@@ -272,8 +272,16 @@ function NewFeedMenu() {
  *   error: string|null
  * }} props
  */
-export function FeedsListPage({ feeds, stats, error }) {
-  const columns = React.useMemo(() => buildFeedTableColumns(), []);
+export function FeedsListPage({
+  feeds,
+  stats,
+  error,
+  title = "Research Feeds",
+  description = "Custom lists from external sources that feed the research queue.",
+  basePath = "/settings/feeds",
+  createBasePath = "/settings/feeds/new",
+}) {
+  const columns = React.useMemo(() => buildFeedTableColumns(basePath), [basePath]);
   const activeFeeds = React.useMemo(
     () => sortFeeds(feeds.filter((feed) => feed.enabled !== false)),
     [feeds]
@@ -308,12 +316,12 @@ export function FeedsListPage({ feeds, stats, error }) {
       <Box px={{ base: 4, md: 6 }} py={{ base: 4, md: 5 }} borderBottomWidth="1px" bg="white">
         <Flex justify="space-between" align="center" gap={4} wrap="wrap">
           <Box>
-            <Heading size="md">Research Feeds</Heading>
+            <Heading size="md">{title}</Heading>
             <Text color="gray.600" mt={1} fontSize="sm">
-              Custom lists from external sources that feed the research queue.
+              {description}
             </Text>
           </Box>
-          <NewFeedMenu />
+          <NewFeedMenu createBasePath={createBasePath} />
         </Flex>
       </Box>
 
@@ -352,7 +360,7 @@ export function FeedsListPage({ feeds, stats, error }) {
             <Text fontSize="sm" color="gray.400" mb={4}>
               Add a feed to preview source results and queue company research.
             </Text>
-            <NewFeedMenu />
+            <NewFeedMenu createBasePath={createBasePath} />
           </Box>
         ) : null}
 

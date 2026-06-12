@@ -4,6 +4,15 @@
  */
 export const toolsConfig = [
   {
+    key: "company-research",
+    label: "Company Research",
+    to: "/tools/company-research",
+    description:
+      "Queue operations, manual lists, feed intake, and prioritization for Company Research.",
+    icon: "travel_explore",
+    status: "available"
+  },
+  {
     key: "resegmentation",
     label: "Resegmentation",
     to: "/tools/resegmentation",

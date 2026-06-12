@@ -945,17 +945,21 @@ function SearchConfigurationCard({
           </Alert>
         ) : null}
 
-        {isNew && canCreateFromPreview ? (
-          <Button
-            type="submit"
-            colorScheme="blue"
-            size="sm"
-            leftIcon={<MdSave />}
-            isLoading={isSaving}
-            alignSelf="flex-start"
-          >
-            Create & Queue Search
-          </Button>
+        {isNew ? (
+          <HStack spacing={3} flexWrap="wrap">
+            <Button
+              type="submit"
+              name="_action"
+              value="create"
+              colorScheme="blue"
+              size="sm"
+              leftIcon={<MdSave />}
+              isLoading={isSaving}
+              isDisabled={!canCreateFromPreview}
+            >
+              Create & Queue Search
+            </Button>
+          </HStack>
         ) : null}
       </VStack>
     </SurfaceCard>
@@ -1028,7 +1032,18 @@ function FeedLifecycleControlsCard({
 // Editor form body (shared between new/edit)
 // ---------------------------------------------------------------------------
 
-function FeedEditorForm({ feed, isNew, actionData, availableLists = [] }) {
+function FeedEditorForm({
+  feed,
+  isNew,
+  actionData,
+  availableLists = [],
+  backPath = "/settings/feeds",
+  backLabel = "Research Feeds",
+  formComponent: FormComponent = Form,
+  formAction,
+  submission = null,
+  extraHiddenFields = null,
+}) {
   const navigation = useNavigation();
   const previewRef = useRef(null);
   const generatedNameTimestampRef = useRef(new Date());
@@ -1048,18 +1063,21 @@ function FeedEditorForm({ feed, isNew, actionData, availableLists = [] }) {
   const [tone, setTone] = useState("default");
   const [isNameCustomized, setIsNameCustomized] = useState(!isNew ? true : Boolean(feed.name));
 
-  const navigationIntent = readFeedFormIntent(navigation.formData);
+  const activeFormData =
+    submission?.formData || (!submission ? navigation.formData : null);
+  const activeState = submission?.state || (!submission ? navigation.state : "idle");
+  const navigationIntent = readFeedFormIntent(activeFormData);
   const isSaving =
-    navigation.state !== "idle" &&
+    activeState !== "idle" &&
     (navigationIntent === "create" || navigationIntent === "update");
   const isPreviewing =
-    navigation.state !== "idle" &&
+    activeState !== "idle" &&
     navigationIntent === "preview";
   const isRefreshing =
-    navigation.state !== "idle" &&
+    activeState !== "idle" &&
     navigationIntent === "refresh";
   const isTogglingPause =
-    navigation.state !== "idle" &&
+    activeState !== "idle" &&
     (navigationIntent === "pause" || navigationIntent === "resume");
   const suggestedFeedName = isNew
     ? buildSuggestedFeedName(source, settings, generatedNameTimestampRef.current)
@@ -1086,15 +1104,15 @@ function FeedEditorForm({ feed, isNew, actionData, availableLists = [] }) {
     !!source &&
     (isPreviewing ||
       !!actionData?.preview ||
-      (navigation.state === "idle" && !!actionData?.error && actionData?.intent === "preview"));
+      (activeState === "idle" && !!actionData?.error && actionData?.intent === "preview"));
   const runStatus = String(actionData?.run?.status || feed.last_run_status || "").toLowerCase();
   const hasActiveRun = !isNew && (runStatus === "pending" || runStatus === "running");
 
   useEffect(() => {
-    if (navigation.state === "idle" && tone === "saving") {
+    if (activeState === "idle" && tone === "saving") {
       setTone("default");
     }
-  }, [navigation.state, tone]);
+  }, [activeState, tone]);
 
   useEffect(() => {
     if (!isNew || isNameCustomized) {
@@ -1106,16 +1124,6 @@ function FeedEditorForm({ feed, isNew, actionData, availableLists = [] }) {
   useEffect(() => {
     setListOptions(filterOrganizationLists(availableLists));
   }, [availableLists]);
-
-  useEffect(() => {
-    if (!shouldShowPreviewPanel || !previewRef.current) {
-      return;
-    }
-    previewRef.current.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  }, [shouldShowPreviewPanel, isPreviewing, actionData?.preview, actionData?.error]);
 
   useEffect(() => {
     if (source !== "list" && recordsLimit === "") {
@@ -1144,7 +1152,7 @@ function FeedEditorForm({ feed, isNew, actionData, availableLists = [] }) {
   }
 
   return (
-    <Form method="post" onSubmit={handleSubmit}>
+    <FormComponent method="post" action={formAction} onSubmit={handleSubmit}>
       <input type="hidden" name="_action" value={isNew ? "create" : "update"} />
       {!isNew && <input type="hidden" name="feedId" value={feed.id} />}
       {isNew ? <input type="hidden" name="source" value={source} /> : null}
@@ -1154,6 +1162,7 @@ function FeedEditorForm({ feed, isNew, actionData, availableLists = [] }) {
       {isNew ? (
         <input type="hidden" name="previewSignature" value={canCreateFromPreview ? currentPreviewSignature : ""} />
       ) : null}
+      {extraHiddenFields}
 
       <VStack align="stretch" spacing={4}>
         <FeedRunActivityPanel initialRun={actionData?.run || null} />
@@ -1196,7 +1205,7 @@ function FeedEditorForm({ feed, isNew, actionData, availableLists = [] }) {
             ) : (
               <FeedPreviewPanel
                 preview={actionData?.preview || null}
-                previewFailed={!actionData?.preview && !isPreviewing && navigation.state === "idle" && actionData?.intent === "preview"}
+                previewFailed={!actionData?.preview && !isPreviewing && activeState === "idle" && actionData?.intent === "preview"}
                 previewError={actionData?.error || null}
               />
             )}
@@ -1249,13 +1258,13 @@ function FeedEditorForm({ feed, isNew, actionData, availableLists = [] }) {
         <Flex justify="space-between" align="center" pt={1}>
           <Button
             as={Link}
-            to="/settings/feeds"
+            to={backPath}
             variant="ghost"
             size="sm"
             leftIcon={<MdArrowBack />}
             color="gray.600"
           >
-            Back to Research Feeds
+            {`Back to ${backLabel}`}
           </Button>
           <HStack spacing={3}>
             {!isNew ? (
@@ -1334,7 +1343,7 @@ function FeedEditorForm({ feed, isNew, actionData, availableLists = [] }) {
           setIsListFinderOpen(false);
         }}
       />
-    </Form>
+    </FormComponent>
   );
 }
 
@@ -1413,7 +1422,19 @@ function LastRunPanel({ feed }) {
  *   actionData: {error?: string}|null
  * }} props
  */
-export function FeedEditPage({ feed, initialRun, actionData, availableLists = [] }) {
+export function FeedEditPage({
+  feed,
+  initialRun,
+  actionData,
+  availableLists = [],
+  backPath = "/settings/feeds",
+  backLabel = "Research Feeds",
+  embedded = false,
+  formComponent = Form,
+  formAction,
+  submission = null,
+  extraHiddenFields = null,
+}) {
   const sourceColor = getFeedSourceColor(feed.source);
   const resolvedActionData =
     actionData?.run || actionData?.preview || actionData?.error
@@ -1421,6 +1442,37 @@ export function FeedEditPage({ feed, initialRun, actionData, availableLists = []
       : initialRun
         ? { run: initialRun }
         : actionData;
+
+  if (embedded) {
+    return (
+      <VStack align="stretch" spacing={4} px={{ base: 4, md: 6 }} py={5}>
+        <HStack spacing={3} align="center">
+          <Heading size="md" flex="1" noOfLines={1}>
+            {feed.name}
+          </Heading>
+          <Badge colorScheme={sourceColor} fontSize="sm" px={2.5} py={0.5}>
+            {getFeedSourceLabel(feed.source)}
+          </Badge>
+          <Badge colorScheme={feed.enabled === false ? "orange" : "green"} fontSize="sm" px={2.5} py={0.5}>
+            {feed.enabled === false ? "Paused" : "Active"}
+          </Badge>
+        </HStack>
+        <LastRunPanel feed={feed} />
+        <FeedEditorForm
+          feed={feed}
+          isNew={false}
+          actionData={resolvedActionData}
+          availableLists={availableLists}
+          backPath={backPath}
+          backLabel={backLabel}
+          formComponent={formComponent}
+          formAction={formAction}
+          submission={submission}
+          extraHiddenFields={extraHiddenFields}
+        />
+      </VStack>
+    );
+  }
 
   return (
     <VStack align="stretch" spacing={0}>
@@ -1433,14 +1485,14 @@ export function FeedEditPage({ feed, initialRun, actionData, availableLists = []
         <HStack spacing={3} align="center">
           <Button
             as={Link}
-            to="/settings/feeds"
+            to={backPath}
             variant="ghost"
             size="sm"
             leftIcon={<MdArrowBack />}
             color="gray.600"
             px={2}
           >
-            Research Feeds
+            {backLabel}
           </Button>
           <Text color="gray.300">/</Text>
           <Heading size="md" flex="1" noOfLines={1}>
@@ -1462,6 +1514,12 @@ export function FeedEditPage({ feed, initialRun, actionData, availableLists = []
           isNew={false}
           actionData={resolvedActionData}
           availableLists={availableLists}
+          backPath={backPath}
+          backLabel={backLabel}
+          formComponent={formComponent}
+          formAction={formAction}
+          submission={submission}
+          extraHiddenFields={extraHiddenFields}
         />
       </VStack>
     </VStack>
@@ -1475,7 +1533,18 @@ export function FeedEditPage({ feed, initialRun, actionData, availableLists = []
  *   actionData: {error?: string}|null
  * }} props
  */
-export function FeedNewPage({ initialSource, actionData, availableLists = [] }) {
+export function FeedNewPage({
+  initialSource,
+  actionData,
+  availableLists = [],
+  backPath = "/settings/feeds",
+  backLabel = "Research Feeds",
+  embedded = false,
+  formComponent = Form,
+  formAction,
+  submission = null,
+  extraHiddenFields = null,
+}) {
   const emptyFeed = {
     id: null,
     name: "",
@@ -1491,6 +1560,35 @@ export function FeedNewPage({ initialSource, actionData, availableLists = [] }) 
     next_run_at: null
   };
 
+  if (embedded) {
+    return (
+      <VStack align="stretch" spacing={4} px={{ base: 4, md: 6 }} py={5}>
+        <HStack spacing={3} align="center">
+          <Heading size="md" flex="1" noOfLines={1}>
+            New Feed
+          </Heading>
+          {initialSource ? (
+            <Badge colorScheme={getFeedSourceColor(initialSource)} fontSize="sm" px={2.5} py={0.5}>
+              {getFeedSourceLabel(initialSource)}
+            </Badge>
+          ) : null}
+        </HStack>
+        <FeedEditorForm
+          feed={emptyFeed}
+          isNew
+          actionData={actionData}
+          availableLists={availableLists}
+          backPath={backPath}
+          backLabel={backLabel}
+          formComponent={formComponent}
+          formAction={formAction}
+          submission={submission}
+          extraHiddenFields={extraHiddenFields}
+        />
+      </VStack>
+    );
+  }
+
   return (
     <VStack align="stretch" spacing={0}>
       <Box
@@ -1502,14 +1600,14 @@ export function FeedNewPage({ initialSource, actionData, availableLists = [] }) 
         <HStack spacing={3} align="center">
           <Button
             as={Link}
-            to="/settings/feeds"
+            to={backPath}
             variant="ghost"
             size="sm"
             leftIcon={<MdArrowBack />}
             color="gray.600"
             px={2}
           >
-            Research Feeds
+            {backLabel}
           </Button>
           <Text color="gray.300">/</Text>
           <Heading size="md">New Feed</Heading>
@@ -1522,6 +1620,12 @@ export function FeedNewPage({ initialSource, actionData, availableLists = [] }) 
           isNew
           actionData={actionData}
           availableLists={availableLists}
+          backPath={backPath}
+          backLabel={backLabel}
+          formComponent={formComponent}
+          formAction={formAction}
+          submission={submission}
+          extraHiddenFields={extraHiddenFields}
         />
       </VStack>
     </VStack>
