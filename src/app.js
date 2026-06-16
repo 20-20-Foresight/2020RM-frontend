@@ -394,7 +394,7 @@ function createApp(config, remixHandler, deps = {}) {
       secret: config.sessionSecret,
       resave: false,
       saveUninitialized: false,
-      store: getSessionStore(),
+      store: getSessionStore({ filePath: config.sessionStoreFile }),
       cookie: {
         httpOnly: true,
         sameSite: "lax",

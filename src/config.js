@@ -6,6 +6,7 @@ const path = require("node:path");
  * @property {string} baseUrl
  * @property {boolean} authEnabled
  * @property {string} sessionSecret
+ * @property {string} sessionStoreFile
  * @property {string} backendBaseUrl
  * @property {string} msTenantId
  * @property {string} msClientId
@@ -57,6 +58,10 @@ function loadConfig() {
   const sessionSecret = authEnabled
     ? requireEnv("SESSION_SECRET")
     : readStringEnv("SESSION_SECRET", "dev-session-secret");
+  const sessionStoreFile = readStringEnv(
+    "SESSION_STORE_FILE",
+    path.resolve(__dirname, "../.store/session-store.json")
+  );
 
   const backendBaseUrl = authEnabled
     ? requireEnv("BACKEND_BASE_URL")
@@ -87,6 +92,7 @@ function loadConfig() {
     baseUrl,
     authEnabled,
     sessionSecret,
+    sessionStoreFile,
     backendBaseUrl,
     msTenantId,
     msClientId,
