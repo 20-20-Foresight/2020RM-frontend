@@ -17,10 +17,11 @@ import {
   useDisclosure,
   VStack
 } from "@chakra-ui/react";
-import { Link as RemixLink } from "@remix-run/react";
+import { Link as RemixLink, useRevalidator } from "@remix-run/react";
 import { FaLinkedin } from "react-icons/fa";
-import { FiDatabase, FiGlobe, FiMapPin, FiPhone, FiSettings } from "react-icons/fi";
+import { FiDatabase, FiGlobe, FiMapPin, FiPhone, FiPlus, FiSettings } from "react-icons/fi";
 import { MdBusiness } from "react-icons/md";
+import AddToListDrawer from "./AddToListDrawer";
 import { buildOrganizationHeaderViewModel } from "../models/organization-detail-view.mjs";
 import { SourceDataFlyout } from "./SourceDataFlyout";
 
@@ -94,6 +95,8 @@ function HeaderMetaItem({ icon, label, href = null, isExternal = false }) {
  * @returns {JSX.Element}
  */
 export function OrganizationDetailLayout({ data, tabs, activeTabKey, children = null }) {
+  const revalidator = useRevalidator();
+  const { isOpen: isAddToListOpen, onOpen: onAddToListOpen, onClose: onAddToListClose } = useDisclosure();
   const { isOpen: isSourceOpen, onOpen: onSourceOpen, onClose: onSourceClose } = useDisclosure();
   const header = buildOrganizationHeaderViewModel({
     record: data?.record || null,
@@ -200,12 +203,24 @@ export function OrganizationDetailLayout({ data, tabs, activeTabKey, children = 
                 alignSelf={{ base: "stretch", lg: "flex-start" }}
               />
               <MenuList minW="200px" shadow="lg" borderColor={BORDER_COLOR}>
+                <MenuItem icon={<FiPlus />} onClick={onAddToListOpen} fontSize="sm">
+                  Add To List
+                </MenuItem>
                 <MenuItem icon={<FiDatabase />} onClick={onSourceOpen} fontSize="sm">
                   View Data Sources
                 </MenuItem>
               </MenuList>
             </Menu>
 
+            <AddToListDrawer
+              isOpen={isAddToListOpen}
+              onClose={onAddToListClose}
+              entityType="organization"
+              entityUUID={data?.uuid || ""}
+              onAdded={async () => {
+                revalidator.revalidate();
+              }}
+            />
             <SourceDataFlyout
               isOpen={isSourceOpen}
               onClose={onSourceClose}

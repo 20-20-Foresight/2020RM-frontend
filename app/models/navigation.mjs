@@ -88,6 +88,29 @@ export const navItems = [
     icon: "table_chart"
   },
   {
+    key: "lists",
+    label: "Lists",
+    to: "/lists",
+    icon: "format_list_bulleted",
+    children: [
+      {
+        key: "lists-campaigns",
+        label: "Campaigns",
+        to: "/lists/campaigns"
+      },
+      {
+        key: "lists-my-lists",
+        label: "My Lists",
+        to: "/lists/my-lists"
+      },
+      {
+        key: "lists-all",
+        label: "All Lists",
+        to: "/lists/all"
+      }
+    ]
+  },
+  {
     key: "learn",
     label: "Learn",
     to: "/learn",

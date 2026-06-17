@@ -18,6 +18,12 @@ const ORGANIZATION_DETAIL_TABS = [
     loadingLabel: "Loading contacts..."
   },
   {
+    key: "lists",
+    label: "Lists",
+    segment: "lists",
+    loadingLabel: "Loading lists..."
+  },
+  {
     key: "jobs",
     label: "Jobs",
     segment: "jobs",

@@ -3,15 +3,12 @@ import { useLoaderData } from "@remix-run/react";
 import EntityListsPanel from "../components/EntityListsPanel";
 import { loadEntityLists } from "../models/lists.server";
 
-/**
- * Renders the lists tab for one contact detail page.
- */
 export async function loader({ request, params }) {
   try {
     const result = await loadEntityLists({
       request,
-      entityType: "person",
-      uuid: params.personId || "",
+      entityType: "organization",
+      uuid: params.organizationId || "",
     });
     return json({
       rows: Array.isArray(result.data) ? result.data : [],
@@ -20,18 +17,19 @@ export async function loader({ request, params }) {
   } catch (error) {
     return json({
       rows: [],
-      error: error instanceof Error ? error.message : "Unable to load person list memberships.",
+      error:
+        error instanceof Error ? error.message : "Unable to load organization list memberships.",
     });
   }
 }
 
-export default function PersonListsRoute() {
+export default function OrganizationListsRoute() {
   const data = useLoaderData();
   return (
     <EntityListsPanel
       rows={data?.rows}
       error={data?.error}
-      emptyLabel="This person is not currently on any lists."
+      emptyLabel="This organization is not currently on any lists."
     />
   );
 }

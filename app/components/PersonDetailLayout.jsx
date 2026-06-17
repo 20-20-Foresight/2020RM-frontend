@@ -19,9 +19,10 @@ import {
   useDisclosure,
   VStack
 } from "@chakra-ui/react";
-import { Link as RemixLink } from "@remix-run/react";
+import { Link as RemixLink, useRevalidator } from "@remix-run/react";
 import { FaLinkedin } from "react-icons/fa";
-import { FiDatabase, FiMail, FiPhone, FiPhoneCall, FiSettings } from "react-icons/fi";
+import { FiDatabase, FiMail, FiPhone, FiPhoneCall, FiPlus, FiSettings } from "react-icons/fi";
+import AddToListDrawer from "./AddToListDrawer";
 import { buildPersonHeaderViewModel } from "../models/person-detail-view.mjs";
 import { SourceDataFlyout } from "./SourceDataFlyout";
 
@@ -91,6 +92,8 @@ function ContactMetaItem({ icon, label, href = null, isExternal = false }) {
  * @returns {JSX.Element}
  */
 export function PersonDetailLayout({ data, tabs, activeTabKey, children = null }) {
+  const revalidator = useRevalidator();
+  const { isOpen: isAddToListOpen, onOpen: onAddToListOpen, onClose: onAddToListClose } = useDisclosure();
   const { isOpen: isSourceOpen, onOpen: onSourceOpen, onClose: onSourceClose } = useDisclosure();
   const header = buildPersonHeaderViewModel({
     record: data?.record || null,
@@ -201,12 +204,24 @@ export function PersonDetailLayout({ data, tabs, activeTabKey, children = null }
                 alignSelf={{ base: "stretch", lg: "flex-start" }}
               />
               <MenuList minW="200px" shadow="lg" borderColor={BORDER_COLOR}>
+                <MenuItem icon={<FiPlus />} onClick={onAddToListOpen} fontSize="sm">
+                  Add To List
+                </MenuItem>
                 <MenuItem icon={<FiDatabase />} onClick={onSourceOpen} fontSize="sm">
                   View Primary Record
                 </MenuItem>
               </MenuList>
             </Menu>
 
+            <AddToListDrawer
+              isOpen={isAddToListOpen}
+              onClose={onAddToListClose}
+              entityType="person"
+              entityUUID={data?.uuid || ""}
+              onAdded={async () => {
+                revalidator.revalidate();
+              }}
+            />
             <SourceDataFlyout
               isOpen={isSourceOpen}
               onClose={onSourceClose}

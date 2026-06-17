@@ -32,7 +32,8 @@ import {
   MdSchool,
   MdTableChart,
   MdPalette,
-  MdBuild
+  MdBuild,
+  MdFormatListBulleted
 } from "react-icons/md";
 import { FiLogOut } from "react-icons/fi";
 import {
@@ -57,6 +58,7 @@ const iconByName = {
   settings: MdSettings,
   school: MdSchool,
   table_chart: MdTableChart,
+  format_list_bulleted: MdFormatListBulleted,
   palette: MdPalette,
   build: MdBuild
 };
