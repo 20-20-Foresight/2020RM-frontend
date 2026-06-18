@@ -20,6 +20,8 @@ import {
   HStack,
   Input,
   Select,
+  Skeleton,
+  SkeletonText,
   SimpleGrid,
   Stack,
   Tab,
@@ -43,6 +45,12 @@ import {
   normalizeEmailContentKey,
   publishDraftEmailContentDocument
 } from "../models/email-template-document.mjs";
+const {
+  EmailTemplatesApiError,
+  getEmailTemplate,
+  loadEmailTemplates,
+  saveEmailTemplate
+} = require("../models/email-templates.server.js");
 
 /**
  * Reads a trimmed string.
@@ -97,7 +105,7 @@ function parseJsonField(formData, key, fallback) {
  * @returns {{message: string}}
  */
 function buildRouteError(error) {
-  if (error instanceof Error && error.name === "AdminDataApiError") {
+  if (error instanceof Error && error.name === "EmailTemplatesApiError") {
     return {
       message: error.message
     };
@@ -106,15 +114,6 @@ function buildRouteError(error) {
   return {
     message: error instanceof Error ? error.message : "Email Templates request failed."
   };
-}
-
-/**
- * Dynamically loads the admin-data server module.
- * @returns {Promise<import("../models/admin-data.server.js")>}
- */
-async function loadAdminDataServerModule() {
-  const module = await import("../models/admin-data.server.js");
-  return module.default || module;
 }
 
 /**
@@ -153,64 +152,24 @@ function isSnippetRecord(record) {
 }
 
 /**
- * Returns one default create-template metadata object.
- * @returns {Record<string, unknown>}
- */
-function buildTemplateMetadata() {
-  return {
-    type: "email-template",
-    category: "email-template-builder",
-    namespace: EMAIL_TEMPLATE_NAMESPACE_PREFIX,
-    editorProvider: "unlayer"
-  };
-}
-
-/**
- * Returns one default create-snippet metadata object.
- * @param {string} snippetKind
- * @returns {Record<string, unknown>}
- */
-function buildSnippetMetadata(snippetKind) {
-  return {
-    type: "email-snippet",
-    category: "email-template-builder",
-    namespace: EMAIL_TEMPLATE_NAMESPACE_PREFIX,
-    snippetKind
-  };
-}
-
-/**
  * Loads all email template/snippet records.
  * @param {{request: Request}} options
  * @returns {Promise<Array<Record<string, unknown>>>}
  */
 async function loadEmailContentRecords(options) {
-  const { loadAdminDataList, loadRawAdminDataDocument } = await loadAdminDataServerModule();
-  const summaries = await loadAdminDataList({
-    request: options.request,
-    namespacePrefix: EMAIL_TEMPLATE_NAMESPACE_PREFIX
+  const result = await loadEmailTemplates({
+    request: options.request
   });
-
-  const records = await Promise.all(
-    summaries
-      .filter((summary) => typeof summary.id === "string" && summary.id.trim())
-      .map(async (summary) => {
-        const raw = await loadRawAdminDataDocument({
-          request: options.request,
-          id: summary.id
-        });
-        const normalized = normalizeEmailContentDocument(raw);
-
-        return {
-          ...summary,
-          ...normalized,
-          description: raw.description || summary.description || "",
-          version: raw.version ?? summary.version ?? null,
-          metadata: raw.metadata || {},
-          rawDocument: raw.document || null
-        };
-      })
-  );
+  const records = (Array.isArray(result.data) ? result.data : []).map((record) => {
+    const normalized = normalizeEmailContentDocument(record);
+    return {
+      ...record,
+      ...normalized,
+      description: record.description || "",
+      version: record.version ?? null,
+      rawDocument: record.rawDocument || null
+    };
+  });
 
   return records.sort((left, right) => String(left.name || left.key || "").localeCompare(String(right.name || right.key || "")));
 }
@@ -237,7 +196,7 @@ export async function loader({ request }) {
       snippetsByKey: Object.fromEntries(snippets.map((snippet) => [snippet.snippetKey, snippet.rawDocument]))
     });
   } catch (error) {
-    const status = error?.name === "AdminDataApiError" ? error.statusCode : 500;
+    const status = error?.name === "EmailTemplatesApiError" ? error.statusCode : 500;
     return json(
       {
         templates: [],
@@ -256,7 +215,6 @@ export async function action({ request }) {
   const formData = await request.formData();
   const intent = readFormString(formData, "intent");
   const tab = normalizeTab(readFormString(formData, "tab"));
-  const { loadRawAdminDataDocument, saveRawAdminDataDocument } = await loadAdminDataServerModule();
 
   try {
     if (intent === "create-template") {
@@ -267,15 +225,12 @@ export async function action({ request }) {
         return json({ ok: false, error: { message: "Template key or name is required." } }, { status: 400 });
       }
 
-      const id = buildEmailContentRecordId(key);
-      await saveRawAdminDataDocument({
+      const id = buildEmailContentRecordId(EMAIL_TEMPLATE_KIND, key);
+      await saveEmailTemplate({
         request,
         id,
+        name,
         description: "",
-        metadata: buildTemplateMetadata(),
-        editor: {
-          provider: "unlayer"
-        },
         document: buildEmptyEmailTemplateDocument({
           key,
           name
@@ -296,15 +251,12 @@ export async function action({ request }) {
         return json({ ok: false, error: { message: "Snippet key or name is required." } }, { status: 400 });
       }
 
-      const id = buildEmailContentRecordId(key);
-      await saveRawAdminDataDocument({
+      const id = buildEmailContentRecordId(EMAIL_SNIPPET_KIND, key);
+      await saveEmailTemplate({
         request,
         id,
+        name,
         description: "",
-        metadata: buildSnippetMetadata(snippetKind),
-        editor: {
-          provider: "html"
-        },
         document: buildEmptyEmailSnippetDocument({
           key,
           name,
@@ -326,7 +278,7 @@ export async function action({ request }) {
       const expectedVersion = readFormNumber(formData, "expectedVersion");
       const headerSnippetKey = normalizeEmailContentKey(readFormString(formData, "headerSnippetKey"));
       const footerSnippetKey = normalizeEmailContentKey(readFormString(formData, "footerSnippetKey"));
-      const existing = await loadRawAdminDataDocument({
+      const existing = await getEmailTemplate({
         request,
         id
       });
@@ -359,15 +311,12 @@ export async function action({ request }) {
         ? publishDraftEmailContentDocument(nextDocument)
         : nextDocument;
 
-      await saveRawAdminDataDocument({
+      await saveEmailTemplate({
         request,
         id,
+        name: name || key,
         description,
         expectedVersion,
-        metadata: existing.metadata || buildTemplateMetadata(),
-        editor: {
-          provider: "unlayer"
-        },
         document: finalDocument
       });
 
@@ -386,7 +335,7 @@ export async function action({ request }) {
       const snippetKind = EMAIL_SNIPPET_TYPES.includes(readFormString(formData, "snippetKind"))
         ? readFormString(formData, "snippetKind")
         : "footer";
-      const existing = await loadRawAdminDataDocument({
+      const existing = await getEmailTemplate({
         request,
         id
       });
@@ -410,15 +359,12 @@ export async function action({ request }) {
         ? publishDraftEmailContentDocument(nextDocument)
         : nextDocument;
 
-      await saveRawAdminDataDocument({
+      await saveEmailTemplate({
         request,
         id,
+        name: name || key,
         description,
         expectedVersion,
-        metadata: existing.metadata || buildSnippetMetadata(snippetKind),
-        editor: {
-          provider: "html"
-        },
         document: finalDocument
       });
 
@@ -427,7 +373,7 @@ export async function action({ request }) {
 
     return json({ ok: false, error: { message: "Unsupported Email Templates action." } }, { status: 400 });
   } catch (error) {
-    const status = error?.name === "AdminDataApiError" ? error.statusCode : 500;
+    const status = error?.name === "EmailTemplatesApiError" ? error.statusCode : 500;
     return json(
       {
         ok: false,
@@ -515,12 +461,31 @@ export default function EmailTemplatesRoute() {
   const selectedTab = loaderData?.selectedTab || "templates";
   const [templateState, setTemplateState] = useState(() => buildTemplateFormState(selectedDocument));
   const [snippetState, setSnippetState] = useState(() => buildSnippetFormState(selectedDocument));
+  const [isSnippetCreateFormOpen, setIsSnippetCreateFormOpen] = useState(() => {
+    return selectedTab === "snippets" && !(loaderData?.snippets || []).length;
+  });
   const selectedDocumentSignature = `${selectedDocument?.id || ""}:${selectedDocument?.version || ""}:${selectedTab}`;
 
   useEffect(() => {
     setTemplateFormState(buildTemplateFormState(selectedDocument));
     setSnippetFormState(buildSnippetFormState(selectedDocument));
   }, [selectedDocumentSignature]);
+
+  useEffect(() => {
+    if (selectedTab !== "snippets") {
+      setIsSnippetCreateFormOpen(false);
+      return;
+    }
+
+    if (!(loaderData?.snippets || []).length) {
+      setIsSnippetCreateFormOpen(true);
+      return;
+    }
+
+    if (selectedDocument?.kind === EMAIL_SNIPPET_KIND) {
+      setIsSnippetCreateFormOpen(false);
+    }
+  }, [loaderData?.snippets, selectedDocument?.id, selectedDocument?.kind, selectedTab]);
 
   const setTemplateFormState = setTemplateState;
   const setSnippetFormState = setSnippetState;
@@ -567,6 +532,13 @@ export default function EmailTemplatesRoute() {
     });
   }, [selectedDocument, snippetsByKey, templateState]);
   const isSaving = navigation.state === "submitting";
+  const navigationIntent = navigation.formData
+    ? readFormString(navigation.formData, "intent")
+    : "";
+  const isCreatingTemplate =
+    navigation.state === "submitting" && navigationIntent === "create-template";
+  const isCreatingSnippet =
+    navigation.state === "submitting" && navigationIntent === "create-snippet";
 
   /**
    * Saves the current template draft or publishes it.
@@ -699,40 +671,83 @@ export default function EmailTemplatesRoute() {
                       <FormLabel fontSize="sm">Key</FormLabel>
                       <Input name="key" size="sm" placeholder="executive-search-outreach" />
                     </FormControl>
-                    <Button type="submit" size="sm" colorScheme="blue">Create Template</Button>
+                    <Button type="submit" size="sm" colorScheme="blue" isLoading={isCreatingTemplate}>
+                      Create Template
+                    </Button>
                   </Stack>
                 </Box>
               ) : (
-                <Box as="form" method="post">
-                  <input type="hidden" name="intent" value="create-snippet" />
-                  <input type="hidden" name="tab" value="snippets" />
-                  <Heading size="sm" mb={3}>New Snippet</Heading>
-                  <Stack spacing={3}>
-                    <FormControl>
-                      <FormLabel fontSize="sm">Name</FormLabel>
-                      <Input name="name" size="sm" placeholder="Default Footer" />
-                    </FormControl>
-                    <FormControl>
-                      <FormLabel fontSize="sm">Key</FormLabel>
-                      <Input name="key" size="sm" placeholder="default-footer" />
-                    </FormControl>
-                    <FormControl>
-                      <FormLabel fontSize="sm">Type</FormLabel>
-                      <Select name="snippetKind" size="sm" defaultValue="footer">
-                        <option value="header">Header</option>
-                        <option value="footer">Footer</option>
-                      </Select>
-                    </FormControl>
-                    <Button type="submit" size="sm" colorScheme="blue">Create Snippet</Button>
-                  </Stack>
-                </Box>
+                <Stack spacing={3}>
+                  <Button
+                    size="sm"
+                    colorScheme="blue"
+                    variant={isSnippetCreateFormOpen ? "solid" : "outline"}
+                    onClick={() => setIsSnippetCreateFormOpen((current) => !current)}
+                  >
+                    {isSnippetCreateFormOpen ? "Close New Snippet" : "New Snippet"}
+                  </Button>
+
+                  {isSnippetCreateFormOpen ? (
+                    <Box as="form" method="post">
+                      <input type="hidden" name="intent" value="create-snippet" />
+                      <input type="hidden" name="tab" value="snippets" />
+                      <Heading size="sm" mb={3}>New Snippet</Heading>
+                      <Stack spacing={3}>
+                        <FormControl>
+                          <FormLabel fontSize="sm">Name</FormLabel>
+                          <Input name="name" size="sm" placeholder="Default Footer" />
+                        </FormControl>
+                        <FormControl>
+                          <FormLabel fontSize="sm">Key</FormLabel>
+                          <Input name="key" size="sm" placeholder="default-footer" />
+                        </FormControl>
+                        <FormControl>
+                          <FormLabel fontSize="sm">Type</FormLabel>
+                          <Select name="snippetKind" size="sm" defaultValue="footer">
+                            <option value="header">Header</option>
+                            <option value="footer">Footer</option>
+                          </Select>
+                        </FormControl>
+                        <Button type="submit" size="sm" colorScheme="blue" isLoading={isCreatingSnippet}>
+                          Create Snippet
+                        </Button>
+                      </Stack>
+                    </Box>
+                  ) : null}
+                </Stack>
               )}
             </CardBody>
           </Card>
         </GridItem>
 
         <GridItem>
-          {!selectedDocument ? (
+          {isCreatingSnippet ? (
+            <Stack spacing={6}>
+              <Card>
+                <CardBody>
+                  <Skeleton height="22px" width="180px" mb={4} borderRadius="sm" />
+                  <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={4} mb={4}>
+                    <Skeleton height="40px" borderRadius="md" />
+                    <Skeleton height="40px" borderRadius="md" />
+                  </SimpleGrid>
+                  <Skeleton height="72px" borderRadius="md" mb={4} />
+                  <Skeleton height="18px" width="120px" mb={3} borderRadius="sm" />
+                  <Skeleton height="420px" borderRadius="md" />
+                  <HStack spacing={3} mt={5}>
+                    <Skeleton height="40px" width="120px" borderRadius="md" />
+                    <Skeleton height="40px" width="180px" borderRadius="md" />
+                  </HStack>
+                </CardBody>
+              </Card>
+
+              <Card>
+                <CardBody>
+                  <Skeleton height="18px" width="90px" mb={3} borderRadius="sm" />
+                  <SkeletonText noOfLines={6} spacing={4} skeletonHeight="16px" />
+                </CardBody>
+              </Card>
+            </Stack>
+          ) : !selectedDocument ? (
             <Card>
               <CardBody>
                 <Heading size="sm" mb={2}>Nothing selected</Heading>

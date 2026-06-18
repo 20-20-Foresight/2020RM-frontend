@@ -54,9 +54,10 @@ export function normalizeEmailContentKey(value) {
  * @param {unknown} key
  * @returns {string}
  */
-export function buildEmailContentRecordId(key) {
+export function buildEmailContentRecordId(kind, key) {
   const normalizedKey = normalizeEmailContentKey(key);
-  return `${EMAIL_TEMPLATE_NAMESPACE_PREFIX}:${normalizedKey}`;
+  const normalizedKind = kind === EMAIL_SNIPPET_KIND ? EMAIL_SNIPPET_KIND : EMAIL_TEMPLATE_KIND;
+  return `${EMAIL_TEMPLATE_NAMESPACE_PREFIX}.${normalizedKind}:${normalizedKey}`;
 }
 
 /**
@@ -183,19 +184,39 @@ export function buildEmptyEmailSnippetDocument(options = {}) {
  * }}
  */
 export function normalizeEmailContentDocument(value = {}) {
-  const key = readString(value.key || value.id);
+  const rawDocument = isPlainObject(value.rawDocument) ? value.rawDocument : null;
+  const kindFromValue = readString(value.kind, EMAIL_TEMPLATE_KIND);
+  const key = normalizeEmailContentKey(
+    value.key ||
+      value.id ||
+      rawDocument?.templateKey ||
+      rawDocument?.snippetKey
+  );
   const name = readString(value.name, key || "Untitled");
+  const fallbackKind =
+    kindFromValue === EMAIL_SNIPPET_KIND ? EMAIL_SNIPPET_KIND : EMAIL_TEMPLATE_KIND;
   const document = isPlainObject(value.document)
     ? value.document
-    : buildEmptyEmailTemplateDocument({
-      key,
-      name
-    });
-  const kind = readString(document.kind, EMAIL_TEMPLATE_KIND) === EMAIL_SNIPPET_KIND
+    : rawDocument ||
+      (fallbackKind === EMAIL_SNIPPET_KIND
+        ? buildEmptyEmailSnippetDocument({
+            key,
+            name,
+            snippetKind: value.snippetKind
+          })
+        : buildEmptyEmailTemplateDocument({
+            key,
+            name
+          }));
+  const kind = readString(document.kind || kindFromValue, EMAIL_TEMPLATE_KIND) === EMAIL_SNIPPET_KIND
     ? EMAIL_SNIPPET_KIND
     : EMAIL_TEMPLATE_KIND;
-  const templateKey = readString(document.templateKey, key);
-  const snippetKey = readString(document.snippetKey, key);
+  const templateKey = kind === EMAIL_TEMPLATE_KIND
+    ? normalizeEmailContentKey(document.templateKey || key)
+    : "";
+  const snippetKey = kind === EMAIL_SNIPPET_KIND
+    ? normalizeEmailContentKey(document.snippetKey || key)
+    : "";
   const snippetKind = EMAIL_SNIPPET_TYPES.includes(readString(document.snippetKind))
     ? readString(document.snippetKind)
     : "footer";
@@ -203,8 +224,8 @@ export function normalizeEmailContentDocument(value = {}) {
   const normalizedName = kind === EMAIL_SNIPPET_KIND ? snippetKey || name : templateKey || name;
 
   return {
-    id: readString(value.id, key),
-    key,
+    id: readString(value.id, buildEmailContentRecordId(kind, key || templateKey || snippetKey)),
+    key: key || templateKey || snippetKey,
     name,
     kind,
     scope,

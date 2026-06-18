@@ -1,11 +1,15 @@
-import { Link } from "@remix-run/react";
+import { Link, useMatches } from "@remix-run/react";
 import { Box, Heading, Text, SimpleGrid, Card, CardBody, Badge, Icon, HStack } from "@chakra-ui/react";
 import { MdCategory, MdChevronRight } from "react-icons/md";
-import { toolsConfig } from "../models/tools-config.mjs";
+import { listAvailableTools } from "../models/tools-config.mjs";
 
 const statusScheme = { available: "green", beta: "orange", "coming-soon": "gray" };
 
 export default function ToolsIndexPage() {
+  const matches = useMatches();
+  const meta = matches.find((match) => match?.data?.meta)?.data?.meta;
+  const tools = listAvailableTools(meta);
+
   return (
     <Box>
       <Heading size="md" mb={1}>Tools</Heading>
@@ -14,7 +18,7 @@ export default function ToolsIndexPage() {
       </Text>
 
       <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4}>
-        {toolsConfig.map((tool) => (
+        {tools.map((tool) => (
           <Card
             key={tool.key}
             as={tool.status === "available" ? Link : Box}

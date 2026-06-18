@@ -1,6 +1,6 @@
 import { designPages } from "./design-pages.mjs";
 import { listAdminDataCategories } from "./admin-data-categories.mjs";
-import { toolsConfig } from "./tools-config.mjs";
+import { listAvailableTools, toolsConfig } from "./tools-config.mjs";
 
 /**
  * Sidebar navigation model for the application shell.
@@ -238,9 +238,21 @@ export function getNavigationItems(meta) {
   const dataSettingsActions = Array.isArray(meta?.permissions?.admin_access?.data_settings)
     ? meta.permissions.admin_access.data_settings
     : [];
+  const availableTools = listAvailableTools(meta);
 
   return navItems
     .map((item) => {
+      if (item.key === "tools") {
+        const children = (item.children || []).filter((child) =>
+          availableTools.some((tool) => `tools-${tool.key}` === child.key)
+        );
+
+        return {
+          ...item,
+          children
+        };
+      }
+
       if (item.key === "data") {
         return dataSettingsActions.includes("access") ? item : null;
       }
@@ -269,6 +281,10 @@ export function getNavigationItems(meta) {
     .filter((item) => {
       if (!item) {
         return false;
+      }
+
+      if (item.key === "tools" || item.key === "admin") {
+        return Array.isArray(item.children) && item.children.length > 0;
       }
 
       if (item.key !== "admin") {
