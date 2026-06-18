@@ -11,5 +11,14 @@ export const toolsConfig = [
       "Re-run organization segmentation to update industry and focus classifications. Works on a single organization or a full list.",
     icon: "category",
     status: "available"
+  },
+  {
+    key: "email-templates",
+    label: "Email Templates",
+    to: "/tools/email-templates",
+    description:
+      "Draft, preview, and publish CRM email templates plus shared global header and footer snippets.",
+    icon: "mail",
+    status: "available"
   }
 ];

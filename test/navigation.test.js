@@ -25,8 +25,12 @@ test("navigation model defines the requested subsection labels", async () => {
       children: ["My Services", "EM Services", "ES Services", "Advanced Search"]
     },
     {
+      label: "Lists",
+      children: ["Campaigns", "My Lists", "All Lists"]
+    },
+    {
       label: "Tools",
-      children: ["Resegmentation"]
+      children: ["Resegmentation", "Email Templates"]
     },
     {
       label: "Admin",
@@ -52,11 +56,13 @@ test("navigation model defines the requested subsection labels", async () => {
   ]);
   const jobsIndex = navItems.findIndex((item) => item.key === "jobs");
   const reportsIndex = navItems.findIndex((item) => item.key === "reports");
+  const listsIndex = navItems.findIndex((item) => item.key === "lists");
   const learnIndex = navItems.findIndex((item) => item.key === "learn");
   const marketingIndex = navItems.findIndex((item) => item.key === "marketing");
 
   assert.equal(reportsIndex, jobsIndex + 1);
-  assert.equal(learnIndex, reportsIndex + 1);
+  assert.equal(listsIndex, reportsIndex + 1);
+  assert.equal(learnIndex, listsIndex + 1);
   assert.equal(marketingIndex, learnIndex + 1);
 });
 
