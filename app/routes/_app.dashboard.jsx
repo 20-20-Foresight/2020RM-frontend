@@ -1,3 +1,4 @@
+import { redirect } from "@remix-run/node";
 import { useState } from "react";
 import {
   Badge, Box, Button, Checkbox, Divider, Flex,
@@ -10,8 +11,21 @@ import { TaskItem } from "../components/ui/molecules/TaskItem";
 import { MeetingItem } from "../components/ui/molecules/MeetingItem";
 import { MonthCalendar } from "../components/ui/molecules/MonthCalendar";
 import { ES_MILESTONES, EM_MILESTONES } from "../models/services-mock-data.mjs";
+import { loadSessionMeta } from "../models/session-meta.server";
+import { getDefaultLandingPath } from "../models/navigation.mjs";
 
 const TODAY_DATE = new Date(2026, 3, 30); // April 30, 2026
+
+export async function loader({ request }) {
+  const meta = await loadSessionMeta({ request });
+  const defaultLandingPath = getDefaultLandingPath(meta);
+
+  if (defaultLandingPath !== "/dashboard") {
+    return redirect(defaultLandingPath);
+  }
+
+  return null;
+}
 
 // ── Mock data ──────────────────────────────────────────────────────────────────
 

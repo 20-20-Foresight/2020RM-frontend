@@ -1,5 +1,6 @@
 import {
   Box,
+  Button,
   Flex,
   IconButton,
   Drawer,
@@ -29,6 +30,7 @@ import {
   MdSecurity,
   MdSettings,
   MdDashboard,
+  MdReceiptLong,
   MdSchool,
   MdTableChart,
   MdPalette,
@@ -38,6 +40,7 @@ import {
 import { FiLogOut } from "react-icons/fi";
 import {
   getNavigationItems,
+  getDefaultLandingPath,
   isPathWithinItem,
   isNavItemActive,
   getExpandedNavItemKeys
@@ -58,6 +61,7 @@ const iconByName = {
   settings: MdSettings,
   school: MdSchool,
   table_chart: MdTableChart,
+  receipt_long: MdReceiptLong,
   format_list_bulleted: MdFormatListBulleted,
   palette: MdPalette,
   build: MdBuild
@@ -301,6 +305,8 @@ function SidebarContent({ meta, onNavigate, isCollapsed = false, onToggleCollaps
 export function AppLayout({ user, meta, children }) {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isStoppingGhost, setIsStoppingGhost] = useState(false);
+  const defaultLandingPath = getDefaultLandingPath(meta);
   const location = useLocation();
   const navigation = useNavigation();
   const fetchers = useFetchers();
@@ -317,6 +323,25 @@ export function AppLayout({ user, meta, children }) {
   });
   const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() || user?.email || "User";
   const accountMenuLabel = `Open account menu for ${displayName}`;
+
+  async function handleStopGhost() {
+    if (isStoppingGhost) {
+      return;
+    }
+
+    setIsStoppingGhost(true);
+    try {
+      await fetch("/api/ghost/stop", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({})
+      });
+    } finally {
+      window.location.assign(location.pathname + location.search);
+    }
+  }
 
   return (
     <Flex minH="100vh" bg="gray.50" color="gray.900" position="relative" direction="column">
@@ -340,7 +365,7 @@ export function AppLayout({ user, meta, children }) {
           color={SIDEBAR_TEXT}
           _hover={{ bg: "rgba(255, 255, 255, 0.06)" }}
         />
-        <Link to="/dashboard" style={{ textDecoration: "none" }}>
+        <Link to={defaultLandingPath} style={{ textDecoration: "none" }}>
           <Image
             src={LOGO_PATH}
             alt="2020 Foresight Executive Talent Solutions"
@@ -369,7 +394,7 @@ export function AppLayout({ user, meta, children }) {
               ) : null}
               {meta?.personas?.current ? (
                 <Text fontSize="sm" color="gray.600" mt={1}>
-                  Persona: {meta.personas.current}
+                  Persona: {meta.personas.labels?.[meta.personas.current] || meta.personas.current}
                 </Text>
               ) : null}
             </Box>
@@ -379,6 +404,31 @@ export function AppLayout({ user, meta, children }) {
           </MenuList>
         </Menu>
       </Flex>
+
+      {meta?.ghost?.active ? (
+        <Flex
+          align="center"
+          justify="space-between"
+          gap={4}
+          px={{ base: 4, md: 6 }}
+          py={3}
+          bg="orange.100"
+          borderBottomWidth="1px"
+          borderBottomColor="orange.200"
+        >
+          <Box>
+            <Text fontSize="sm" fontWeight="semibold" color="orange.900">
+              Ghosting as {meta.ghost.effectiveDisplayName || meta.ghost.effectiveEmail || "selected user"}
+            </Text>
+            <Text fontSize="sm" color="orange.800">
+              Signed in as {meta.ghost.actorDisplayName || meta.actor?.email || "current user"}
+            </Text>
+          </Box>
+          <Button size="sm" variant="outline" colorScheme="orange" onClick={handleStopGhost} isLoading={isStoppingGhost}>
+            Exit Ghost
+          </Button>
+        </Flex>
+      ) : null}
 
       <Flex flex="1" minH="0" className="app-shell-body">
         <Box

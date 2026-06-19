@@ -30,15 +30,11 @@ test("navigation model defines the requested subsection labels", async () => {
     },
     {
       label: "Tools",
-      children: ["Resegmentation", "Email Templates"]
+      children: ["Company Research", "Resegmentation", "Email Templates"]
     },
     {
       label: "Admin",
       children: ["Roles", "User Management"]
-    },
-    {
-      label: "Settings",
-      children: ["Research Feeds"]
     },
     {
       label: "Data",
@@ -154,4 +150,46 @@ test("getNavigationItems exposes Data as a top-level item for data-settings user
   assert.equal(dataItem?.label, "Data");
   assert.equal(dataItem?.to, "/admin/data");
   assert.equal(items.some((item) => item.key === "admin"), false);
+});
+
+test("getNavigationItems narrows the sidebar for recruiter persona", async () => {
+  const { getNavigationItems } = await import("../app/models/navigation.mjs");
+  const items = getNavigationItems({
+    personas: {
+      current: "recruiter"
+    },
+    permissions: {
+      entity_access: {},
+      tools_access: {
+        company_research: ["access"]
+      },
+      admin_access: {}
+    }
+  });
+
+  assert.deepEqual(items.map((item) => item.key), ["dashboard", "organizations", "people", "jobs", "tools"]);
+});
+
+test("getNavigationItems swaps ES client sidebar to active searches, completed searches, and agreements", async () => {
+  const { getNavigationItems, getDefaultLandingPath } = await import("../app/models/navigation.mjs");
+  const items = getNavigationItems({
+    personas: {
+      current: "es_client"
+    },
+    permissions: {
+      entity_access: {},
+      tools_access: {},
+      admin_access: {}
+    }
+  });
+
+  assert.deepEqual(items.map((item) => item.label), [
+    "Active Searches",
+    "Completed Searches",
+    "Agreements"
+  ]);
+  assert.equal(items[0]?.to, "/jobs/all-es-jobs");
+  assert.equal(items[1]?.to, "/jobs/completed-searches");
+  assert.equal(items[2]?.to, "/agreements");
+  assert.equal(getDefaultLandingPath({ personas: { current: "es_client" } }), "/jobs/all-es-jobs");
 });

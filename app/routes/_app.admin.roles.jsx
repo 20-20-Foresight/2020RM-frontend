@@ -36,7 +36,8 @@ import { useEffect, useState } from "react";
 const { loadRoleManagementPage } = require("../models/access-control.server");
 const {
   AccessRoleMutationApiError,
-  createAccessRole
+  createAccessRole,
+  updateAccessRole
 } = require("../models/access-role-mutations.server");
 
 export async function loader({ request }) {
@@ -59,6 +60,26 @@ export async function action({ request }) {
         {
           ok: false,
           error: error instanceof Error ? error.message : "Unable to create role."
+        },
+        {
+          status: error instanceof AccessRoleMutationApiError ? error.statusCode : 500
+        }
+      );
+    }
+  }
+
+  if (intent === "update_role") {
+    try {
+      const role = await updateAccessRole({ request, formData });
+      return json({
+        ok: true,
+        role
+      });
+    } catch (error) {
+      return json(
+        {
+          ok: false,
+          error: error instanceof Error ? error.message : "Unable to update role."
         },
         {
           status: error instanceof AccessRoleMutationApiError ? error.statusCode : 500
@@ -104,12 +125,35 @@ export default function AdminRolesPage() {
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
+  const [editingRoleKey, setEditingRoleKey] = useState(null);
   const [roleLabel, setRoleLabel] = useState("");
+  const [editingRoleLabel, setEditingRoleLabel] = useState("");
+  const [editingRoleDescription, setEditingRoleDescription] = useState("");
+  const [editingPermissionKeys, setEditingPermissionKeys] = useState([]);
   const generatedRoleKey = buildRoleKey(roleLabel);
+  const editingRole = roles.find((role) => role.key === editingRoleKey) || null;
+
+  useEffect(() => {
+    if (!editingRole) {
+      setEditingRoleLabel("");
+      setEditingRoleDescription("");
+      setEditingPermissionKeys([]);
+      return;
+    }
+
+    setEditingRoleLabel(editingRole.label || "");
+    setEditingRoleDescription(editingRole.description || "");
+    setEditingPermissionKeys(
+      (Array.isArray(editingRole.permissions) ? editingRole.permissions : []).map(
+        (permission) => `${permission.category}:${permission.target}:${permission.action}`
+      )
+    );
+  }, [editingRoleKey]);
 
   useEffect(() => {
     if (actionData?.ok && navigation.state === "idle") {
       setIsCreateDrawerOpen(false);
+      setEditingRoleKey(null);
       setRoleLabel("");
     }
   }, [actionData, navigation.state]);
@@ -174,6 +218,11 @@ export default function AdminRolesPage() {
                   </Badge>
                 ))}
               </Stack>
+              <HStack justify="flex-end" mt={4}>
+                <Button size="sm" variant="outline" onClick={() => setEditingRoleKey(role.key)}>
+                  Edit
+                </Button>
+              </HStack>
             </Box>
           ))}
           {!roles.length ? (
@@ -288,6 +337,125 @@ export default function AdminRolesPage() {
               </HStack>
             </DrawerFooter>
           </Form>
+        </DrawerContent>
+      </Drawer>
+
+      <Drawer
+        isOpen={Boolean(editingRole)}
+        onClose={() => setEditingRoleKey(null)}
+        placement="right"
+        size="full"
+      >
+        <DrawerOverlay />
+        <DrawerContent maxW={{ base: "100vw", lg: "75vw" }} overflow="hidden">
+          <DrawerCloseButton />
+          <DrawerHeader borderBottomWidth="1px">Edit Role</DrawerHeader>
+          {editingRole ? (
+            <Form method="post">
+              <input type="hidden" name="intent" value="update_role" />
+              <input type="hidden" name="roleKey" value={editingRole.key} />
+              {editingPermissionKeys.map((permissionKey) => (
+                <input key={permissionKey} type="hidden" name="permissionKeys" value={permissionKey} />
+              ))}
+              <DrawerBody py={5} overflowY="auto">
+                <VStack align="stretch" spacing={6}>
+                  <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={4}>
+                    <GridItem>
+                      <FormControl isRequired>
+                        <FormLabel>Role Label</FormLabel>
+                        <Input
+                          name="label"
+                          value={editingRoleLabel}
+                          onChange={(event) => setEditingRoleLabel(event.target.value)}
+                        />
+                      </FormControl>
+                    </GridItem>
+                    <GridItem>
+                      <FormControl>
+                        <FormLabel>Role Key</FormLabel>
+                        <Input value={editingRole.key} isReadOnly />
+                      </FormControl>
+                    </GridItem>
+                  </Grid>
+
+                  <FormControl>
+                    <FormLabel>Description</FormLabel>
+                    <Textarea
+                      name="description"
+                      rows={3}
+                      value={editingRoleDescription}
+                      onChange={(event) => setEditingRoleDescription(event.target.value)}
+                    />
+                  </FormControl>
+
+                  {sections.map((section) => (
+                    <Box key={`edit-${section.category}`}>
+                      <Heading size="xs" mb={3}>
+                        {section.label}
+                      </Heading>
+                      <TableContainer borderWidth="1px" borderColor="gray.200" borderRadius="md" overflowX="auto">
+                        <Table size="sm">
+                          <Thead bg="gray.50">
+                            <Tr>
+                              <Th width="40%">Permission Area</Th>
+                              <Th>Allowed Actions</Th>
+                            </Tr>
+                          </Thead>
+                          <Tbody>
+                            {section.items.map((item) => (
+                              <Tr key={`edit-${section.category}:${item.target}`}>
+                                <Td>
+                                  <Text fontWeight="medium">{item.label}</Text>
+                                </Td>
+                                <Td>
+                                  <HStack spacing={6} wrap="wrap">
+                                    {item.actions.map((action) => {
+                                      const value = `${section.category}:${item.target}:${action}`;
+                                      return (
+                                        <Checkbox
+                                          key={`edit-${value}`}
+                                          isChecked={editingPermissionKeys.includes(value)}
+                                          onChange={(event) =>
+                                            setEditingPermissionKeys((current) =>
+                                              event.target.checked
+                                                ? [...new Set([...current, value])].sort()
+                                                : current.filter((entry) => entry !== value)
+                                            )
+                                          }
+                                        >
+                                          {action === "access" ? "Enabled" : action.charAt(0).toUpperCase() + action.slice(1)}
+                                        </Checkbox>
+                                      );
+                                    })}
+                                  </HStack>
+                                </Td>
+                              </Tr>
+                            ))}
+                          </Tbody>
+                        </Table>
+                      </TableContainer>
+                    </Box>
+                  ))}
+
+                  {actionData?.ok === false ? (
+                    <Box borderWidth="1px" borderColor="red.200" bg="red.50" borderRadius="md" p={3}>
+                      <Text color="red.700">{actionData.error}</Text>
+                    </Box>
+                  ) : null}
+                </VStack>
+              </DrawerBody>
+              <DrawerFooter borderTopWidth="1px">
+                <HStack justify="flex-end" width="100%">
+                  <Button variant="ghost" onClick={() => setEditingRoleKey(null)}>
+                    Cancel
+                  </Button>
+                  <Button colorScheme="blue" type="submit" isLoading={isSubmitting}>
+                    Save Role
+                  </Button>
+                </HStack>
+              </DrawerFooter>
+            </Form>
+          ) : null}
         </DrawerContent>
       </Drawer>
     </VStack>

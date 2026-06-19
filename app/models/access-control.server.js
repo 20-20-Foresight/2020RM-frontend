@@ -28,22 +28,26 @@ async function fetchAccessControl(options) {
 /**
  * Loads the admin access-control page data.
  * @param {{request: Request, fetchImpl?: typeof fetch}} options
- * @returns {Promise<{roles: object[], users: object[], error: string|null}>}
+ * @returns {Promise<{roles: object[], users: object[], personas: object[], error: string|null}>}
  */
 async function loadAccessControlPage(options) {
-  const [rolesResponse, usersResponse] = await Promise.all([
+  const [rolesResponse, usersResponse, permissionsResponse] = await Promise.all([
     fetchAccessControl({ ...options, pathname: "/api/admin/access/roles" }),
-    fetchAccessControl({ ...options, pathname: "/api/admin/access/users" })
+    fetchAccessControl({ ...options, pathname: "/api/admin/access/users" }),
+    fetchAccessControl({ ...options, pathname: "/api/admin/access/permissions" })
   ]);
 
-  if (!rolesResponse.ok || !usersResponse.ok) {
+  if (!rolesResponse.ok || !usersResponse.ok || !permissionsResponse.ok) {
     const errorPayload = !rolesResponse.ok
       ? await readJson(rolesResponse)
-      : await readJson(usersResponse);
+      : !usersResponse.ok
+        ? await readJson(usersResponse)
+        : await readJson(permissionsResponse);
 
     return {
       roles: [],
       users: [],
+      personas: [],
       error: typeof errorPayload.error === "string"
         ? errorPayload.error
         : "Unable to load access control data."
@@ -52,10 +56,12 @@ async function loadAccessControlPage(options) {
 
   const rolesPayload = await readJson(rolesResponse);
   const usersPayload = await readJson(usersResponse);
+  const permissionsPayload = await readJson(permissionsResponse);
 
   return {
     roles: Array.isArray(rolesPayload.roles) ? rolesPayload.roles : [],
     users: Array.isArray(usersPayload.users) ? usersPayload.users : [],
+    personas: Array.isArray(permissionsPayload.personas) ? permissionsPayload.personas : [],
     error: null
   };
 }
@@ -63,7 +69,7 @@ async function loadAccessControlPage(options) {
 /**
  * Loads the admin role-management page data.
  * @param {{request: Request, fetchImpl?: typeof fetch}} options
- * @returns {{roles: object[], sections: object[], error: string|null}}
+ * @returns {{roles: object[], sections: object[], personas: object[], error: string|null}}
  */
 async function loadRoleManagementPage(options) {
   const [rolesResponse, sectionsResponse] = await Promise.all([
@@ -79,6 +85,7 @@ async function loadRoleManagementPage(options) {
     return {
       roles: [],
       sections: [],
+      personas: [],
       error: typeof errorPayload.error === "string"
         ? errorPayload.error
         : "Unable to load roles."
@@ -91,6 +98,7 @@ async function loadRoleManagementPage(options) {
   return {
     roles: Array.isArray(rolesPayload.roles) ? rolesPayload.roles : [],
     sections: Array.isArray(sectionsPayload.sections) ? sectionsPayload.sections : [],
+    personas: Array.isArray(sectionsPayload.personas) ? sectionsPayload.personas : [],
     error: null
   };
 }

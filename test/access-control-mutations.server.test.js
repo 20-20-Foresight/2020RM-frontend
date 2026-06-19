@@ -3,7 +3,9 @@ const assert = require("node:assert/strict");
 
 const {
   AccessControlMutationApiError,
+  createAccessControlUser,
   createAccessControlLocalPerson,
+  startGhostSession,
   updateAccessControlUser
 } = require("../app/models/access-control-mutations.server");
 
@@ -12,6 +14,7 @@ test("access control user mutation proxies the edit payload through the BFF", as
   const formData = new FormData();
   formData.set("userId", "usr_1");
   formData.set("status", "active");
+  formData.set("defaultPersonaKey", "recruiter");
   formData.set("localPersonId", "person-1");
   formData.set("rpcPersonId", "rpc-1");
   formData.append("roleKeys", "ops_admin");
@@ -51,6 +54,7 @@ test("access control user mutation proxies the edit payload through the BFF", as
   assert.deepEqual(JSON.parse(calls[0].options.body), {
     status: "active",
     roleKeys: ["ops_admin", "recruiter_internal"],
+    defaultPersonaKey: "recruiter",
     localPersonId: "person-1",
     rpcPersonId: "rpc-1"
   });
@@ -181,5 +185,95 @@ test("access control local person mutation proxies the create request through th
       localPersonId: "person-local-41",
       rpcPersonId: null
     }
+  });
+});
+
+test("access control user creation proxies the create request through the BFF", async () => {
+  const calls = [];
+  const formData = new FormData();
+  formData.set("firstName", "Peter");
+  formData.set("lastName", "Weyland");
+  formData.set("email", "peter.weyland@example.com");
+
+  const user = await createAccessControlUser({
+    request: new Request("http://localhost:3000/admin/user-management", {
+      headers: {
+        cookie: "sid=123"
+      }
+    }),
+    formData,
+    fetchImpl: async (url, options) => {
+      calls.push({
+        url: String(url),
+        options
+      });
+      return {
+        ok: true,
+        status: 201,
+        async json() {
+          return {
+            user: {
+              id: "usr_0001",
+              email: "peter.weyland@example.com"
+            }
+          };
+        }
+      };
+    }
+  });
+
+  assert.equal(calls[0].url, "http://localhost:3000/api/admin/access/users");
+  assert.equal(calls[0].options.method, "POST");
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    firstName: "Peter",
+    lastName: "Weyland",
+    email: "peter.weyland@example.com"
+  });
+  assert.deepEqual(user, {
+    id: "usr_0001",
+    email: "peter.weyland@example.com"
+  });
+});
+
+test("ghost start proxies through the frontend ghost endpoint", async () => {
+  const calls = [];
+  const formData = new FormData();
+  formData.set("effectiveUserId", "usr_0001");
+
+  const ghost = await startGhostSession({
+    request: new Request("http://localhost:3000/admin/user-management", {
+      headers: {
+        cookie: "sid=123"
+      }
+    }),
+    formData,
+    fetchImpl: async (url, options) => {
+      calls.push({
+        url: String(url),
+        options
+      });
+      return {
+        ok: true,
+        status: 201,
+        async json() {
+          return {
+            ghost: {
+              active: true,
+              effectiveUserId: "usr_0001"
+            }
+          };
+        }
+      };
+    }
+  });
+
+  assert.equal(calls[0].url, "http://localhost:3000/api/ghost/start");
+  assert.equal(calls[0].options.method, "POST");
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    effectiveUserId: "usr_0001"
+  });
+  assert.deepEqual(ghost, {
+    active: true,
+    effectiveUserId: "usr_0001"
   });
 });

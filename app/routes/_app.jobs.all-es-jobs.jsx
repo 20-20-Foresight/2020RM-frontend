@@ -12,18 +12,27 @@ import {
   Text,
   VStack,
 } from "@chakra-ui/react";
+import { json } from "@remix-run/node";
+import { useLoaderData } from "@remix-run/react";
 import { useState } from "react";
 import { FiSearch } from "react-icons/fi";
 import { MilestoneChevrons } from "../components/MilestoneChevrons";
 import { ServiceCard } from "../components/ServiceCard";
-import { ES_MILESTONES, MOCK_ES_SERVICES } from "../models/services-mock-data.mjs";
+import { loadEsClientActiveSearches } from "../models/es-client.server";
+
+export async function loader({ request }) {
+  return json(await loadEsClientActiveSearches({ request }));
+}
 
 export default function AllEsServicesPage() {
+  const data = useLoaderData();
+  const services = Array.isArray(data?.items) ? data.items : [];
+  const milestones = Array.isArray(data?.milestones) ? data.milestones : [];
   const [query, setQuery] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const filtered = MOCK_ES_SERVICES.filter((s) => {
+  const filtered = services.filter((s) => {
     const matchesQuery =
       !query ||
       s.title.toLowerCase().includes(query.toLowerCase()) ||
@@ -38,9 +47,9 @@ export default function AllEsServicesPage() {
   return (
     <VStack align="stretch" spacing={5}>
       <Box>
-        <Heading size="md" color="gray.900">ES Services</Heading>
+        <Heading size="md" color="gray.900">Active Searches</Heading>
         <Text color="gray.500" mt={1} fontSize="sm">
-          All Executive Search engagements
+          Current Executive Search engagements for the ES Client experience
         </Text>
       </Box>
 
@@ -49,13 +58,13 @@ export default function AllEsServicesPage() {
           Pipeline at a Glance
         </Text>
         <MilestoneChevrons
-          milestones={ES_MILESTONES}
+          milestones={milestones}
           activeIndex={-1}
           size="md"
         />
         <Flex gap="2px" w="full" mt={1}>
-          {ES_MILESTONES.map((m, i) => {
-            const count = MOCK_ES_SERVICES.filter((s) => s.activePhaseIndex === i).length;
+          {milestones.map((m, i) => {
+            const count = services.filter((s) => s.activePhaseIndex === i).length;
             return (
               <Box key={m.key} flex="1" textAlign="center">
                 <Text fontSize="xs" color={count > 0 ? "gray.700" : "gray.300"} fontWeight={count > 0 ? "bold" : "normal"}>
@@ -90,7 +99,7 @@ export default function AllEsServicesPage() {
             w="auto"
           >
             <option value="all">All Stages</option>
-            {ES_MILESTONES.map((m, i) => (
+            {milestones.map((m, i) => (
               <option key={m.key} value={i}>{m.label}</option>
             ))}
           </Select>
@@ -119,7 +128,7 @@ export default function AllEsServicesPage() {
           p={10}
           textAlign="center"
         >
-          <Text color="gray.400" fontSize="sm">No services match your filters.</Text>
+          <Text color="gray.400" fontSize="sm">No searches match your filters.</Text>
         </Box>
       ) : (
         <SimpleGrid columns={{ base: 1, lg: 2, "2xl": 3 }} spacing={4}>

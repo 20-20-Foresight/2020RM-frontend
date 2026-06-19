@@ -2,6 +2,14 @@ import { designPages } from "./design-pages.mjs";
 import { listAdminDataCategories } from "./admin-data-categories.mjs";
 import { listAvailableTools, toolsConfig } from "./tools-config.mjs";
 
+const PERSONA_LANDING_PATHS = {
+  admin: "/dashboard",
+  recruiter: "/dashboard",
+  es_client: "/jobs/all-es-jobs",
+  em_client: "/dashboard/em-client",
+  super_admin: "/dashboard"
+};
+
 /**
  * Sidebar navigation model for the application shell.
  */
@@ -232,6 +240,7 @@ export function getExpandedNavItemKeys(pathname) {
  * @returns {typeof navItems}
  */
 export function getNavigationItems(meta) {
+  const persona = typeof meta?.personas?.current === "string" ? meta.personas.current : null;
   const adminActions = Array.isArray(meta?.permissions?.admin_access?.configuration)
     ? meta.permissions.admin_access.configuration
     : [];
@@ -240,8 +249,55 @@ export function getNavigationItems(meta) {
     : [];
   const availableTools = listAvailableTools(meta);
 
-  return navItems
+  if (persona === "es_client") {
+    return [
+      {
+        key: "es-client-active-searches",
+        label: "Active Searches",
+        to: "/jobs/all-es-jobs",
+        icon: "work"
+      },
+      {
+        key: "es-client-completed-searches",
+        label: "Completed Searches",
+        to: "/jobs/completed-searches",
+        icon: "work"
+      },
+      {
+        key: "es-client-agreements",
+        label: "Agreements",
+        to: "/agreements",
+        icon: "table_chart"
+      },
+      {
+        key: "es-client-invoices",
+        label: "Invoices",
+        to: "/invoices",
+        icon: "receipt_long"
+      }
+    ];
+  }
+
+  const personaScopedItems = navItems
+    .filter((item) => {
+      if (persona === "recruiter") {
+        return ["dashboard", "organizations", "people", "jobs", "tools"].includes(item.key);
+      }
+
+      if (persona === "em_client") {
+        return ["dashboard", "people", "organizations"].includes(item.key);
+      }
+
+      return true;
+    })
     .map((item) => {
+      if (persona === "em_client" && item.key === "dashboard") {
+        return {
+          ...item,
+          to: "/dashboard/em-client"
+        };
+      }
+
       if (item.key === "tools") {
         const children = (item.children || []).filter((child) =>
           availableTools.some((tool) => `tools-${tool.key}` === child.key)
@@ -293,4 +349,16 @@ export function getNavigationItems(meta) {
 
       return Array.isArray(item.children) && item.children.length > 0;
     });
+
+  return personaScopedItems;
+}
+
+/**
+ * Returns the default landing path for the current effective persona.
+ * @param {{personas?: {current?: string|null}}|null|undefined} meta
+ * @returns {string}
+ */
+export function getDefaultLandingPath(meta) {
+  const persona = typeof meta?.personas?.current === "string" ? meta.personas.current : null;
+  return PERSONA_LANDING_PATHS[persona] || "/dashboard";
 }

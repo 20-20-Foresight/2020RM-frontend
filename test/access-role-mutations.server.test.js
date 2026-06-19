@@ -3,7 +3,8 @@ const assert = require("node:assert/strict");
 
 const {
   AccessRoleMutationApiError,
-  createAccessRole
+  createAccessRole,
+  updateAccessRole
 } = require("../app/models/access-role-mutations.server");
 
 test("access role mutation proxies the create payload through the BFF", async () => {
@@ -89,4 +90,55 @@ test("access role mutation normalizes backend failures", async () => {
       return true;
     }
   );
+});
+
+test("access role update proxies the edit payload through the BFF", async () => {
+  const calls = [];
+  const formData = new FormData();
+  formData.set("roleKey", "research_manager");
+  formData.set("label", "Research Lead");
+  formData.set("description", "Updated access");
+  formData.append("permissionKeys", "tools_access:company_research:access");
+
+  const role = await updateAccessRole({
+    request: new Request("http://localhost:3000/admin/roles", {
+      headers: {
+        cookie: "sid=123"
+      }
+    }),
+    formData,
+    fetchImpl: async (url, options) => {
+      calls.push({
+        url: String(url),
+        options
+      });
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            role: {
+              key: "research_manager",
+              label: "Research Lead"
+            }
+          };
+        }
+      };
+    }
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "http://localhost:3000/api/admin/access/roles/research_manager");
+  assert.equal(calls[0].options.method, "PATCH");
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    label: "Research Lead",
+    description: "Updated access",
+    permissions: [
+      { category: "tools_access", target: "company_research", action: "access" }
+    ]
+  });
+  assert.deepEqual(role, {
+    key: "research_manager",
+    label: "Research Lead"
+  });
 });

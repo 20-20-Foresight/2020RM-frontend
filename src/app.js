@@ -12,6 +12,7 @@ const {
 const { getSessionStore } = require("./session/store");
 const DEFAULT_FAVICON_PATH = "/assets/2020-ets-horiz-logo-rgb-color-lg.png";
 const pendingSessionRefreshes = new Map();
+const LOCAL_BACKEND_HOST_CANDIDATES = ["localhost", "127.0.0.1", "[::1]"];
 
 /**
  * Returns whether the proxied request method can include a body.
@@ -43,6 +44,9 @@ function buildBackendProxyRequestInit(req) {
   if (req.accessToken) {
     headers.set("authorization", `Bearer ${req.accessToken}`);
   }
+  if (req.session?.ghost?.effectiveUserId) {
+    headers.set("x-2020rm-ghost-user-id", req.session.ghost.effectiveUserId);
+  }
 
   /** @type {RequestInit} */
   const init = {
@@ -57,6 +61,66 @@ function buildBackendProxyRequestInit(req) {
   }
 
   return init;
+}
+
+/**
+ * Returns whether the configured backend base URL points at a local host.
+ * @param {string} backendBaseUrl
+ * @returns {boolean}
+ */
+function isLocalBackendBaseUrl(backendBaseUrl) {
+  try {
+    const url = new URL(backendBaseUrl);
+    return ["localhost", "127.0.0.1", "::1", "[::1]"].includes(url.hostname);
+  } catch (_error) {
+    return false;
+  }
+}
+
+/**
+ * Builds one list of backend URL candidates, preserving the original first.
+ * @param {string} requestPath
+ * @param {string} backendBaseUrl
+ * @returns {URL[]}
+ */
+function buildBackendTargetCandidates(requestPath, backendBaseUrl) {
+  const primary = new URL(requestPath, backendBaseUrl);
+  if (!isLocalBackendBaseUrl(backendBaseUrl)) {
+    return [primary];
+  }
+
+  const candidates = [primary];
+  for (const host of LOCAL_BACKEND_HOST_CANDIDATES) {
+    const next = new URL(primary.toString());
+    next.hostname = host === "[::1]" ? "::1" : host;
+    if (!candidates.some((candidate) => candidate.toString() === next.toString())) {
+      candidates.push(next);
+    }
+  }
+
+  return candidates;
+}
+
+/**
+ * Fetches one backend endpoint and retries across local host candidates when needed.
+ * @param {string} requestPath
+ * @param {string} backendBaseUrl
+ * @param {RequestInit} requestInit
+ * @returns {Promise<Response>}
+ */
+async function fetchBackendWithFallback(requestPath, backendBaseUrl, requestInit) {
+  const candidates = buildBackendTargetCandidates(requestPath, backendBaseUrl);
+  let lastError = null;
+
+  for (const target of candidates) {
+    try {
+      return await fetch(target, requestInit);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("backend_fetch_failed");
 }
 
 /**
@@ -142,6 +206,7 @@ function clearSessionAuthentication(sessionData) {
   delete sessionData.user;
   delete sessionData.tokens;
   delete sessionData.msAuth;
+  delete sessionData.ghost;
 }
 
 /**
@@ -820,12 +885,92 @@ function createApp(config, remixHandler, deps = {}) {
   app.use("/build", express.static(path.join(config.publicDir, "build"), { immutable: true, maxAge: "1y" }));
   app.use(express.static(config.publicDir, { maxAge: "1h" }));
 
+  app.post("/api/ghost/start", requireSessionAuth, express.json({ limit: "64kb" }), async (req, res) => {
+    try {
+      const effectiveUserId =
+        typeof req.body?.effectiveUserId === "string" ? req.body.effectiveUserId.trim() : "";
+      const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+
+      if (!effectiveUserId) {
+        return res.status(400).json({
+          error: "invalid_ghost_start",
+          message: "Effective user id is required."
+        });
+      }
+
+      const backendRes = await fetchBackendWithFallback("/api/admin/access/ghost/start", config.backendBaseUrl, {
+        method: "POST",
+        headers: {
+          ...(req.accessToken ? { authorization: `Bearer ${req.accessToken}` } : {}),
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          effectiveUserId,
+          reason: reason || null
+        })
+      });
+      const payload = await backendRes.json().catch(() => ({}));
+
+      if (!backendRes.ok) {
+        return res.status(backendRes.status).json(payload);
+      }
+
+      req.session.ghost = payload.ghost || null;
+      return res.status(201).json(payload);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "ghost_start_failed";
+      log.error("ghost start error", {
+        userEmail: req.user?.email || "unknown",
+        message
+      });
+      return res.status(502).json({ error: "proxy_error", message });
+    }
+  });
+
+  app.post("/api/ghost/stop", requireSessionAuth, express.json({ limit: "16kb" }), async (req, res) => {
+    try {
+      if (!req.session?.ghost?.active) {
+        delete req.session.ghost;
+        return res.json({
+          ghost: {
+            active: false
+          }
+        });
+      }
+
+      const backendRes = await fetchBackendWithFallback("/api/admin/access/ghost/stop", config.backendBaseUrl, {
+        method: "POST",
+        headers: {
+          ...(req.accessToken ? { authorization: `Bearer ${req.accessToken}` } : {}),
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({})
+      });
+      const payload = await backendRes.json().catch(() => ({}));
+
+      delete req.session.ghost;
+
+      if (!backendRes.ok) {
+        return res.status(backendRes.status).json(payload);
+      }
+
+      return res.json(payload);
+    } catch (error) {
+      delete req.session.ghost;
+      const message = error instanceof Error ? error.message : "ghost_stop_failed";
+      log.error("ghost stop error", {
+        userEmail: req.user?.email || "unknown",
+        message
+      });
+      return res.status(502).json({ error: "proxy_error", message });
+    }
+  });
+
   app.use("/api", requireSessionAuth, async (req, res) => {
     try {
       // Preserve the full API path when proxying to 2020RM-backend.
       const backendPath = req.originalUrl || "/";
-      const target = new URL(backendPath, config.backendBaseUrl);
-      const backendRes = await fetch(target, buildBackendProxyRequestInit(req));
+      const backendRes = await fetchBackendWithFallback(backendPath, config.backendBaseUrl, buildBackendProxyRequestInit(req));
 
       if (backendRes.status >= 500) {
         log.error("api proxy upstream server error", {

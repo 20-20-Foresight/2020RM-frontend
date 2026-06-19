@@ -30,9 +30,25 @@ test("access control loader fetches users and roles through the BFF", async () =
                 {
                   key: "recruiter_internal",
                   label: "Recruiter Internal",
-                  personas: ["recruiter"],
                   permissions: [],
                   userCount: 0
+                }
+              ]
+            };
+          }
+        };
+      }
+
+      if (String(url).endsWith("/api/admin/access/permissions")) {
+        return {
+          ok: true,
+          status: 200,
+          async json() {
+            return {
+              personas: [
+                {
+                  key: "recruiter",
+                  label: "Recruiter"
                 }
               ]
             };
@@ -52,6 +68,7 @@ test("access control loader fetches users and roles through the BFF", async () =
                 lastName: "Lovelace",
                 email: "ada@example.com",
                 status: "pending_access",
+                defaultPersonaKey: "recruiter",
                 roleKeys: [],
                 localPersonId: null,
                 rpcPersonId: null
@@ -65,7 +82,8 @@ test("access control loader fetches users and roles through the BFF", async () =
 
   assert.deepEqual(calls.map((call) => call.url), [
     "http://localhost:3000/api/admin/access/roles",
-    "http://localhost:3000/api/admin/access/users"
+    "http://localhost:3000/api/admin/access/users",
+    "http://localhost:3000/api/admin/access/permissions"
   ]);
   assert.equal(calls[0].options.headers.cookie, "sid=123");
   assert.deepEqual(result, {
@@ -73,7 +91,6 @@ test("access control loader fetches users and roles through the BFF", async () =
       {
         key: "recruiter_internal",
         label: "Recruiter Internal",
-        personas: ["recruiter"],
         permissions: [],
         userCount: 0
       }
@@ -85,9 +102,16 @@ test("access control loader fetches users and roles through the BFF", async () =
         lastName: "Lovelace",
         email: "ada@example.com",
         status: "pending_access",
+        defaultPersonaKey: "recruiter",
         roleKeys: [],
         localPersonId: null,
         rpcPersonId: null
+      }
+    ],
+    personas: [
+      {
+        key: "recruiter",
+        label: "Recruiter"
       }
     ],
     error: null
@@ -111,6 +135,7 @@ test("access control loader returns an error payload when the BFF rejects the re
   assert.deepEqual(result, {
     roles: [],
     users: [],
+    personas: [],
     error: "forbidden"
   });
 });
@@ -140,6 +165,12 @@ test("role management loader fetches roles and permission sections through the B
                   category: "tools_access",
                   label: "Tools Permissions",
                   items: []
+                }
+              ],
+              personas: [
+                {
+                  key: "es_client",
+                  label: "ES Client"
                 }
               ]
             };
@@ -185,6 +216,12 @@ test("role management loader fetches roles and permission sections through the B
         category: "tools_access",
         label: "Tools Permissions",
         items: []
+      }
+    ],
+    personas: [
+      {
+        key: "es_client",
+        label: "ES Client"
       }
     ],
     error: null

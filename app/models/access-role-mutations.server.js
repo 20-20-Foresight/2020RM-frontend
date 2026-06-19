@@ -94,7 +94,62 @@ async function createAccessRole(options) {
   return isPlainObject(responsePayload?.role) ? responsePayload.role : null;
 }
 
+async function updateAccessRole(options) {
+  const fetchImpl = options.fetchImpl || globalThis.fetch;
+  if (typeof fetchImpl !== "function") {
+    throw new Error("Fetch is required to update access roles.");
+  }
+
+  const roleKey = readTrimmedString(options.formData.get("roleKey"));
+  if (!roleKey) {
+    throw new AccessRoleMutationApiError("Role key is required.", {
+      code: "invalid_role_update",
+      statusCode: 400
+    });
+  }
+
+  const payload = {
+    label: readTrimmedString(options.formData.get("label")),
+    description: readTrimmedString(options.formData.get("description")),
+    permissions: readPermissions(options.formData)
+  };
+
+  let response;
+  try {
+    response = await fetchImpl(new URL(`/api/admin/access/roles/${encodeURIComponent(roleKey)}`, options.request.url), {
+      method: "PATCH",
+      headers: {
+        cookie: options.request.headers.get("cookie") || "",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+  } catch (error) {
+    throw new AccessRoleMutationApiError("Unable to reach the access role service.", {
+      code: "access_role_unreachable",
+      statusCode: 502,
+      cause: error
+    });
+  }
+
+  const responsePayload = await tryReadJson(response);
+  if (!response.ok) {
+    throw new AccessRoleMutationApiError(
+      readTrimmedString(responsePayload?.message) ||
+        readTrimmedString(responsePayload?.error) ||
+        `Access role update failed (HTTP ${response.status}).`,
+      {
+        code: readTrimmedString(responsePayload?.error) || "access_role_mutation_failed",
+        statusCode: response.status
+      }
+    );
+  }
+
+  return isPlainObject(responsePayload?.role) ? responsePayload.role : null;
+}
+
 module.exports = {
   AccessRoleMutationApiError,
-  createAccessRole
+  createAccessRole,
+  updateAccessRole
 };

@@ -56,6 +56,7 @@ async function updateAccessControlUser(options) {
   const payload = {
     status: readTrimmedString(options.formData.get("status")) || "pending_access",
     roleKeys: readRoleKeys(options.formData),
+    defaultPersonaKey: readTrimmedString(options.formData.get("defaultPersonaKey")),
     localPersonId: readTrimmedString(options.formData.get("localPersonId")),
     rpcPersonId: readTrimmedString(options.formData.get("rpcPersonId"))
   };
@@ -153,8 +154,106 @@ async function createAccessControlLocalPerson(options) {
   };
 }
 
+async function createAccessControlUser(options) {
+  const fetchImpl = options.fetchImpl || globalThis.fetch;
+  if (typeof fetchImpl !== "function") {
+    throw new Error("Fetch is required to create users.");
+  }
+
+  const payload = {
+    firstName: readTrimmedString(options.formData.get("firstName")),
+    lastName: readTrimmedString(options.formData.get("lastName")),
+    email: readTrimmedString(options.formData.get("email"))
+  };
+
+  let response;
+  try {
+    response = await fetchImpl(new URL("/api/admin/access/users", options.request.url), {
+      method: "POST",
+      headers: {
+        cookie: options.request.headers.get("cookie") || "",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+  } catch (error) {
+    throw new AccessControlMutationApiError("Unable to reach the access control service.", {
+      code: "access_control_unreachable",
+      statusCode: 502,
+      cause: error
+    });
+  }
+
+  const responsePayload = await tryReadJson(response);
+  if (!response.ok) {
+    throw new AccessControlMutationApiError(
+      readTrimmedString(responsePayload?.message) ||
+        readTrimmedString(responsePayload?.error) ||
+        `User creation failed (HTTP ${response.status}).`,
+      {
+        code: readTrimmedString(responsePayload?.error) || "access_control_mutation_failed",
+        statusCode: response.status
+      }
+    );
+  }
+
+  return isPlainObject(responsePayload?.user) ? responsePayload.user : null;
+}
+
+async function startGhostSession(options) {
+  const fetchImpl = options.fetchImpl || globalThis.fetch;
+  if (typeof fetchImpl !== "function") {
+    throw new Error("Fetch is required to start ghost sessions.");
+  }
+
+  const effectiveUserId = readTrimmedString(options.formData.get("effectiveUserId"));
+  if (!effectiveUserId) {
+    throw new AccessControlMutationApiError("Effective user id is required.", {
+      code: "invalid_ghost_start",
+      statusCode: 400
+    });
+  }
+
+  let response;
+  try {
+    response = await fetchImpl(new URL("/api/ghost/start", options.request.url), {
+      method: "POST",
+      headers: {
+        cookie: options.request.headers.get("cookie") || "",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        effectiveUserId
+      })
+    });
+  } catch (error) {
+    throw new AccessControlMutationApiError("Unable to reach the ghost service.", {
+      code: "ghost_unreachable",
+      statusCode: 502,
+      cause: error
+    });
+  }
+
+  const responsePayload = await tryReadJson(response);
+  if (!response.ok) {
+    throw new AccessControlMutationApiError(
+      readTrimmedString(responsePayload?.message) ||
+        readTrimmedString(responsePayload?.error) ||
+        `Ghost start failed (HTTP ${response.status}).`,
+      {
+        code: readTrimmedString(responsePayload?.error) || "ghost_start_failed",
+        statusCode: response.status
+      }
+    );
+  }
+
+  return isPlainObject(responsePayload?.ghost) ? responsePayload.ghost : null;
+}
+
 module.exports = {
   AccessControlMutationApiError,
+  createAccessControlUser,
   createAccessControlLocalPerson,
+  startGhostSession,
   updateAccessControlUser
 };
