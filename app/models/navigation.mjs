@@ -35,6 +35,11 @@ export const navItems = [
         key: "organizations-advanced-search",
         label: "Advanced Search",
         to: "/organizations/advanced-search"
+      },
+      {
+        key: "organizations-es-search-leads",
+        label: "ES Search Leads",
+        to: "/organizations/es-search-leads"
       }
     ]
   },

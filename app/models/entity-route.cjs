@@ -25,7 +25,12 @@ function buildEntityDetailPath(entityType, uuid) {
     return null;
   }
 
-  const basePath = entityType === "person" ? "/person" : "/organization";
+  const basePath =
+    entityType === "person"
+      ? "/person"
+      : entityType === "lead"
+        ? "/lead"
+        : "/organization";
   return `${basePath}/${encodeURIComponent(uuid.trim())}`;
 }
 
@@ -56,6 +61,15 @@ function buildOrganizationPeoplePath(uuid) {
 }
 
 /**
+ * Returns one lead detail route for one lead UUID.
+ * @param {string|null|undefined} uuid
+ * @returns {string|null}
+ */
+function buildLeadDetailPath(uuid) {
+  return buildEntityDetailPath("lead", uuid);
+}
+
+/**
  * Returns one contact detail-tab route for one person UUID.
  * @param {string|null|undefined} uuid
  * @param {"overview"|"lists"|"similarContacts"|"notes"} tabKey
@@ -75,6 +89,7 @@ function buildPersonDetailTabPath(uuid, tabKey) {
 module.exports = {
   buildEntityDetailPath,
   buildEntityListPath,
+  buildLeadDetailPath,
   buildOrganizationDetailTabPath,
   buildOrganizationPeoplePath,
   buildPersonDetailTabPath
