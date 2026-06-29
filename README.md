@@ -36,6 +36,31 @@ Notes:
 - `npm run dev` pins the internal Remix dev server to port `8002` so it does not collide with the backend default port `3001`.
 - The Express BFF still serves the app on `http://localhost:3000`.
 
+## Worktrees
+
+When you need a separate CRM frontend worktree, use the helper script instead
+of raw `git worktree add`:
+
+```bash
+cd /Users/dmorgan/Projects/CRM/2020RM-frontend
+bash ./scripts/create-worktree.sh <branch-name> <worktree-path> [base-ref]
+```
+
+The helper creates the worktree and copies these local runtime paths from the
+main checkout when they exist:
+
+- `.env` and top-level `.env.*` files such as `.env.local`
+- `node_modules`
+- `.store`
+
+If you need to repair or refresh runtime state in an existing worktree, rerun
+the bootstrap step directly:
+
+```bash
+cd /Users/dmorgan/Projects/CRM/2020RM-frontend
+bash ./scripts/bootstrap-worktree-runtime.sh ../2020RM-frontend-some-worktree
+```
+
 ## UI Verification
 
 - `npm run test:e2e` runs the Playwright browser harness against a deterministic local shell with auth disabled and fixture-backed admin-data responses.
