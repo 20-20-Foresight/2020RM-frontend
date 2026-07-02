@@ -352,7 +352,15 @@ function getOrganizationExpertiseTags(record) {
     ...(Array.isArray(segmentation?.focuses) ? segmentation.focuses : [])
   ].filter(Boolean);
 
-  return values.length ? values.slice(0, 8) : ["Awaiting segmentation"];
+  if (values.length) {
+    return values.slice(0, 8);
+  }
+
+  if (segmentation?.state === "empty") {
+    return ["Segmentation complete: no labels"];
+  }
+
+  return ["Awaiting segmentation"];
 }
 
 /**
@@ -436,7 +444,11 @@ function computeAccountHealthScore(options) {
     score += 10;
   }
 
-  if (Array.isArray(options.expertiseTags) && options.expertiseTags[0] !== "Awaiting segmentation") {
+  if (
+    Array.isArray(options.expertiseTags) &&
+    options.expertiseTags[0] !== "Awaiting segmentation" &&
+    options.expertiseTags[0] !== "Segmentation complete: no labels"
+  ) {
     score += 20;
   }
 

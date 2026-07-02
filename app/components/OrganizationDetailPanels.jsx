@@ -69,13 +69,21 @@ const CONTACT_TITLE_PATHS = [
   "metadata.jobtitle",
   "metadata.job_title",
   "metadata.position",
+  "metadata.currenttitle",
+  "metadata.currentTitle",
+  "currenttitle",
+  "currentTitle",
   "title"
 ];
 
 const CONTACT_LEVEL_PATHS = [
   "metadata.level",
   "metadata.seniority",
-  "metadata.seniority_level"
+  "metadata.seniority_level",
+  "metadata.positionlevel",
+  "metadata.positionLevel",
+  "positionlevel",
+  "positionLevel"
 ];
 
 const CONTACT_EMAIL_PATH_GROUPS = [

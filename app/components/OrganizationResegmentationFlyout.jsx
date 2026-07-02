@@ -147,26 +147,32 @@ export function OrganizationResegmentationFlyout({
       return;
     }
 
-    const payload = await postResegmentationAction("segmentOrganization", {
-      uuid: organizationUUID,
-      dryRun: false,
-      saveSalesforce,
-      includeExplanation: true
-    });
-    const nextResult = buildAppliedResult(payload.resegmentation);
-    const nextRecord = applyResegmentationToRecord(record, payload.resegmentation);
-    const nextMessage = payload.statusExplained || "Segmentation applied.";
-    setResult(nextResult);
-    setIsApplied(true);
-    setAppliedMessage(nextMessage);
-    setResultMessage("");
-    setError("");
-    if (typeof onApplied === "function") {
-      await onApplied({
-        record: nextRecord,
-        resegmentation: payload.resegmentation,
-        statusExplained: nextMessage
+    try {
+      const payload = await postResegmentationAction("segmentOrganization", {
+        uuid: organizationUUID,
+        dryRun: false,
+        saveSalesforce,
+        includeExplanation: true
       });
+      const nextResult = buildAppliedResult(payload.resegmentation);
+      const nextRecord = applyResegmentationToRecord(record, payload.resegmentation);
+      const nextMessage = payload.statusExplained || "Segmentation applied.";
+      setResult(nextResult);
+      setIsApplied(true);
+      setAppliedMessage(nextMessage);
+      setResultMessage("");
+      setError("");
+      if (typeof onApplied === "function") {
+        await onApplied({
+          record: nextRecord,
+          resegmentation: payload.resegmentation,
+          statusExplained: nextMessage
+        });
+      }
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Unable to apply resegmentation.");
+      setIsApplied(false);
+      setAppliedMessage("");
     }
   }
 
@@ -231,7 +237,7 @@ export function OrganizationResegmentationFlyout({
               alwaysShow
               emptyProposedMessage={
                 hasPreviewed
-                  ? "No segmentation was generated for this organization."
+                  ? "Segmentation ran, but no labels were produced for this organization."
                   : "Run segmentation to preview the proposed updates."
               }
             />

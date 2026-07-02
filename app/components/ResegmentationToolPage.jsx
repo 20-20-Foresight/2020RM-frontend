@@ -216,7 +216,7 @@ export function ResegmentationToolPage({
   initialLists = [],
   initialError = null,
 }) {
-  const [strategy, setStrategy] = useState("legacy");
+  const [strategy, setStrategy] = useState("v312");
   const [singleQuery, setSingleQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searchError, setSearchError] = useState("");
@@ -428,20 +428,29 @@ export function ResegmentationToolPage({
       return;
     }
 
-    const payload = await postResegmentationAction("segmentOrganization", {
-      uuid: selectedOrganization.summary.uuid,
-      strategy,
-      dryRun: false,
-      saveSalesforce,
-      includeExplanation: true
-    });
-    setSingleResult(buildAppliedResult(payload.resegmentation));
-    setSingleApplied(true);
-    setSingleAppliedMessage(payload.statusExplained || "Segmentation applied.");
-    setSelectedOrganization((currentValue) => ({
-      summary: currentValue?.summary || selectedOrganization.summary,
-      record: applyResegmentationToRecord(currentValue?.record || null, payload.resegmentation),
-    }));
+    try {
+      const payload = await postResegmentationAction("segmentOrganization", {
+        uuid: selectedOrganization.summary.uuid,
+        strategy,
+        dryRun: false,
+        saveSalesforce,
+        includeExplanation: true
+      });
+      setSingleResult(buildAppliedResult(payload.resegmentation));
+      setSingleApplied(true);
+      setSingleAppliedMessage(payload.statusExplained || "Segmentation applied.");
+      setSelectedOrganization((currentValue) => ({
+        summary: currentValue?.summary || selectedOrganization.summary,
+        record: applyResegmentationToRecord(currentValue?.record || null, payload.resegmentation),
+      }));
+      setSelectedOrganizationError("");
+    } catch (error) {
+      setSelectedOrganizationError(
+        error instanceof Error ? error.message : "Unable to apply resegmentation."
+      );
+      setSingleApplied(false);
+      setSingleAppliedMessage("");
+    }
   }
 
   async function handleSelectList(nextListId) {
@@ -580,23 +589,27 @@ export function ResegmentationToolPage({
   }
 
   async function handleApplyListRow(org, options) {
-    const payload = await postResegmentationAction("segmentOrganization", {
-      uuid: org.uuid,
-      strategy,
-      dryRun: false,
-      saveSalesforce: options.saveSalesforce,
-      includeExplanation: true
-    });
-    setRowResults((currentValue) => ({
-      ...currentValue,
-      [org.uuid]: buildAppliedResult(payload.resegmentation),
-    }));
-    setRowAppliedIds((currentValue) => {
-      const nextValue = new Set(currentValue);
-      nextValue.add(org.uuid);
-      return nextValue;
-    });
-    setListError("");
+    try {
+      const payload = await postResegmentationAction("segmentOrganization", {
+        uuid: org.uuid,
+        strategy,
+        dryRun: false,
+        saveSalesforce: options.saveSalesforce,
+        includeExplanation: true
+      });
+      setRowResults((currentValue) => ({
+        ...currentValue,
+        [org.uuid]: buildAppliedResult(payload.resegmentation),
+      }));
+      setRowAppliedIds((currentValue) => {
+        const nextValue = new Set(currentValue);
+        nextValue.add(org.uuid);
+        return nextValue;
+      });
+      setListError("");
+    } catch (error) {
+      setListError(error instanceof Error ? error.message : "Unable to apply list resegmentation.");
+    }
   }
 
   function openReviewFor(org) {
@@ -841,7 +854,7 @@ export function ResegmentationToolPage({
                   alwaysShow
                   emptyProposedMessage={
                     hasSinglePreviewed
-                      ? "No segmentation was generated for this organization."
+                      ? "Segmentation ran, but no labels were produced for this organization."
                       : "Run segmentation to preview the proposed updates."
                   }
                 />

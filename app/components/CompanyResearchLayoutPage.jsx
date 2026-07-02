@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import {
   Badge,
   Box,
@@ -9,7 +9,12 @@ import {
   Text,
   useDisclosure,
 } from "@chakra-ui/react";
-import { NavLink, Outlet, useFetcher, useRevalidator } from "@remix-run/react";
+import {
+  NavLink,
+  Outlet,
+  useFetcher,
+  useOutletContext,
+} from "@remix-run/react";
 import { CompanyResearchRequestDrawer } from "./CompanyResearchRequestDrawer";
 
 const COMPANY_RESEARCH_TABS = [
@@ -53,12 +58,32 @@ function TabLink({ tab }) {
 export default function CompanyResearchLayoutRoute() {
   const drawer = useDisclosure();
   const fetcher = useFetcher();
-  const revalidator = useRevalidator();
+  const [requestDrawerInitialValues, setRequestDrawerInitialValues] = useState(null);
+  const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
+
+  function openRequestDrawer(initialValues = null) {
+    setRequestDrawerInitialValues(initialValues || null);
+    drawer.onOpen();
+  }
+
+  function closeRequestDrawer() {
+    drawer.onClose();
+  }
 
   function handleRequestCreated() {
+    setRequestDrawerInitialValues(null);
     drawer.onClose();
-    revalidator.revalidate();
+    setDashboardRefreshKey((current) => current + 1);
   }
+
+  const outletContext = useMemo(
+    () => ({
+      openRequestDrawer,
+      closeRequestDrawer,
+      dashboardRefreshKey,
+    }),
+    [dashboardRefreshKey]
+  );
 
   return (
     <Box bg="gray.100" minH="100vh">
@@ -78,7 +103,7 @@ export default function CompanyResearchLayoutRoute() {
               Queue operations, prioritization, and intake configuration for Company Research.
             </Text>
           </Box>
-          <Button colorScheme="blue" size="sm" onClick={drawer.onOpen}>
+          <Button colorScheme="blue" size="sm" onClick={() => openRequestDrawer()}>
             Request Research
           </Button>
         </Flex>
@@ -102,13 +127,18 @@ export default function CompanyResearchLayoutRoute() {
         </Box>
       </Box>
 
-      <Outlet />
+      <Outlet context={outletContext} />
       <CompanyResearchRequestDrawer
         isOpen={drawer.isOpen}
-        onClose={drawer.onClose}
+        onClose={closeRequestDrawer}
         fetcher={fetcher}
         onSuccess={handleRequestCreated}
+        initialValues={requestDrawerInitialValues}
       />
     </Box>
   );
+}
+
+export function useCompanyResearchLayoutContext() {
+  return useOutletContext();
 }

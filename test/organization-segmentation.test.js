@@ -178,11 +178,12 @@ test("buildOrganizationSegmentationViewModel falls back to top-level segmentatio
     focuses: [
       "retail banking"
     ],
-    explanations: []
+    explanations: [],
+    state: "ready"
   });
 });
 
-test("buildOrganizationSegmentationViewModel returns null when segmentation has no usable values", () => {
+test("buildOrganizationSegmentationViewModel reports empty stored segmentation distinctly", () => {
   const result = buildOrganizationSegmentationViewModel({
     metadata: {
       segmentation: {
@@ -204,7 +205,12 @@ test("buildOrganizationSegmentationViewModel returns null when segmentation has 
     }
   });
 
-  assert.equal(result, null);
+  assert.deepEqual(result, {
+    industries: [],
+    focuses: [],
+    explanations: [],
+    state: "empty"
+  });
 });
 
 test("buildOrganizationSegmentationViewModel escapes explanation fallback text", () => {
