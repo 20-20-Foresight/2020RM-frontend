@@ -132,6 +132,8 @@ function normalizeQueueItem(value) {
       originLabels[1] ||
       null,
     queueStatus: readTrimmedString(value.queueStatus) || "pending",
+    requestStatus: readTrimmedString(value.requestStatus),
+    requestPhase: readTrimmedString(value.requestPhase),
     companyResearchStatus: readTrimmedString(value.companyResearchStatus),
     processingStage: readTrimmedString(value.processingStage) || "waiting",
     companyName: readTrimmedString(value.companyName) || "",
