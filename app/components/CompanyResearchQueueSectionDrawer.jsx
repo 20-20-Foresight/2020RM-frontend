@@ -21,6 +21,8 @@ import {
 } from "@chakra-ui/react";
 import { CompanyResearchQueueTable } from "./CompanyResearchQueueTable";
 
+const SECTION_DRAWER_POLL_INTERVAL_MS = 60_000;
+
 function readLocalDate(value = new Date()) {
   const date = value instanceof Date ? value : new Date(value);
   const year = date.getFullYear();
@@ -65,11 +67,26 @@ function buildQueryString(section, offset, filters) {
   return params.toString();
 }
 
+async function fetchSectionItems({ section, filters, offset }) {
+  const response = await fetch(
+    `/api/rest/company-research/items?${buildQueryString(section, offset, filters)}`,
+    {
+      headers: { accept: "application/json" },
+    }
+  );
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.message || "Unable to load queue items.");
+  }
+  return payload;
+}
+
 export function CompanyResearchQueueSectionDrawer({
   isOpen,
   onClose,
   section,
   title,
+  onRerunRequest,
 }) {
   const isCompleted = section === "completed";
   const [items, setItems] = useState([]);
@@ -89,21 +106,17 @@ export function CompanyResearchQueueSectionDrawer({
     dateTo: "",
   });
 
-  async function loadItems({ reset = false } = {}) {
+  async function loadItems({ reset = false, showLoading = true } = {}) {
     const offset = reset ? 0 : items.length;
-    setLoading(true);
-    setError("");
+    if (showLoading) {
+      setLoading(true);
+    }
     try {
-      const response = await fetch(
-        `/api/rest/company-research/items?${buildQueryString(section, offset, filters)}`,
-        {
-          headers: { accept: "application/json" },
-        }
-      );
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload?.message || "Unable to load queue items.");
-      }
+      const payload = await fetchSectionItems({
+        section,
+        filters,
+        offset,
+      });
       const nextItems = Array.isArray(payload?.items?.items) ? payload.items.items : [];
       setItems((current) => (reset ? nextItems : [...current, ...nextItems]));
       setTotal(Number(payload?.items?.total || 0));
@@ -120,10 +133,13 @@ export function CompanyResearchQueueSectionDrawer({
             }
           : { statuses: [], reasons: [] }
       );
+      setError("");
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load queue items.");
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   }
 
@@ -131,9 +147,63 @@ export function CompanyResearchQueueSectionDrawer({
     if (!isOpen) {
       return;
     }
+    let isActive = true;
+
+    async function refresh(reset = true, showLoading = false) {
+      try {
+        if (showLoading) {
+          setLoading(true);
+        }
+        const payload = await fetchSectionItems({
+          section,
+          filters,
+          offset: reset ? 0 : items.length,
+        });
+        if (!isActive) {
+          return;
+        }
+        const nextItems = Array.isArray(payload?.items?.items) ? payload.items.items : [];
+        setItems((current) => (reset ? nextItems : [...current, ...nextItems]));
+        setTotal(Number(payload?.items?.total || 0));
+        setHasMore(Boolean(payload?.items?.hasMore));
+        setAvailableFilters(
+          isCompleted
+            ? {
+                statuses: Array.isArray(payload?.items?.availableFilters?.statuses)
+                  ? payload.items.availableFilters.statuses
+                  : [],
+                reasons: Array.isArray(payload?.items?.availableFilters?.reasons)
+                  ? payload.items.availableFilters.reasons
+                  : [],
+              }
+            : { statuses: [], reasons: [] }
+        );
+        setError("");
+      } catch (loadError) {
+        if (!isActive) {
+          return;
+        }
+        setError(loadError instanceof Error ? loadError.message : "Unable to load queue items.");
+      } finally {
+        if (isActive && showLoading) {
+          setLoading(false);
+        }
+      }
+    }
+
     setItems([]);
-    loadItems({ reset: true });
-  }, [isOpen, section]);
+    refresh(true, true);
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        refresh(true, false);
+      }
+    }, SECTION_DRAWER_POLL_INTERVAL_MS);
+
+    return () => {
+      isActive = false;
+      window.clearInterval(intervalId);
+    };
+  }, [filters, isCompleted, isOpen, section]);
 
   const appliedFilterCount = useMemo(
     () =>
@@ -298,7 +368,11 @@ export function CompanyResearchQueueSectionDrawer({
                 <Text fontSize="sm">Loading queue items…</Text>
               </HStack>
             ) : (
-              <CompanyResearchQueueTable items={items} section={section} />
+              <CompanyResearchQueueTable
+                items={items}
+                section={section}
+                onRerunRequest={onRerunRequest}
+              />
             )}
           </VStack>
         </DrawerBody>

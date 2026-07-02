@@ -33,7 +33,7 @@ test("loadCompanyResearchDashboard calls the dashboard route and normalizes the 
                     companyName: "Manual Co",
                     requestKind: "manual",
                     queueStatus: "pending",
-                    sourceLabels: ["Manual Request"],
+                    originLabel: "Manual Request",
                   },
                 ],
               },
@@ -49,7 +49,24 @@ test("loadCompanyResearchDashboard calls the dashboard route and normalizes the 
                         companyName: "Active Co",
                         requestKind: "automation",
                         companyResearchStatus: "Loading Salesforce Data",
-                        sourceLabels: ["salesforce", "Recent Accounts"],
+                        originLabel: "Query Feed",
+                        originContextLabel: "Recent Accounts",
+                        meta: {
+                          organizationUUID: "org-12",
+                          reportUploadError: {
+                            code: "invalid_client_credential",
+                            message: "Upload failed",
+                          },
+                          rocketReachSummary: {
+                            queueRequestCount: 99,
+                            successCount: 75,
+                            failedCount: 1,
+                            pendingCount: 22,
+                            startedCount: 1,
+                            activeCount: 23,
+                            settled: false,
+                          },
+                        },
                       },
                     ],
                   },
@@ -62,7 +79,7 @@ test("loadCompanyResearchDashboard calls the dashboard route and normalizes the 
                     id: 13,
                     companyName: "Done Co",
                     companyResearchStatus: "Success",
-                    sourceLabels: ["Manual List"],
+                    originLabel: "Manual List",
                   },
                 ],
               },
@@ -83,10 +100,23 @@ test("loadCompanyResearchDashboard calls the dashboard route and normalizes the 
   assert.equal(dashboard.nextUp.items[0].companyName, "Manual Co");
   assert.equal(dashboard.processing.total, 1);
   assert.equal(dashboard.processing.groups[0].status, "Loading Salesforce Data");
-  assert.deepEqual(dashboard.processing.groups[0].items[0].sourceLabels, [
-    "salesforce",
-    "Recent Accounts",
-  ]);
+  assert.equal(dashboard.processing.groups[0].items[0].originLabel, "Query Feed");
+  assert.equal(
+    dashboard.processing.groups[0].items[0].originContextLabel,
+    "Recent Accounts"
+  );
+  assert.equal(
+    dashboard.processing.groups[0].items[0].meta.organizationUUID,
+    "org-12"
+  );
+  assert.equal(
+    dashboard.processing.groups[0].items[0].meta.reportUploadError.code,
+    "invalid_client_credential"
+  );
+  assert.equal(
+    dashboard.processing.groups[0].items[0].meta.rocketReachSummary.successCount,
+    75
+  );
   assert.equal(dashboard.completed.items[0].companyResearchStatus, "Success");
 });
 

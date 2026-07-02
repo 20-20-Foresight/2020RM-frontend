@@ -10,11 +10,16 @@ test("createCompanyResearchManualRequest posts the expected payload", async () =
   const calls = [];
   const formData = new FormData();
   formData.set("companyName", "Acme Capital");
-  formData.set("reason", "Important prospect");
   formData.set("website", "https://acme.example.com");
   formData.set("linkedInUrl", "https://linkedin.com/company/acme");
-  formData.append("requestedSources", "Website");
-  formData.append("requestedSources", "Sales Navigator");
+  formData.set("requestReason", "From Email Request");
+  formData.set("notes", "Important prospect");
+  formData.set("originLabel", "Rerun Request");
+  formData.set("requestSource_website", "true");
+  formData.set("requestSource_salesnav", "true");
+  formData.set("requestSource_biscred", "true");
+  formData.set("requestSource_preqin", "true");
+  formData.set("requestSource_revenuebase", "true");
   formData.set("runNow", "true");
 
   const requestRecord = await createCompanyResearchManualRequest({
@@ -52,11 +57,18 @@ test("createCompanyResearchManualRequest posts the expected payload", async () =
   assert.equal(calls[0].options.headers.cookie, "sid=123");
   assert.deepEqual(JSON.parse(calls[0].options.body), {
     companyName: "Acme Capital",
-    reason: "Important prospect",
+    requestReason: "From Email Request",
+    notes: "Important prospect",
     website: "https://acme.example.com",
     linkedInUrl: "https://linkedin.com/company/acme",
-    requestedSources: ["Website", "Sales Navigator"],
     runNow: true,
+    originLabel: "Rerun Request",
+    requestSource_website: true,
+    requestSource_linkedin: false,
+    requestSource_salesnav: true,
+    requestSource_biscred: true,
+    requestSource_preqin: true,
+    requestSource_revenuebase: true,
   });
   assert.equal(requestRecord.id, "a01-manual");
   assert.equal(requestRecord.queueRequestId, 901);
@@ -65,7 +77,7 @@ test("createCompanyResearchManualRequest posts the expected payload", async () =
 test("createCompanyResearchManualRequest throws normalized errors", async () => {
   const formData = new FormData();
   formData.set("companyName", "Acme Capital");
-  formData.set("reason", "Important prospect");
+  formData.set("notes", "Important prospect");
 
   await assert.rejects(
     () =>

@@ -57,7 +57,7 @@ export async function postResegmentationAction(intent, fields = {}) {
       "content-type": "application/json"
     };
     requestOptions.body = JSON.stringify({
-      strategy: readTrimmedString(fields.strategy) || "legacy",
+      strategy: readTrimmedString(fields.strategy) || "v312",
       dryRun: fields.dryRun !== false,
       saveSalesforce: fields.saveSalesforce === true,
       includeExplanation: fields.includeExplanation !== false
@@ -94,6 +94,22 @@ export async function postResegmentationAction(intent, fields = {}) {
     };
   }
   if (intent === "segmentOrganization") {
+    if (payload?.status && payload.status !== "completed") {
+      const nextMessage =
+        readTrimmedString(payload?.statusExplained) ||
+        readTrimmedString(payload?.message) ||
+        "Segmentation failed. Please have an admin review the logs and error details.";
+      const error = new Error(
+        nextMessage
+      );
+      error.details =
+        payload?.resegmentation?.failure ||
+        payload?.meta?.failure ||
+        payload?.meta?.runtime?.failure ||
+        null;
+      error.status = payload?.status || "";
+      throw error;
+    }
     return {
       resegmentation: payload.resegmentation || null,
       status: payload.status,

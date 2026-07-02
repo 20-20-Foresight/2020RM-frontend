@@ -341,15 +341,19 @@ function readSegmentationProjection(record) {
   const legacyReasons = Array.isArray(legacySegmentation?.reasons)
     ? legacySegmentation.reasons.filter((reason) => isObjectLike(reason))
     : [];
+  const hasStoredSegmentation =
+    isObjectLike(projection) ||
+    isObjectLike(legacySegmentation);
 
-  if (!industry.length && !focus.length && !legacyReasons.length) {
+  if (!industry.length && !focus.length && !legacyReasons.length && !hasStoredSegmentation) {
     return null;
   }
 
   return {
     industry,
     focus,
-    legacyReasons
+    legacyReasons,
+    hasStoredSegmentation
   };
 }
 
@@ -537,13 +541,21 @@ function buildOrganizationSegmentationViewModel(record) {
   ];
 
   if (!industries.length && !focuses.length && !explanations.length) {
-    return null;
+    return projection?.hasStoredSegmentation
+      ? {
+          industries: [],
+          focuses: [],
+          explanations: [],
+          state: "empty"
+        }
+      : null;
   }
 
   return {
     industries,
     focuses,
-    explanations
+    explanations,
+    state: "ready"
   };
 }
 

@@ -604,6 +604,69 @@ function formatJson(value) {
   return JSON.stringify(value || {}, null, 2);
 }
 
+function normalizeSegmentationFailureDetails(details) {
+  if (!details || typeof details !== "object") {
+    return null;
+  }
+
+  const context =
+    details?.context && typeof details.context === "object"
+      ? details.context
+      : {};
+  const diagnostics =
+    details?.diagnostics && typeof details.diagnostics === "object"
+      ? details.diagnostics
+      : {};
+  const unsupportedItems = Array.isArray(diagnostics.unsupportedItems)
+    ? diagnostics.unsupportedItems
+    : [];
+  const weakEvidenceItems = Array.isArray(diagnostics.weakEvidenceItems)
+    ? diagnostics.weakEvidenceItems
+    : [];
+  const passSummaries = Array.isArray(diagnostics.passSummaries)
+    ? diagnostics.passSummaries
+    : [];
+
+  return {
+    summary:
+      readTrimmedString(details.summary) ||
+      "Segmentation failed. Please have an admin review the logs and error details.",
+    openAIMessage: readTrimmedString(details.openAIMessage),
+    category: readTrimmedString(details.category),
+    failureType: readTrimmedString(diagnostics.failureType),
+    organizationDescriptionPresent:
+      context.organizationDescriptionPresent === true,
+    externalSourceCount: readFiniteNumber(context.externalSourceCount, 0),
+    descriptiveEvidenceCount: readFiniteNumber(
+      context.descriptiveEvidenceCount,
+      0
+    ),
+    structuredEvidenceCount: readFiniteNumber(
+      context.structuredEvidenceCount,
+      0
+    ),
+    unsupportedItems,
+    weakEvidenceItems,
+    passSummaries,
+  };
+}
+
+function renderFailureItemReasons(item) {
+  const reasons = Array.isArray(item?.reasons)
+    ? item.reasons.map((reason) => readTrimmedString(reason)).filter(Boolean)
+    : [];
+  return reasons.length ? reasons.join(", ") : "";
+}
+
+function renderFailureItemEvidence(item) {
+  const evidence = Array.isArray(item?.parsedEvidence)
+    ? item.parsedEvidence
+    : Array.isArray(item?.evidencePreview)
+      ? item.evidencePreview
+      : [];
+  return evidence.map((entry) => readTrimmedString(entry)).filter(Boolean);
+}
+
 async function readJsonResponse(response) {
   const contentType = response.headers.get("content-type") || "";
   const bodyText = await response.text();
@@ -1039,6 +1102,7 @@ export function OrganizationSegmentationTab({ organizationDetail }) {
     status: "idle",
     message: "",
     error: "",
+    details: null,
   });
   const [reviewNotice, setReviewNotice] = useState({
     status: "idle",
@@ -1062,6 +1126,7 @@ export function OrganizationSegmentationTab({ organizationDetail }) {
       status: "idle",
       message: "",
       error: "",
+      details: null,
     });
     setReviewNotice({
       status: "idle",
@@ -1095,6 +1160,7 @@ export function OrganizationSegmentationTab({ organizationDetail }) {
           readTrimmedString(executedAction.message) ||
           "Segmentation was rerun successfully.",
         error: "",
+        details: null,
       });
       setReviewNotice({
         status: "idle",
@@ -1199,6 +1265,7 @@ export function OrganizationSegmentationTab({ organizationDetail }) {
       status: "running",
       message: "",
       error: "",
+      details: null,
     });
 
     try {
@@ -1223,16 +1290,19 @@ export function OrganizationSegmentationTab({ organizationDetail }) {
             ? `Segmentation reran and saved${runtimeMode ? ` using ${runtimeMode}` : ""}.`
             : "Segmentation reran and saved."),
         error: "",
+        details: null,
       });
       revalidator.revalidate();
     } catch (error) {
+      const failureDetails = normalizeSegmentationFailureDetails(error?.details);
       setRerunState({
         status: "error",
         message: "",
-        error:
-          error instanceof Error
+        error: failureDetails?.summary ||
+          (error instanceof Error
             ? error.message
-            : "Unable to rerun segmentation right now.",
+            : "Segmentation failed. Please have an admin review the logs and error details."),
+        details: failureDetails,
       });
     }
   }
@@ -1273,10 +1343,145 @@ export function OrganizationSegmentationTab({ organizationDetail }) {
         </Flex>
 
         {rerunState.error ? (
-          <Alert status="error" borderRadius="20px">
-            <AlertIcon />
-            {rerunState.error}
-          </Alert>
+          <Stack spacing={4}>
+            <Alert status="error" borderRadius="20px" alignItems="flex-start">
+              <AlertIcon mt={1} />
+              <Stack spacing={1}>
+                <Text fontWeight="semibold">
+                  Segmentation failed. Please have an admin review logs and error details.
+                </Text>
+                <Text>{rerunState.error}</Text>
+              </Stack>
+            </Alert>
+
+            {rerunState.details ? (
+              <Box
+                borderWidth="1px"
+                borderColor={BORDER_COLOR}
+                borderRadius="24px"
+                bg="white"
+                px={5}
+                py={5}
+              >
+                <Stack spacing={4}>
+                  <Box>
+                    <Text fontSize="xs" fontWeight="bold" letterSpacing="0.14em" color="gray.500">
+                      ERROR DETAILS
+                    </Text>
+                    <Text fontSize="sm" color="gray.700" mt={1}>
+                      {rerunState.details.summary}
+                    </Text>
+                    {rerunState.details.openAIMessage ? (
+                      <Text fontSize="sm" color="gray.600" mt={2}>
+                        OpenAI message: {rerunState.details.openAIMessage}
+                      </Text>
+                    ) : null}
+                  </Box>
+
+                  <SimpleGrid columns={{ base: 1, md: 2, xl: 4 }} spacing={3}>
+                    <Box borderWidth="1px" borderColor={BORDER_COLOR} borderRadius="16px" px={4} py={3}>
+                      <Text fontSize="xs" color="gray.500" letterSpacing="0.12em">CATEGORY</Text>
+                      <Text fontSize="sm" mt={1}>{rerunState.details.category || "Not set"}</Text>
+                    </Box>
+                    <Box borderWidth="1px" borderColor={BORDER_COLOR} borderRadius="16px" px={4} py={3}>
+                      <Text fontSize="xs" color="gray.500" letterSpacing="0.12em">FAILURE TYPE</Text>
+                      <Text fontSize="sm" mt={1}>{rerunState.details.failureType || "Not set"}</Text>
+                    </Box>
+                    <Box borderWidth="1px" borderColor={BORDER_COLOR} borderRadius="16px" px={4} py={3}>
+                      <Text fontSize="xs" color="gray.500" letterSpacing="0.12em">EXTERNAL SOURCES</Text>
+                      <Text fontSize="sm" mt={1}>{rerunState.details.externalSourceCount}</Text>
+                    </Box>
+                    <Box borderWidth="1px" borderColor={BORDER_COLOR} borderRadius="16px" px={4} py={3}>
+                      <Text fontSize="xs" color="gray.500" letterSpacing="0.12em">EVIDENCE FRAGMENTS</Text>
+                      <Text fontSize="sm" mt={1}>
+                        {rerunState.details.descriptiveEvidenceCount} descriptive,{" "}
+                        {rerunState.details.structuredEvidenceCount} structured
+                      </Text>
+                    </Box>
+                  </SimpleGrid>
+
+                  <Box>
+                    <Text fontSize="sm" fontWeight="semibold">Unsupported items</Text>
+                    {rerunState.details.unsupportedItems.length ? (
+                      <UnorderedList mt={2} spacing={2}>
+                        {rerunState.details.unsupportedItems.map((item, index) => {
+                          const evidence = renderFailureItemEvidence(item);
+                          const reasons = renderFailureItemReasons(item);
+                          return (
+                            <ListItem key={`unsupported-${index}`}>
+                              <Text fontSize="sm">
+                                {readTrimmedString(item?.scope) || "item"}:{" "}
+                                {readTrimmedString(item?.value) || "Not set"}
+                                {reasons ? ` (${reasons})` : ""}
+                              </Text>
+                              {evidence.length ? (
+                                <Text fontSize="xs" color="gray.600">
+                                  Evidence: {evidence.join(" | ")}
+                                </Text>
+                              ) : null}
+                            </ListItem>
+                          );
+                        })}
+                      </UnorderedList>
+                    ) : (
+                      <Text fontSize="sm" color="gray.600" mt={2}>No unsupported items were logged.</Text>
+                    )}
+                  </Box>
+
+                  <Box>
+                    <Text fontSize="sm" fontWeight="semibold">Weak evidence items</Text>
+                    {rerunState.details.weakEvidenceItems.length ? (
+                      <UnorderedList mt={2} spacing={2}>
+                        {rerunState.details.weakEvidenceItems.map((item, index) => {
+                          const evidence = renderFailureItemEvidence(item);
+                          const reasons = renderFailureItemReasons(item);
+                          return (
+                            <ListItem key={`weak-${index}`}>
+                              <Text fontSize="sm">
+                                {readTrimmedString(item?.scope) || "item"}:{" "}
+                                {readTrimmedString(item?.value) || "Not set"}
+                                {reasons ? ` (${reasons})` : ""}
+                              </Text>
+                              {evidence.length ? (
+                                <Text fontSize="xs" color="gray.600">
+                                  Evidence: {evidence.join(" | ")}
+                                </Text>
+                              ) : null}
+                            </ListItem>
+                          );
+                        })}
+                      </UnorderedList>
+                    ) : (
+                      <Text fontSize="sm" color="gray.600" mt={2}>No weak-evidence items were logged.</Text>
+                    )}
+                  </Box>
+
+                  <Box>
+                    <Text fontSize="sm" fontWeight="semibold">Pass history</Text>
+                    {rerunState.details.passSummaries.length ? (
+                      <UnorderedList mt={2} spacing={1}>
+                        {rerunState.details.passSummaries.map((pass, index) => (
+                          <ListItem key={`pass-${index}`}>
+                            <Text fontSize="sm">
+                              {readTrimmedString(pass?.passType) || "pass"}
+                              {Number.isFinite(Number(pass?.attempt))
+                                ? ` (attempt ${Number(pass.attempt)})`
+                                : ""}
+                              {readTrimmedString(pass?.responseId)
+                                ? ` - ${readTrimmedString(pass.responseId)}`
+                                : ""}
+                            </Text>
+                          </ListItem>
+                        ))}
+                      </UnorderedList>
+                    ) : (
+                      <Text fontSize="sm" color="gray.600" mt={2}>No pass history was logged.</Text>
+                    )}
+                  </Box>
+                </Stack>
+              </Box>
+            ) : null}
+          </Stack>
         ) : null}
 
         {rerunState.message ? (
@@ -1299,7 +1504,7 @@ export function OrganizationSegmentationTab({ organizationDetail }) {
         {!segmentation && !isRerunning ? (
           <Alert status="warning" borderRadius="20px">
             <AlertIcon />
-            No saved v3.12 segmentation payload is available on this organization yet.
+            No saved organization-level v3.12 segmentation result is available. Segmentation may have run during research but not produced a confident saved payload for this organization.
           </Alert>
         ) : null}
 

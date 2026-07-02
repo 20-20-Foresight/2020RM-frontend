@@ -74,11 +74,20 @@ async function requestCompanyResearchMutationApi(options) {
   return payload;
 }
 
-function readRequestedSources(formData) {
-  return formData
-    .getAll("requestedSources")
-    .map((value) => readTrimmedString(value))
-    .filter(Boolean);
+const REQUEST_SOURCE_FIELDS = Object.freeze([
+  "website",
+  "linkedin",
+  "salesnav",
+  "biscred",
+  "preqin",
+  "revenuebase",
+]);
+
+function readRequestSourceFlags(formData) {
+  return REQUEST_SOURCE_FIELDS.reduce((result, source) => {
+    result[`requestSource_${source}`] = formData.get(`requestSource_${source}`) === "true";
+    return result;
+  }, {});
 }
 
 async function createCompanyResearchManualRequest(options) {
@@ -89,8 +98,9 @@ async function createCompanyResearchManualRequest(options) {
     notes: readTrimmedString(formData.get("notes")) || "",
     website: readTrimmedString(formData.get("website")) || null,
     linkedInUrl: readTrimmedString(formData.get("linkedInUrl")) || null,
-    requestedSources: readRequestedSources(formData),
     runNow: formData.get("runNow") === "true",
+    originLabel: readTrimmedString(formData.get("originLabel")) || null,
+    ...readRequestSourceFlags(formData),
   };
 
   if (!payload.website && !payload.linkedInUrl) {

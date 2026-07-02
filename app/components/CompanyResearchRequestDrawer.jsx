@@ -1,11 +1,10 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   AlertIcon,
   Box,
   Button,
   Checkbox,
-  CheckboxGroup,
   Drawer,
   DrawerBody,
   DrawerCloseButton,
@@ -23,21 +22,77 @@ import {
   VStack,
 } from "@chakra-ui/react";
 
-const REQUESTED_SOURCE_OPTIONS = [
-  { value: "Website", label: "Website" },
-  { value: "LinkedIn", label: "LinkedIn" },
-  { value: "Sales Navigator", label: "Sales Navigator" },
+const DATA_PROVIDER_OPTIONS = [
+  { value: "website", label: "Website" },
+  { value: "linkedin", label: "LinkedIn" },
+  { value: "salesnav", label: "Sales Navigator" },
+  { value: "biscred", label: "Biscred" },
+  { value: "preqin", label: "Preqin" },
+  { value: "revenuebase", label: "RevenueBase" },
 ];
+const DEFAULT_DATA_PROVIDERS = DATA_PROVIDER_OPTIONS.map((option) => option.value);
 
 const REQUEST_REASON_OPTIONS = [
   { value: "From Email Request", label: "From Email Request" },
 ];
 
-export function CompanyResearchRequestDrawer({ isOpen, onClose, fetcher, onSuccess }) {
+function readTrimmedString(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeDataProviders(value) {
+  const items = Array.isArray(value) ? value : [];
+  const unique = Array.from(
+    new Set(items.map((entry) => readTrimmedString(entry)).filter(Boolean))
+  );
+  return unique.length ? unique : DEFAULT_DATA_PROVIDERS;
+}
+
+export function CompanyResearchRequestDrawer({
+  isOpen,
+  onClose,
+  fetcher,
+  onSuccess,
+  initialValues = null,
+}) {
   const isSubmitting = fetcher.state !== "idle";
   const error = fetcher.data?.error || null;
+  const defaults = useMemo(
+    () => ({
+      companyName: readTrimmedString(initialValues?.companyName),
+      website: readTrimmedString(initialValues?.website),
+      linkedInUrl: readTrimmedString(initialValues?.linkedInUrl),
+      dataProviders: normalizeDataProviders(initialValues?.dataProviders),
+      requestReason:
+        readTrimmedString(initialValues?.requestReason) || "From Email Request",
+      notes: readTrimmedString(initialValues?.notes),
+      originLabel: readTrimmedString(initialValues?.originLabel || initialValues?.requestSourceLabel),
+    }),
+    [initialValues]
+  );
+  const formKey = useMemo(() => JSON.stringify(defaults), [defaults]);
+  const isRerunRequest = defaults.originLabel === "Rerun Request";
+  const [selectedDataProviders, setSelectedDataProviders] = useState(
+    defaults.dataProviders
+  );
+  const lastHandledSuccessRef = useRef(null);
 
   useEffect(() => {
+    setSelectedDataProviders(defaults.dataProviders);
+  }, [defaults]);
+
+  useEffect(() => {
+    if (fetcher.state !== "idle") {
+      return;
+    }
+    if (!fetcher.data?.ok) {
+      lastHandledSuccessRef.current = null;
+      return;
+    }
+    if (lastHandledSuccessRef.current === fetcher.data) {
+      return;
+    }
+    lastHandledSuccessRef.current = fetcher.data;
     if (fetcher.state === "idle" && fetcher.data?.ok) {
       onSuccess?.(fetcher.data.request || null);
     }
@@ -48,9 +103,11 @@ export function CompanyResearchRequestDrawer({ isOpen, onClose, fetcher, onSucce
       <DrawerOverlay />
       <DrawerContent>
         <DrawerCloseButton />
-        <DrawerHeader borderBottomWidth="1px">Request Research</DrawerHeader>
+        <DrawerHeader borderBottomWidth="1px">
+          {isRerunRequest ? "Rerun Company Research" : "Request Research"}
+        </DrawerHeader>
 
-        <fetcher.Form method="post" action="/tools/company-research">
+        <fetcher.Form key={formKey} method="post" action="/tools/company-research">
           <DrawerBody py={5}>
             <VStack align="stretch" spacing={4}>
               {error ? (
@@ -61,15 +118,27 @@ export function CompanyResearchRequestDrawer({ isOpen, onClose, fetcher, onSucce
               ) : null}
 
               <input type="hidden" name="intent" value="create_manual_request" />
-
+              <input
+                type="hidden"
+                name="originLabel"
+                value={defaults.originLabel}
+              />
               <FormControl isRequired>
                 <FormLabel fontSize="sm">Company</FormLabel>
-                <Input name="companyName" placeholder="e.g. Acme Capital" />
+                <Input
+                  name="companyName"
+                  placeholder="e.g. Acme Capital"
+                  defaultValue={defaults.companyName}
+                />
               </FormControl>
 
               <FormControl>
                 <FormLabel fontSize="sm">Website</FormLabel>
-                <Input name="website" placeholder="https://example.com" />
+                <Input
+                  name="website"
+                  placeholder="https://example.com"
+                  defaultValue={defaults.website}
+                />
                 <FormHelperText>Website or LinkedIn URL is required.</FormHelperText>
               </FormControl>
 
@@ -78,32 +147,45 @@ export function CompanyResearchRequestDrawer({ isOpen, onClose, fetcher, onSucce
                 <Input
                   name="linkedInUrl"
                   placeholder="https://www.linkedin.com/company/example"
+                  defaultValue={defaults.linkedInUrl}
                 />
               </FormControl>
 
               <FormControl>
-                <FormLabel fontSize="sm">Additional Sources</FormLabel>
-                <CheckboxGroup defaultValue={["Website"]}>
-                  <Stack spacing={2}>
-                    {REQUESTED_SOURCE_OPTIONS.map((option) => (
-                      <Checkbox
-                        key={option.value}
-                        name="requestedSources"
-                        value={option.value}
-                      >
-                        {option.label}
-                      </Checkbox>
-                    ))}
-                  </Stack>
-                </CheckboxGroup>
+                <FormLabel fontSize="sm">Data Providers</FormLabel>
+                <Stack spacing={2}>
+                  {DATA_PROVIDER_OPTIONS.map((option) => (
+                    <Checkbox
+                      key={option.value}
+                      name={`requestSource_${option.value}`}
+                      value="true"
+                      isChecked={selectedDataProviders.includes(option.value)}
+                      onChange={(event) => {
+                        setSelectedDataProviders((current) => {
+                          const next = new Set(current);
+                          if (event.target.checked) {
+                            next.add(option.value);
+                          } else {
+                            next.delete(option.value);
+                          }
+                          return DATA_PROVIDER_OPTIONS.map(({ value }) => value).filter(
+                            (value) => next.has(value)
+                          );
+                        });
+                      }}
+                    >
+                      {option.label}
+                    </Checkbox>
+                  ))}
+                </Stack>
                 <FormHelperText>
-                  Stored on the request for queue provenance and operator review.
+                  Every provider sent to the backend is explicit here.
                 </FormHelperText>
               </FormControl>
 
               <FormControl>
                 <FormLabel fontSize="sm">Reason</FormLabel>
-                <Select name="requestReason" defaultValue="From Email Request">
+                <Select name="requestReason" defaultValue={defaults.requestReason}>
                   {REQUEST_REASON_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
@@ -121,6 +203,7 @@ export function CompanyResearchRequestDrawer({ isOpen, onClose, fetcher, onSucce
                   name="notes"
                   placeholder="Why should this company enter Company Research?"
                   minH="120px"
+                  defaultValue={defaults.notes}
                 />
                 <FormHelperText>
                   Stored in Salesforce `Notes__c`.
@@ -149,7 +232,7 @@ export function CompanyResearchRequestDrawer({ isOpen, onClose, fetcher, onSucce
                 isLoading={isSubmitting}
                 loadingText="Submitting"
               >
-                Create Request
+                {isRerunRequest ? "Create Rerun Request" : "Create Request"}
               </Button>
             </Box>
           </DrawerFooter>

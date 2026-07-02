@@ -34,6 +34,40 @@ function readInteger(value) {
   return Number.isInteger(parsed) ? parsed : null;
 }
 
+function normalizeMeta(value) {
+  if (!isPlainObject(value)) {
+    return {};
+  }
+
+  return {
+    requestUrl: readTrimmedString(value.requestUrl),
+    organizationUUID: readTrimmedString(value.organizationUUID),
+    reportUrl: readTrimmedString(value.reportUrl),
+    localReportPath: readTrimmedString(value.localReportPath),
+    sharepointTrackingId: readTrimmedString(value.sharepointTrackingId),
+    reportUploadError: isPlainObject(value.reportUploadError)
+      ? value.reportUploadError
+      : null,
+    scraperFailures: Array.isArray(value.scraperFailures)
+      ? value.scraperFailures.filter((entry) => isPlainObject(entry))
+      : [],
+    rocketReachSummary: isPlainObject(value.rocketReachSummary)
+      ? value.rocketReachSummary
+      : null,
+    rocketReachCandidateCount: readInteger(value.rocketReachCandidateCount) ?? 0,
+    rocketReachSuccessCount: readInteger(value.rocketReachSuccessCount) ?? 0,
+    rocketReachFailedCount: readInteger(value.rocketReachFailedCount) ?? 0,
+    rocketReachPendingCount: readInteger(value.rocketReachPendingCount) ?? 0,
+    rocketReachStartedCount: readInteger(value.rocketReachStartedCount) ?? 0,
+    rocketReachSkippedCount: readInteger(value.rocketReachSkippedCount) ?? 0,
+    queuedSyncRequestIds: Array.isArray(value.queuedSyncRequestIds)
+      ? value.queuedSyncRequestIds
+          .map((entry) => readInteger(entry) ?? readTrimmedString(entry))
+          .filter((entry) => entry != null)
+      : [],
+  };
+}
+
 async function tryReadJson(response) {
   if (!response || typeof response.json !== "function") {
     return null;
@@ -51,13 +85,17 @@ function normalizeQueueItem(value) {
     return null;
   }
 
-  const sourceLabels = Array.isArray(value.sourceLabels)
-    ? value.sourceLabels
+  const originLabels = Array.isArray(value.originLabels)
+    ? value.originLabels
         .map((entry) => readTrimmedString(entry))
         .filter(Boolean)
-    : [];
-  const requestedSources = Array.isArray(value.requestedSources)
-    ? value.requestedSources
+    : Array.isArray(value.sourceLabels)
+      ? value.sourceLabels
+        .map((entry) => readTrimmedString(entry))
+        .filter(Boolean)
+      : [];
+  const dataProviders = Array.isArray(value.dataProviders)
+    ? value.dataProviders
         .map((entry) => readTrimmedString(entry))
         .filter(Boolean)
     : [];
@@ -84,6 +122,15 @@ function normalizeQueueItem(value) {
     salesforceRequestId: readTrimmedString(value.salesforceRequestId),
     queuedSalesforceRequestId: readTrimmedString(value.queuedSalesforceRequestId),
     requestKind: readTrimmedString(value.requestKind) || "manual",
+    originType: readTrimmedString(value.originType) || readTrimmedString(value.sourceType),
+    originLabel:
+      readTrimmedString(value.originLabel) ||
+      originLabels[0] ||
+      null,
+    originContextLabel:
+      readTrimmedString(value.originContextLabel) ||
+      originLabels[1] ||
+      null,
     queueStatus: readTrimmedString(value.queueStatus) || "pending",
     companyResearchStatus: readTrimmedString(value.companyResearchStatus),
     processingStage: readTrimmedString(value.processingStage) || "waiting",
@@ -92,15 +139,17 @@ function normalizeQueueItem(value) {
     linkedInUrl: readTrimmedString(value.linkedInUrl),
     reason: readTrimmedString(value.reason),
     notes: readTrimmedString(value.notes),
-    requestedSources,
-    sourceLabels,
-    activeSourceCount: readInteger(value.activeSourceCount) ?? sourceLabels.length,
+    dataProviders,
+    originLabels,
+    sourceLabels: originLabels,
+    activeSourceCount: readInteger(value.activeSourceCount) ?? originLabels.length,
     priority: readInteger(value.priority),
     createdAt: readTrimmedString(value.createdAt),
     updatedAt: readTrimmedString(value.updatedAt),
     completedAt: readTrimmedString(value.completedAt),
     statusText: readTrimmedString(value.statusText),
     statusHistory,
+    meta: normalizeMeta(value.meta),
   };
 }
 
