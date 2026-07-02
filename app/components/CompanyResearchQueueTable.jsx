@@ -83,9 +83,9 @@ function DateStack({ item }) {
 
 function StatusBadge({ item }) {
   const displayStatus =
-    item.processingStage === "RocketReach"
-      ? "RocketReach"
-      : item.companyResearchStatus || item.processingStage || item.queueStatus;
+    item.requestStatus === "Processing"
+      ? item.requestPhase || item.processingStage || "Processing"
+      : item.companyResearchStatus || item.requestPhase || item.processingStage || item.queueStatus;
   const colorScheme =
     item.requestKind === "manual"
       ? "orange"

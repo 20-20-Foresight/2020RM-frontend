@@ -34,6 +34,14 @@ function readInteger(value) {
   return Number.isInteger(parsed) ? parsed : null;
 }
 
+function normalizePhaseLabel(value) {
+  const trimmed = readTrimmedString(value);
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed.toLowerCase() === "waiting" ? "Gathering Data" : trimmed;
+}
+
 function normalizeMeta(value) {
   if (!isPlainObject(value)) {
     return {};
@@ -133,9 +141,9 @@ function normalizeQueueItem(value) {
       null,
     queueStatus: readTrimmedString(value.queueStatus) || "pending",
     requestStatus: readTrimmedString(value.requestStatus),
-    requestPhase: readTrimmedString(value.requestPhase),
+    requestPhase: normalizePhaseLabel(value.requestPhase),
     companyResearchStatus: readTrimmedString(value.companyResearchStatus),
-    processingStage: readTrimmedString(value.processingStage) || "waiting",
+    processingStage: normalizePhaseLabel(value.processingStage) || "Gathering Data",
     companyName: readTrimmedString(value.companyName) || "",
     website: readTrimmedString(value.website),
     linkedInUrl: readTrimmedString(value.linkedInUrl),
@@ -165,7 +173,7 @@ function normalizeProcessingGroup(value) {
     : [];
 
   return {
-    status: readTrimmedString(value.status) || "waiting",
+    status: normalizePhaseLabel(value.status) || "Gathering Data",
     count: readInteger(value.count) ?? items.length,
     items,
   };

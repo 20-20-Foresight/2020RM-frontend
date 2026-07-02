@@ -33,6 +33,7 @@ test("loadCompanyResearchDashboard calls the dashboard route and normalizes the 
                     companyName: "Manual Co",
                     requestKind: "manual",
                     queueStatus: "pending",
+                    requestPhase: "Gathering Data",
                     originLabel: "Manual Request",
                   },
                 ],
@@ -48,6 +49,8 @@ test("loadCompanyResearchDashboard calls the dashboard route and normalizes the 
                         id: 12,
                         companyName: "Active Co",
                         requestKind: "automation",
+                        requestStatus: "Processing",
+                        requestPhase: "Gathering Data",
                         companyResearchStatus: "Loading Salesforce Data",
                         originLabel: "Query Feed",
                         originContextLabel: "Recent Accounts",
@@ -98,9 +101,11 @@ test("loadCompanyResearchDashboard calls the dashboard route and normalizes the 
   assert.equal(calls[0].options.headers.cookie, "sid=123");
   assert.equal(dashboard.nextUp.count, 1);
   assert.equal(dashboard.nextUp.items[0].companyName, "Manual Co");
+  assert.equal(dashboard.nextUp.items[0].requestPhase, "Gathering Data");
   assert.equal(dashboard.processing.total, 1);
   assert.equal(dashboard.processing.groups[0].status, "Loading Salesforce Data");
   assert.equal(dashboard.processing.groups[0].items[0].originLabel, "Query Feed");
+  assert.equal(dashboard.processing.groups[0].items[0].requestPhase, "Gathering Data");
   assert.equal(
     dashboard.processing.groups[0].items[0].originContextLabel,
     "Recent Accounts"
