@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Accordion,
   AccordionButton,
@@ -40,8 +40,9 @@ import {
 } from "@chakra-ui/react";
 import { FiCalendar, FiRefreshCw, FiSettings } from "react-icons/fi";
 import { FaLinkedin } from "react-icons/fa";
+import { CompanyResearchQueueHistory } from "./CompanyResearchQueueHistory";
 
-const DETAIL_POLL_INTERVAL_MS = 60_000;
+const DETAIL_POLL_INTERVAL_MS = 10_000;
 const OVERVIEW_REPORT_TYPE = "overview";
 const REQUEST_DRAWER_TABS = Object.freeze([
   { key: OVERVIEW_REPORT_TYPE, label: "Overview" },
@@ -159,7 +160,7 @@ function CompanySubline({ item }) {
   return (
     <HStack spacing={1.5} wrap="wrap">
       {hasWebsite ? (
-        <Link href={item.website} isExternal fontSize="xs" color="gray.500">
+        <Link href={normalizeExternalHref(item.website)} isExternal fontSize="xs" color="gray.500">
           {item.website}
         </Link>
       ) : null}
@@ -169,7 +170,7 @@ function CompanySubline({ item }) {
         </Text>
       ) : null}
       {hasLinkedIn ? (
-        <Link href={item.linkedInUrl} isExternal fontSize="xs" color="gray.500">
+        <Link href={normalizeExternalHref(item.linkedInUrl)} isExternal fontSize="xs" color="gray.500">
           {item.linkedInUrl}
         </Link>
       ) : null}
@@ -240,12 +241,30 @@ function injectExternalTargets(html) {
   return normalized.replace(/<a\b(?![^>]*\btarget=)/gi, '<a target="_blank" rel="noreferrer" ');
 }
 
-function renderLinkOrText(value, label = value) {
+function normalizeExternalHref(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  if (/^[a-z][a-z\d+.-]*:/i.test(trimmed) || trimmed.startsWith("//")) {
+    return trimmed;
+  }
+
+  return `https://${trimmed}`;
+}
+
+function renderLinkOrText(value, label = value, { normalizeExternalUrl = false } = {}) {
   if (typeof value !== "string" || !value.trim()) {
     return "—";
   }
+  const href = normalizeExternalUrl ? normalizeExternalHref(value) : value;
   return (
-    <Link href={value} isExternal fontSize="sm" color="blue.600">
+    <Link href={href} isExternal fontSize="sm" color="blue.600">
       {label || value}
     </Link>
   );
@@ -257,7 +276,7 @@ function renderLinkedInIcon(value, ariaLabel = "Open LinkedIn") {
   }
   return (
     <Link
-      href={value}
+      href={normalizeExternalHref(value)}
       isExternal
       color="linkedin.500"
       display="inline-flex"
@@ -339,6 +358,10 @@ function buildDetailRequestPath(itemId, reportType = OVERVIEW_REPORT_TYPE) {
   return `/api/rest/company-research/items/${itemId}?${params.toString()}`;
 }
 
+function buildQueueHistoryRequestPath(itemId) {
+  return `/api/rest/company-research/items/${itemId}/queue-history`;
+}
+
 function getVisibleRequestDrawerTabs(item) {
   if (!item?.completedAt) {
     return REQUEST_DRAWER_TABS.slice(0, 1);
@@ -411,49 +434,6 @@ function ScraperFailureList({ failures = [] }) {
         <Box key={`${failure.source || "failure"}-${index}`} borderWidth="1px" borderColor="gray.200" borderRadius="md" p={2}>
           <Text fontSize="sm" color="gray.800">
             {[failure.source, failure.message].filter(Boolean).join(": ") || "Scraper failure"}
-          </Text>
-        </Box>
-      ))}
-    </VStack>
-  );
-}
-
-function HistoryList({ items = [] }) {
-  if (!items.length) {
-    return (
-      <Text fontSize="sm" color="gray.500">
-        No history recorded.
-      </Text>
-    );
-  }
-
-  return (
-    <VStack align="stretch" spacing={3}>
-      {items.map((entry, index) => (
-        <Box
-          key={entry.id || `${entry.createdAt || "history"}-${index}`}
-          borderWidth="1px"
-          borderColor="gray.200"
-          borderRadius="lg"
-          p={3}
-        >
-          <HStack justify="space-between" align="start" spacing={3}>
-            <VStack align="start" spacing={1} flex="1">
-              <Text fontSize="sm" fontWeight="semibold" color="gray.800">
-                {entry.message || entry.status || "History event"}
-              </Text>
-              {entry.source ? (
-                <Text fontSize="xs" color="gray.500">
-                  {entry.source}
-                </Text>
-              ) : null}
-            </VStack>
-            <Badge colorScheme="gray" variant="subtle" fontSize="xs">
-              {entry.status || "—"}
-            </Badge>
-          </HStack>
-          <Text mt={2} fontSize="xs" color="gray.500">
-            {formatDate(entry.createdAt)}
           </Text>
         </Box>
       ))}
@@ -557,14 +537,14 @@ function OverviewLeftColumn({
         {showDetailPlaceholder ? (
           <DetailValuePlaceholder width="70%" />
         ) : (
-          renderLinkOrText(item?.linkedInUrl)
+          renderLinkOrText(item?.linkedInUrl, item?.linkedInUrl, { normalizeExternalUrl: true })
         )}
       </DetailRow>
       <DetailRow label="Website">
         {showDetailPlaceholder ? (
           <DetailValuePlaceholder width="70%" />
         ) : (
-          renderLinkOrText(item?.website)
+          renderLinkOrText(item?.website, item?.website, { normalizeExternalUrl: true })
         )}
       </DetailRow>
       <DetailRow label="Request Origin">
@@ -579,78 +559,6 @@ function OverviewLeftColumn({
           renderLinkOrText(meta.reportUrl, "Open uploaded report")
         )}
       </DetailRow>
-      <Accordion allowToggle defaultIndex={[]}>
-        <AccordionItem borderWidth="1px" borderColor="gray.200" borderRadius="lg">
-          <AccordionButton px={4} py={3}>
-            <HStack flex="1" justify="space-between" textAlign="left">
-              <Text fontSize="sm" fontWeight="semibold" color="gray.800">
-                Triage
-              </Text>
-              <AccordionIcon />
-            </HStack>
-          </AccordionButton>
-          <AccordionPanel px={4} pb={4}>
-            <VStack align="stretch" spacing={4}>
-              <DetailRow label="RocketReach Summary">
-                {showDetailPlaceholder ? (
-                  <DetailValuePlaceholder lines={2} />
-                ) : (
-                  formatRocketReachSummary(meta.rocketReachSummary)
-                )}
-              </DetailRow>
-              <DetailRow label="SharePoint Tracking ID">
-                {showDetailPlaceholder ? (
-                  <DetailValuePlaceholder width="45%" />
-                ) : (
-                  formatInlineValue(meta.sharepointTrackingId)
-                )}
-              </DetailRow>
-              <DetailRow label="Report Upload Error">
-                {showDetailPlaceholder ? (
-                  <DetailValuePlaceholder lines={2} />
-                ) : (
-                  formatUploadError(meta.reportUploadError)
-                )}
-              </DetailRow>
-              <DetailRow label="Queue Request ID">
-                {item?.queueRequestId != null ? String(item.queueRequestId) : "—"}
-              </DetailRow>
-              <DetailRow label="Salesforce Request ID">{item?.salesforceRequestId || "—"}</DetailRow>
-              <DetailRow label="Queued Salesforce Request ID">
-                {item?.queuedSalesforceRequestId || "—"}
-              </DetailRow>
-              <DetailRow label="Local Report Path">
-                {showDetailPlaceholder ? (
-                  <DetailValuePlaceholder width="75%" />
-                ) : (
-                  formatInlineValue(meta.localReportPath)
-                )}
-              </DetailRow>
-              <DetailRow label="Data Providers">
-                <Text fontSize="sm" color="gray.800">
-                  {item?.dataProviders?.length
-                    ? formatDataProviders(item.dataProviders).join(", ")
-                    : "—"}
-                </Text>
-              </DetailRow>
-              <DetailRow label="Backend Request URL">
-                {showDetailPlaceholder ? (
-                  <DetailValuePlaceholder width="65%" />
-                ) : (
-                  renderLinkOrText(meta.requestUrl, "Open Salesforce request")
-                )}
-              </DetailRow>
-              <DetailRow label="Scraper Failures">
-                {showDetailPlaceholder ? (
-                  <DetailValuePlaceholder lines={2} />
-                ) : (
-                  <ScraperFailureList failures={meta.scraperFailures || []} />
-                )}
-              </DetailRow>
-            </VStack>
-          </AccordionPanel>
-        </AccordionItem>
-      </Accordion>
     </VStack>
   );
 }
@@ -658,9 +566,16 @@ function OverviewLeftColumn({
 function OverviewRightColumn({
   item,
   showDetailPlaceholder,
-  detailError,
+  queueHistory = [],
+  isLoadingHistory = false,
+  hasLoadedHistory = false,
+  historyError = "",
+  onJumpToError,
 }) {
   const failureReasonHtml = injectExternalTargets(item?.failureReason);
+  const requestComplete = isRequestEffectivelyComplete(item);
+  const defaultExpanded = requestComplete ? [0] : [1];
+
   return (
     <VStack align="stretch" spacing={5}>
       {!showDetailPlaceholder && failureReasonHtml ? (
@@ -680,49 +595,266 @@ function OverviewRightColumn({
           <DetailValuePlaceholder lines={2} />
         </DetailRow>
       ) : null}
-      <DetailRow label="Status">
-        {showDetailPlaceholder ? (
-          <DetailValuePlaceholder lines={3} />
-        ) : item?.statusText ? (
-          <Box
-            fontSize="sm"
-            color="gray.800"
-            sx={{
-              a: { color: "blue.600", textDecoration: "underline" },
-            }}
-            dangerouslySetInnerHTML={{ __html: item.statusText }}
-          />
-        ) : (
-          "—"
-        )}
-      </DetailRow>
-      <DetailRow label="Workflow">
-        <Text fontSize="sm" color="gray.700">
-          {item?.processingStage || "—"}
-        </Text>
-      </DetailRow>
-      <DetailRow label="History">
-        {showDetailPlaceholder ? (
-          <VStack align="stretch" spacing={3} width="100%">
-            <Box borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={3}>
-              <DetailValuePlaceholder lines={2} />
-            </Box>
-            <Box borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={3}>
-              <DetailValuePlaceholder lines={2} />
-            </Box>
-          </VStack>
-        ) : (
-          <HistoryList items={Array.isArray(item?.statusHistory) ? item.statusHistory : []} />
-        )}
-      </DetailRow>
-      {detailError ? (
-        <Box borderWidth="1px" borderColor="red.200" bg="red.50" borderRadius="lg" p={3}>
-          <Text fontSize="sm" color="red.700">
-            {detailError}
-          </Text>
-        </Box>
-      ) : null}
+      <Accordion allowMultiple defaultIndex={defaultExpanded}>
+        <AccordionItem borderWidth="1px" borderColor="gray.200" borderRadius="lg">
+          <AccordionButton px={4} py={3}>
+            <HStack flex="1" justify="space-between" textAlign="left">
+              <Text fontSize="xs" fontWeight="semibold" color="gray.500" textTransform="uppercase" letterSpacing="0.08em">
+                Status
+              </Text>
+              <AccordionIcon />
+            </HStack>
+          </AccordionButton>
+        <AccordionPanel px={4} pb={4}>
+          {showDetailPlaceholder ? (
+            <DetailValuePlaceholder lines={3} />
+          ) : item?.statusText ? (
+            <Box
+              fontSize="sm"
+              color="gray.800"
+              px={2}
+              py={2}
+              borderRadius="md"
+              sx={{
+                lineHeight: 1.5,
+                a: { color: "blue.600", textDecoration: "underline" },
+                em: { fontStyle: "italic" },
+                strong: { fontWeight: "semibold" },
+                p: { margin: 0, mb: 3 },
+                "p:last-of-type": { mb: 0 },
+                ul: { pl: 5, my: 2 },
+                ol: { pl: 5, my: 2 },
+                li: { mb: 1 },
+                table: {
+                  width: "auto",
+                  borderCollapse: "collapse",
+                  mt: 3,
+                  mb: 1,
+                  color: "black",
+                },
+                thead: {
+                  borderBottom: "1px solid",
+                  borderColor: "black",
+                },
+                th: {
+                  fontWeight: "semibold",
+                  fontSize: "sm",
+                  textAlign: "left",
+                  paddingRight: 4,
+                  paddingBottom: 1,
+                  whiteSpace: "nowrap",
+                  color: "black",
+                  borderColor: "black",
+                },
+                td: {
+                  fontSize: "sm",
+                  paddingRight: 4,
+                  paddingTop: 1,
+                  paddingBottom: 1,
+                  verticalAlign: "top",
+                  color: "black",
+                  borderColor: "black",
+                },
+                tr: {
+                  border: 0,
+                  borderColor: "black",
+                },
+              }}
+              dangerouslySetInnerHTML={{ __html: item.statusText }}
+            />
+            ) : (
+              <Text fontSize="sm" color="gray.800">
+                —
+              </Text>
+            )}
+          </AccordionPanel>
+        </AccordionItem>
+        <AccordionItem borderWidth="1px" borderColor="gray.200" borderRadius="lg" mt={3}>
+          <AccordionButton px={4} py={3}>
+            <HStack flex="1" justify="space-between" textAlign="left">
+              <Text fontSize="xs" fontWeight="semibold" color="gray.500" textTransform="uppercase" letterSpacing="0.08em">
+                History
+              </Text>
+              <AccordionIcon />
+            </HStack>
+          </AccordionButton>
+          <AccordionPanel px={4} pb={4}>
+            <CompanyResearchQueueHistory
+              items={queueHistory}
+              isLoading={isLoadingHistory && !hasLoadedHistory}
+              errorMessage={historyError}
+              onJumpToError={onJumpToError}
+            />
+          </AccordionPanel>
+        </AccordionItem>
+      </Accordion>
     </VStack>
+  );
+}
+
+function TriageErrorList({ errors = [], errorRefs }) {
+  if (!errors.length) {
+    return (
+      <Text fontSize="sm" color="gray.500">
+        No queued exceptions recorded.
+      </Text>
+    );
+  }
+
+  return (
+    <VStack align="stretch" spacing={3}>
+      {errors.map((error) => {
+        const secondary = [
+          error.code ? `code=${error.code}` : null,
+          error.statusCode != null ? `status=${String(error.statusCode)}` : null,
+          error.queueRequestId != null ? `queueRequestId=${String(error.queueRequestId)}` : null,
+          error.fields?.length ? `fields=${error.fields.join(", ")}` : null,
+        ].filter(Boolean);
+
+        return (
+          <Box
+            key={error.id}
+            id={error.id}
+            ref={(node) => {
+              if (errorRefs) {
+                errorRefs.current[error.id] = node;
+              }
+            }}
+            borderWidth="1px"
+            borderColor="orange.200"
+            bg="orange.50"
+            borderRadius="lg"
+            p={3}
+          >
+            <VStack align="stretch" spacing={1}>
+              <Text fontSize="sm" fontWeight="semibold" color="orange.800">
+                {error.queueName || "Queue Error"}
+              </Text>
+              <Text fontSize="sm" color="gray.800">
+                {error.message || "Unknown error"}
+              </Text>
+              {secondary.length ? (
+                <Text fontSize="xs" color="gray.600">
+                  {secondary.join(" | ")}
+                </Text>
+              ) : null}
+            </VStack>
+          </Box>
+        );
+      })}
+    </VStack>
+  );
+}
+
+function OverviewTriageSection({
+  item,
+  meta,
+  triageErrors = [],
+  isLoading = false,
+  historyError = "",
+  errorRefs,
+}) {
+  const hasTriageData = Boolean(
+    meta?.rocketReachSummary ||
+      meta?.sharepointTrackingId ||
+      meta?.reportUploadError ||
+      meta?.localReportPath ||
+      meta?.requestUrl ||
+      (meta?.scraperFailures || []).length ||
+      item?.queueRequestId != null ||
+      item?.salesforceRequestId ||
+      item?.queuedSalesforceRequestId ||
+      (item?.dataProviders || []).length ||
+      triageErrors.length
+  );
+  const showTriagePlaceholder = isLoading && !hasTriageData;
+
+  return (
+    <Accordion allowToggle defaultIndex={[0]}>
+      <AccordionItem borderWidth="1px" borderColor="gray.200" borderRadius="lg">
+        <AccordionButton px={4} py={3}>
+          <HStack flex="1" justify="space-between" textAlign="left">
+            <Text fontSize="sm" fontWeight="semibold" color="gray.800">
+              Triage
+            </Text>
+            <AccordionIcon />
+          </HStack>
+        </AccordionButton>
+        <AccordionPanel px={4} pb={4}>
+          <SimpleGrid columns={{ base: 1, xl: 2 }} spacing={6}>
+            <DetailRow label="Exceptions">
+              {showTriagePlaceholder ? (
+                <DetailValuePlaceholder lines={3} />
+              ) : historyError ? (
+                <Text fontSize="sm" color="red.700">
+                  {historyError}
+                </Text>
+              ) : (
+                <TriageErrorList errors={triageErrors} errorRefs={errorRefs} />
+              )}
+            </DetailRow>
+            <VStack align="stretch" spacing={4}>
+              <DetailRow label="RocketReach Summary">
+                {showTriagePlaceholder ? (
+                  <DetailValuePlaceholder lines={2} />
+                ) : (
+                  formatRocketReachSummary(meta.rocketReachSummary)
+                )}
+              </DetailRow>
+              <DetailRow label="SharePoint Tracking ID">
+                {showTriagePlaceholder ? (
+                  <DetailValuePlaceholder width="45%" />
+                ) : (
+                  formatInlineValue(meta.sharepointTrackingId)
+                )}
+              </DetailRow>
+              <DetailRow label="Report Upload Error">
+                {showTriagePlaceholder ? (
+                  <DetailValuePlaceholder lines={2} />
+                ) : (
+                  formatUploadError(meta.reportUploadError)
+                )}
+              </DetailRow>
+              <DetailRow label="Queue Request ID">
+                {item?.queueRequestId != null ? String(item.queueRequestId) : "—"}
+              </DetailRow>
+              <DetailRow label="Salesforce Request ID">{item?.salesforceRequestId || "—"}</DetailRow>
+              <DetailRow label="Queued Salesforce Request ID">
+                {item?.queuedSalesforceRequestId || "—"}
+              </DetailRow>
+              <DetailRow label="Local Report Path">
+                {showTriagePlaceholder ? (
+                  <DetailValuePlaceholder width="75%" />
+                ) : (
+                  formatInlineValue(meta.localReportPath)
+                )}
+              </DetailRow>
+              <DetailRow label="Data Providers">
+                <Text fontSize="sm" color="gray.800">
+                  {item?.dataProviders?.length
+                    ? formatDataProviders(item.dataProviders).join(", ")
+                    : "—"}
+                </Text>
+              </DetailRow>
+              <DetailRow label="Backend Request URL">
+                {showTriagePlaceholder ? (
+                  <DetailValuePlaceholder width="65%" />
+                ) : (
+                  renderLinkOrText(meta.requestUrl, "Open Salesforce request")
+                )}
+              </DetailRow>
+              <DetailRow label="Scraper Failures">
+                {showTriagePlaceholder ? (
+                  <DetailValuePlaceholder lines={2} />
+                ) : (
+                  <ScraperFailureList failures={meta.scraperFailures || []} />
+                )}
+              </DetailRow>
+            </VStack>
+          </SimpleGrid>
+        </AccordionPanel>
+      </AccordionItem>
+    </Accordion>
   );
 }
 
@@ -733,6 +865,16 @@ function getDisplayNotes(item) {
   }
   const decodedReason = normalizeHtmlContent(item?.reason);
   return decodedReason || "—";
+}
+
+function isRequestEffectivelyComplete(item) {
+  if (item?.completedAt) {
+    return true;
+  }
+  const status = String(
+    item?.companyResearchStatus || item?.queueStatus || item?.requestStatus || ""
+  ).toLowerCase();
+  return /success|failed|complete|completed|error|cancelled|canceled/.test(status);
 }
 
 function canRerunItem(item) {
@@ -777,6 +919,17 @@ function shouldRefreshDetail(summaryItem, detailItem) {
   );
 }
 
+function isQueueHistorySettled(queueHistory = []) {
+  if (!Array.isArray(queueHistory) || queueHistory.length === 0) {
+    return false;
+  }
+
+  return queueHistory.every((entry) => {
+    const status = String(entry?.status || "").toLowerCase();
+    return status && status !== "pending";
+  });
+}
+
 function mergeSelectedItem(summaryItem, detailItem) {
   if (!summaryItem) {
     return detailItem || null;
@@ -802,33 +955,72 @@ function mergeSelectedItem(summaryItem, detailItem) {
 function OverviewTabContent({
   item,
   isLoadingDetail = false,
+  hasLoadedDetail = false,
   detailError = "",
+  queueHistory = [],
+  triageErrors = [],
+  isLoadingHistory = false,
+  hasLoadedHistory = false,
+  historyError = "",
+  onJumpToError,
   onClose,
   onRerunRequest,
 }) {
   const meta = item?.meta || {};
-  const showDetailPlaceholder = isLoadingDetail && !detailError;
+  const showDetailPlaceholder =
+    isLoadingDetail && !detailError && !hasLoadedDetail;
+  const triageErrorRefs = useRef({});
 
   return (
     <VStack align="stretch" spacing={0}>
       <OverviewHeader item={item} onClose={onClose} onRerunRequest={onRerunRequest} />
       <Box px={6} py={5}>
-        <SimpleGrid columns={{ base: 1, lg: 5 }} spacing={8}>
-          <Box gridColumn={{ base: "auto", lg: "span 2" }}>
-            <OverviewLeftColumn
-              item={item}
-              meta={meta}
-              showDetailPlaceholder={showDetailPlaceholder}
-            />
-          </Box>
-          <Box gridColumn={{ base: "auto", lg: "span 3" }}>
-            <OverviewRightColumn
-              item={item}
-              showDetailPlaceholder={showDetailPlaceholder}
-              detailError={detailError}
-            />
-          </Box>
-        </SimpleGrid>
+        <VStack align="stretch" spacing={6}>
+          <SimpleGrid columns={{ base: 1, lg: 5 }} spacing={8}>
+            <Box gridColumn={{ base: "auto", lg: "span 2" }}>
+              <OverviewLeftColumn
+                item={item}
+                meta={meta}
+                showDetailPlaceholder={showDetailPlaceholder}
+              />
+            </Box>
+            <Box gridColumn={{ base: "auto", lg: "span 3" }}>
+              <OverviewRightColumn
+                item={item}
+                showDetailPlaceholder={showDetailPlaceholder}
+                queueHistory={queueHistory}
+                isLoadingHistory={isLoadingHistory}
+                hasLoadedHistory={hasLoadedHistory}
+                historyError={historyError}
+                onJumpToError={(errorId) => {
+                  const node = triageErrorRefs.current[errorId];
+                  if (node && typeof node.scrollIntoView === "function") {
+                    node.scrollIntoView({ behavior: "smooth", block: "center" });
+                    return;
+                  }
+                  if (typeof onJumpToError === "function") {
+                    onJumpToError(errorId);
+                  }
+                }}
+              />
+            </Box>
+          </SimpleGrid>
+          <OverviewTriageSection
+            item={item}
+            meta={meta}
+            triageErrors={triageErrors}
+            isLoading={isLoadingHistory && !hasLoadedHistory}
+            historyError={historyError}
+            errorRefs={triageErrorRefs}
+          />
+          {detailError ? (
+            <Box borderWidth="1px" borderColor="red.200" bg="red.50" borderRadius="lg" p={3}>
+              <Text fontSize="sm" color="red.700">
+                {detailError}
+              </Text>
+            </Box>
+          ) : null}
+        </VStack>
       </Box>
     </VStack>
   );
@@ -1073,12 +1265,18 @@ function CompanyResearchQueueItemDrawer({
   activeTab,
   availableTabs = [],
   isLoadingDetail = false,
+  isLoadingHistory = false,
+  hasLoadedDetail = false,
+  hasLoadedHistory = false,
   detailError = "",
+  historyError = "",
   isOpen,
   onChangeTab,
   onClose,
   onRerunRequest,
+  queueHistory = [],
   report = null,
+  triageErrors = [],
 }) {
   const tabIndex = Math.max(
     0,
@@ -1122,9 +1320,15 @@ function CompanyResearchQueueItemDrawer({
                 <OverviewTabContent
                   item={item}
                   isLoadingDetail={isLoadingDetail}
+                  isLoadingHistory={isLoadingHistory}
+                  hasLoadedDetail={hasLoadedDetail}
+                  hasLoadedHistory={hasLoadedHistory}
                   detailError={activeTab === OVERVIEW_REPORT_TYPE ? detailError : ""}
+                  historyError={historyError}
+                  queueHistory={queueHistory}
                   onClose={onClose}
                   onRerunRequest={onRerunRequest}
+                  triageErrors={triageErrors}
                 />
               </TabPanel>
               {availableTabs.slice(1).map((tab) => (
@@ -1171,6 +1375,9 @@ export function CompanyResearchQueueTable({
   const [detailByKey, setDetailByKey] = useState({});
   const [detailLoadingKey, setDetailLoadingKey] = useState("");
   const [detailErrorByKey, setDetailErrorByKey] = useState({});
+  const [queueHistoryByItemId, setQueueHistoryByItemId] = useState({});
+  const [historyLoadingItemId, setHistoryLoadingItemId] = useState(null);
+  const [historyErrorByItemId, setHistoryErrorByItemId] = useState({});
 
   const rows = useMemo(() => items, [items]);
   const selectedSummaryItem = useMemo(
@@ -1201,7 +1408,27 @@ export function CompanyResearchQueueTable({
   const activeDetailError = activeDetailKey
     ? detailErrorByKey[activeDetailKey] || ""
     : "";
+  const selectedHistory = selectedItemId != null
+    ? queueHistoryByItemId[selectedItemId] || { queueHistory: [], triageErrors: [] }
+    : { queueHistory: [], triageErrors: [] };
+  const activeHistoryError = selectedItemId != null
+    ? historyErrorByItemId[selectedItemId] || ""
+    : "";
+  const isLoadingHistory = selectedItemId != null && historyLoadingItemId === selectedItemId;
   const isLoadingActiveDetail = activeDetailKey === detailLoadingKey;
+  const hasLoadedActiveDetail = Boolean(activeDetailKey && detailByKey[activeDetailKey]);
+  const hasLoadedOverviewDetail = Boolean(overviewDetailKey && detailByKey[overviewDetailKey]);
+  const hasLoadedHistory = Boolean(selectedItemId != null && queueHistoryByItemId[selectedItemId]);
+  const cachedHistory = selectedItemId != null
+    ? queueHistoryByItemId[selectedItemId] || null
+    : null;
+  const isHistorySettled = isQueueHistorySettled(cachedHistory?.queueHistory);
+  const showInitialDetailLoading = Boolean(selectedSummaryItem) &&
+    isLoadingActiveDetail &&
+    !(activeTab === OVERVIEW_REPORT_TYPE ? hasLoadedOverviewDetail : hasLoadedActiveDetail);
+  const showInitialHistoryLoading = Boolean(selectedSummaryItem) &&
+    isLoadingHistory &&
+    !hasLoadedHistory;
   const selectedSummaryItemRefreshKey = useMemo(() => {
     if (!selectedSummaryItem?.id) {
       return "";
@@ -1258,6 +1485,7 @@ export function CompanyResearchQueueTable({
           buildDetailRequestPath(selectedSummaryItem.id, reportType),
           {
             headers: { accept: "application/json" },
+            cache: "no-store",
           }
         );
         const payload = await response.json().catch(() => ({}));
@@ -1301,9 +1529,7 @@ export function CompanyResearchQueueTable({
     }
 
     const intervalId = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        loadDetail();
-      }
+      loadDetail();
     }, DETAIL_POLL_INTERVAL_MS);
 
     return () => {
@@ -1317,6 +1543,87 @@ export function CompanyResearchQueueTable({
     selectedSummaryItem,
     selectedSummaryItemRefreshKey,
   ]);
+
+  useEffect(() => {
+    if (!selectedSummaryItem?.id) {
+      setHistoryLoadingItemId(null);
+      return;
+    }
+
+    let isActive = true;
+    const itemId = selectedSummaryItem.id;
+    const hasCachedHistory = Boolean(queueHistoryByItemId[itemId]);
+    const shouldPollHistory = !selectedSummaryItem.completedAt || !isHistorySettled;
+
+    async function loadHistory() {
+      if (isActive) {
+        setHistoryLoadingItemId(itemId);
+        setHistoryErrorByItemId((current) => ({
+          ...current,
+          [itemId]: "",
+        }));
+      }
+
+      try {
+        const response = await fetch(buildQueueHistoryRequestPath(itemId), {
+          headers: { accept: "application/json" },
+          cache: "no-store",
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload?.message || "Unable to load Company Research queue history.");
+        }
+        if (!isActive) {
+          return;
+        }
+        setQueueHistoryByItemId((current) => ({
+          ...current,
+          [itemId]: {
+            queueHistory: Array.isArray(payload?.history?.queueHistory)
+              ? payload.history.queueHistory
+              : [],
+            triageErrors: Array.isArray(payload?.history?.triageErrors)
+              ? payload.history.triageErrors
+              : [],
+          },
+        }));
+      } catch (loadError) {
+        if (!isActive) {
+          return;
+        }
+        setHistoryErrorByItemId((current) => ({
+          ...current,
+          [itemId]:
+            loadError instanceof Error
+              ? loadError.message
+              : "Unable to load Company Research queue history.",
+        }));
+      } finally {
+        if (isActive) {
+          setHistoryLoadingItemId((current) => (current === itemId ? null : current));
+        }
+      }
+    }
+
+    if (!hasCachedHistory || shouldPollHistory) {
+      loadHistory();
+    }
+
+    if (!shouldPollHistory) {
+      return () => {
+        isActive = false;
+      };
+    }
+
+    const intervalId = window.setInterval(() => {
+      loadHistory();
+    }, DETAIL_POLL_INTERVAL_MS);
+
+    return () => {
+      isActive = false;
+      window.clearInterval(intervalId);
+    };
+  }, [isHistorySettled, queueHistoryByItemId, selectedSummaryItem, selectedSummaryItemRefreshKey]);
 
   if (!rows.length) {
     return (
@@ -1393,13 +1700,19 @@ export function CompanyResearchQueueTable({
         item={selectedItem}
         activeTab={activeTab}
         availableTabs={visibleTabs}
-        isLoadingDetail={Boolean(selectedSummaryItem) && isLoadingActiveDetail}
+        isLoadingDetail={showInitialDetailLoading}
+        isLoadingHistory={showInitialHistoryLoading}
+        hasLoadedDetail={hasLoadedOverviewDetail}
+        hasLoadedHistory={hasLoadedHistory}
         detailError={activeDetailError}
+        historyError={activeHistoryError}
         isOpen={Boolean(selectedItemId)}
         onChangeTab={setActiveTab}
         onClose={() => setSelectedItemId(null)}
         onRerunRequest={onRerunRequest}
+        queueHistory={selectedHistory.queueHistory || []}
         report={activeReport}
+        triageErrors={selectedHistory.triageErrors || []}
       />
     </>
   );

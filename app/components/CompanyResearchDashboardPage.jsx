@@ -15,7 +15,7 @@ import { CompanyResearchQueueSectionDrawer } from "./CompanyResearchQueueSection
 import { useCompanyResearchLayoutContext } from "./CompanyResearchLayoutPage";
 import { CompanyResearchQueueTable } from "./CompanyResearchQueueTable";
 
-const DASHBOARD_POLL_INTERVAL_MS = 60_000;
+const DASHBOARD_POLL_INTERVAL_MS = 10_000;
 
 function buildRerunRequestValues(item) {
   return {
