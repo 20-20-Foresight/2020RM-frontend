@@ -14,6 +14,7 @@ import {
   DrawerContent,
   DrawerOverlay,
   HStack,
+  Icon,
   IconButton,
   Link,
   Menu,
@@ -38,6 +39,7 @@ import {
   SimpleGrid,
 } from "@chakra-ui/react";
 import { FiCalendar, FiRefreshCw, FiSettings } from "react-icons/fi";
+import { FaLinkedin } from "react-icons/fa";
 
 const DETAIL_POLL_INTERVAL_MS = 60_000;
 const OVERVIEW_REPORT_TYPE = "overview";
@@ -246,6 +248,42 @@ function renderLinkOrText(value, label = value) {
     <Link href={value} isExternal fontSize="sm" color="blue.600">
       {label || value}
     </Link>
+  );
+}
+
+function renderLinkedInIcon(value, ariaLabel = "Open LinkedIn") {
+  if (typeof value !== "string" || !value.trim()) {
+    return "—";
+  }
+  return (
+    <Link
+      href={value}
+      isExternal
+      color="linkedin.500"
+      display="inline-flex"
+      alignItems="center"
+      justifyContent="center"
+      minW="40px"
+      minH="40px"
+      borderRadius="md"
+      _hover={{ color: "linkedin.600", bg: "blue.50" }}
+      aria-label={ariaLabel}
+      title="Open LinkedIn"
+    >
+      <Icon as={FaLinkedin} boxSize={6} />
+    </Link>
+  );
+}
+
+function renderTruncatedText(value, maxW = "28rem") {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) {
+    return "—";
+  }
+  return (
+    <Text fontSize="sm" color="gray.800" maxW={maxW} noOfLines={1} title={text}>
+      {text}
+    </Text>
   );
 }
 
@@ -835,16 +873,21 @@ function SalesforceSaveDecisionsTabContent({ report, detailError = "", isLoading
           rows={report.orgDecisions?.rows || []}
           emptyText="No organization save decisions were recorded."
           columns={[
-            { key: "name", label: "Name" },
             { key: "status", label: "Status" },
-            { key: "recordTypeName", label: "Record Type" },
-            { key: "locationLabel", label: "Location" },
             {
               key: "recordLink",
-              label: "Salesforce",
+              label: "Salesforce Link",
               render: (row) => renderLinkOrText(row.recordLink, row.salesforceId || "Open"),
             },
-            { key: "reason", label: "Reason" },
+            { key: "name", label: "Name" },
+            {
+              key: "linkedInUrl",
+              label: "LinkedIn URL",
+              render: (row) => renderLinkedInIcon(row.linkedInUrl, `Open LinkedIn for ${row.name || "organization"}`),
+            },
+            { key: "recordTypeName", label: "Record Type" },
+            { key: "locationLabel", label: "Location" },
+            { key: "reason", label: "Reason", render: (row) => renderTruncatedText(row.reason) },
           ]}
         />
       </DetailRow>
@@ -853,16 +896,28 @@ function SalesforceSaveDecisionsTabContent({ report, detailError = "", isLoading
           rows={report.personDecisions?.rows || []}
           emptyText="No person save decisions were recorded."
           columns={[
-            { key: "name", label: "Name" },
             { key: "status", label: "Status" },
-            { key: "accountName", label: "Organization" },
-            { key: "title", label: "Title" },
             {
               key: "recordLink",
-              label: "Salesforce",
+              label: "Salesforce Link",
               render: (row) => renderLinkOrText(row.recordLink, row.salesforceId || "Open"),
             },
-            { key: "reason", label: "Reason" },
+            { key: "name", label: "Name" },
+            {
+              key: "accountRecordLink",
+              label: "Salesforce Company",
+              render: (row) => renderLinkOrText(row.accountRecordLink, row.accountName || row.accountId || "Open"),
+            },
+            { key: "recordTypeName", label: "Record Type" },
+            { key: "title", label: "Title" },
+            { key: "locationLabel", label: "Location" },
+            { key: "email", label: "Email" },
+            {
+              key: "linkedInUrl",
+              label: "LinkedIn URL",
+              render: (row) => renderLinkedInIcon(row.linkedInUrl, `Open LinkedIn for ${row.name || "person"}`),
+            },
+            { key: "reason", label: "Reason", render: (row) => renderTruncatedText(row.reason) },
           ]}
         />
       </DetailRow>
@@ -871,15 +926,24 @@ function SalesforceSaveDecisionsTabContent({ report, detailError = "", isLoading
           rows={report.duplicateReview?.rows || []}
           emptyText="No duplicate review entries were captured."
           columns={[
-            { key: "duplicateType", label: "Type" },
-            { key: "name", label: "Name" },
             { key: "status", label: "Status" },
             {
               key: "recordLink",
-              label: "Salesforce",
+              label: "Salesforce Link",
               render: (row) => renderLinkOrText(row.recordLink, row.salesforceId || "Open"),
             },
-            { key: "reason", label: "Reason" },
+            { key: "name", label: "Name" },
+            { key: "duplicateType", label: "Type" },
+            {
+              key: "linkedInUrl",
+              label: "LinkedIn URL",
+              render: (row) => renderLinkedInIcon(row.linkedInUrl, `Open LinkedIn for ${row.name || "record"}`),
+            },
+            {
+              key: "reason",
+              label: "Reason",
+              render: (row) => renderTruncatedText(row.reason, "24rem"),
+            },
           ]}
         />
       </DetailRow>
