@@ -33,7 +33,7 @@ test("loadCompanyResearchDashboard calls the dashboard route and normalizes the 
                     companyName: "Manual Co",
                     requestKind: "manual",
                     queueStatus: "pending",
-                    requestPhase: "Gathering Data",
+                    requestPhase: "Starting",
                     originLabel: "Manual Request",
                   },
                 ],
@@ -101,7 +101,7 @@ test("loadCompanyResearchDashboard calls the dashboard route and normalizes the 
   assert.equal(calls[0].options.headers.cookie, "sid=123");
   assert.equal(dashboard.nextUp.count, 1);
   assert.equal(dashboard.nextUp.items[0].companyName, "Manual Co");
-  assert.equal(dashboard.nextUp.items[0].requestPhase, "Gathering Data");
+  assert.equal(dashboard.nextUp.items[0].requestPhase, "Starting");
   assert.equal(dashboard.processing.total, 1);
   assert.equal(dashboard.processing.groups[0].status, "Loading Salesforce Data");
   assert.equal(dashboard.processing.groups[0].items[0].originLabel, "Query Feed");
@@ -123,6 +123,63 @@ test("loadCompanyResearchDashboard calls the dashboard route and normalizes the 
     75
   );
   assert.equal(dashboard.completed.items[0].companyResearchStatus, "Success");
+});
+
+test("loadCompanyResearchDashboard normalizes legacy and transitional phase labels", async () => {
+  const dashboard = await loadCompanyResearchDashboard({
+    request: new Request("http://localhost:3000/settings/company-research"),
+    fetchImpl: async () => ({
+      ok: true,
+      async json() {
+        return {
+          dashboard: {
+            nextUp: {
+              count: 0,
+              items: [],
+            },
+            processing: {
+              total: 2,
+              groups: [
+                {
+                  status: "normalized",
+                  count: 1,
+                  items: [
+                    {
+                      id: 21,
+                      companyName: "Rocket Co",
+                      requestStatus: "Processing",
+                      requestPhase: "normalized",
+                    },
+                  ],
+                },
+                {
+                  status: "Processing Scraped Data",
+                  count: 1,
+                  items: [
+                    {
+                      id: 22,
+                      companyName: "Normalize Co",
+                      requestStatus: "Processing",
+                      requestPhase: "Processing Scraped Data",
+                    },
+                  ],
+                },
+              ],
+            },
+            completed: {
+              count: 0,
+              items: [],
+            },
+          },
+        };
+      },
+    }),
+  });
+
+  assert.equal(dashboard.processing.groups[0].status, "RocketReach");
+  assert.equal(dashboard.processing.groups[0].items[0].requestPhase, "RocketReach");
+  assert.equal(dashboard.processing.groups[1].status, "Normalizing");
+  assert.equal(dashboard.processing.groups[1].items[0].requestPhase, "Normalizing");
 });
 
 test("loadCompanyResearchDashboard throws a normalized API error on failure", async () => {

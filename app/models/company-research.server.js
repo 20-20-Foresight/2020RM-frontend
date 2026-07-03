@@ -39,7 +39,12 @@ function normalizePhaseLabel(value) {
   if (!trimmed) {
     return null;
   }
-  return trimmed.toLowerCase() === "waiting" ? "Gathering Data" : trimmed;
+  const normalized = trimmed.toLowerCase();
+  if (normalized === "waiting") return "Gathering Data";
+  if (normalized === "starting") return "Starting";
+  if (normalized === "processing scraped data") return "Normalizing";
+  if (normalized === "normalized") return "RocketReach";
+  return trimmed;
 }
 
 function normalizeMeta(value) {
@@ -143,7 +148,7 @@ function normalizeQueueItem(value) {
     requestStatus: readTrimmedString(value.requestStatus),
     requestPhase: normalizePhaseLabel(value.requestPhase),
     companyResearchStatus: readTrimmedString(value.companyResearchStatus),
-    processingStage: normalizePhaseLabel(value.processingStage) || "Gathering Data",
+    processingStage: normalizePhaseLabel(value.processingStage) || "Starting",
     companyName: readTrimmedString(value.companyName) || "",
     website: readTrimmedString(value.website),
     linkedInUrl: readTrimmedString(value.linkedInUrl),
@@ -173,7 +178,7 @@ function normalizeProcessingGroup(value) {
     : [];
 
   return {
-    status: normalizePhaseLabel(value.status) || "Gathering Data",
+    status: normalizePhaseLabel(value.status) || "Starting",
     count: readInteger(value.count) ?? items.length,
     items,
   };
