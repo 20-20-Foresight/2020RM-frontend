@@ -10,13 +10,15 @@ import {
   Heading,
   HStack,
   Input,
+  InputGroup,
+  InputLeftElement,
   Text,
   Textarea,
   VStack
 } from "@chakra-ui/react";
-import { EditIcon } from "@chakra-ui/icons";
+import { EditIcon, SearchIcon } from "@chakra-ui/icons";
 import { useLocation } from "@remix-run/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { InlineSaveStatus } from "./InlineSaveStatus";
 import { ToastRichTextEditor } from "./ToastRichTextEditor";
 import { useQueuedDocumentSave } from "../hooks/useQueuedDocumentSave";
@@ -188,9 +190,11 @@ export function DimensionDefinitionEditorPage({ data, actionData }) {
   const [metadata, setMetadata] = useState(() => (data.metadata && typeof data.metadata === "object" ? { ...data.metadata } : {}));
   const [description, setDescription] = useState(data.description || "");
   const [rows, setRows] = useState(() => cloneRows(data.dimensionDefinition.rows));
+  const [searchQuery, setSearchQuery] = useState("");
   const [editingRowKey, setEditingRowKey] = useState("");
   const [draftRow, setDraftRow] = useState(buildEmptyRow);
   const [isDraftNew, setIsDraftNew] = useState(false);
+  const documentIdRef = useRef(readTrimmedString(data.id));
   const {
     saveSummary,
     isSaving: isQueuedSaving,
@@ -219,13 +223,20 @@ export function DimensionDefinitionEditorPage({ data, actionData }) {
   });
 
   useEffect(() => {
+    const nextDocumentId = readTrimmedString(data.id);
+    if (documentIdRef.current === nextDocumentId) {
+      return;
+    }
+
+    documentIdRef.current = nextDocumentId;
     setMetadata(data.metadata && typeof data.metadata === "object" ? { ...data.metadata } : {});
     setDescription(data.description || "");
     setRows(cloneRows(data.dimensionDefinition.rows));
+    setSearchQuery("");
     setEditingRowKey("");
     setDraftRow(buildEmptyRow());
     setIsDraftNew(false);
-  }, [data.description, data.dimensionDefinition.rows, data.id, data.metadata, data.version]);
+  }, [data.description, data.dimensionDefinition.rows, data.id, data.metadata]);
 
   function startEditingRow(rowKey) {
     const matchedRow = rows.find((row) => row.__clientKey === rowKey);
@@ -296,6 +307,16 @@ export function DimensionDefinitionEditorPage({ data, actionData }) {
   }
 
   const displayName = readTrimmedString(metadata?.name) || data.name;
+  const visibleRows = rows.filter((row) => {
+    const query = readTrimmedString(searchQuery).toLowerCase();
+    if (!query) {
+      return true;
+    }
+
+    return [row.label, row.key, row.description, row.examplesText].some((value) =>
+      readTrimmedString(value).toLowerCase().includes(query)
+    );
+  });
 
   return (
     <Box bg="white" h="100%" minH="0" display="flex" flexDirection="column">
@@ -330,10 +351,24 @@ export function DimensionDefinitionEditorPage({ data, actionData }) {
           }}
         >
           <VStack align="stretch" spacing={4} h="100%" minH="0">
-            <Flex justify="flex-end" align={{ base: "stretch", xl: "end" }} gap={4} wrap="wrap">
-              <HStack spacing={3}>
-                <Button type="button" colorScheme="blue" onClick={startAddingRow} isDisabled={Boolean(editingRowKey)}>
-                  Add Dimension
+          <Flex justify="space-between" align={{ base: "stretch", xl: "end" }} gap={4} wrap="wrap">
+            <FormControl maxW={{ base: "100%", md: "360px" }}>
+              <FormLabel mb={2}>Search</FormLabel>
+              <InputGroup>
+                <InputLeftElement pointerEvents="none">
+                  <SearchIcon color="gray.400" />
+                </InputLeftElement>
+                <Input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Filter by name, key, description, or example"
+                />
+              </InputGroup>
+            </FormControl>
+
+            <HStack spacing={3}>
+              <Button type="button" colorScheme="blue" onClick={startAddingRow} isDisabled={Boolean(editingRowKey)}>
+                Add Dimension
                 </Button>
               </HStack>
             </Flex>
@@ -350,8 +385,8 @@ export function DimensionDefinitionEditorPage({ data, actionData }) {
                 />
               ) : null}
 
-              {rows.length ? (
-                rows.map((row) => {
+              {visibleRows.length ? (
+                visibleRows.map((row) => {
                   const isEditingRow = !isDraftNew && editingRowKey === row.__clientKey;
                   return (
                     <DimensionCard
@@ -369,7 +404,9 @@ export function DimensionDefinitionEditorPage({ data, actionData }) {
                 })
               ) : (
                 <Box borderWidth="1px" borderColor="gray.200" borderRadius="xl" px={5} py={6} bg="white">
-                  <Text color="gray.500">No dimensions are defined yet.</Text>
+                  <Text color="gray.500">
+                    {rows.length ? "No dimensions matched the current search." : "No dimensions are defined yet."}
+                  </Text>
                 </Box>
               )}
             </VStack>

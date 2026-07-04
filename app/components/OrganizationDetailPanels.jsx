@@ -52,12 +52,12 @@ import {
   buildOrganizationHeaderViewModel,
   buildOrganizationLocationsViewModel,
   buildOrganizationOverviewViewModel
-} from "../models/organization-detail-view";
+} from "../models/organization-detail-view.mjs";
 import {
   getSearchResultFieldValue,
   resolveSchemaFieldPath
-} from "../models/search-result";
-import { buildEntityDetailPath } from "../models/entity-route";
+} from "../models/search-result.mjs";
+import { buildEntityDetailPath, buildOrganizationDetailTabPath } from "../models/entity-route.mjs";
 
 const BRAND_BLUE = "#0F4C81";
 const BORDER_COLOR = "#D7DFEC";
@@ -69,13 +69,21 @@ const CONTACT_TITLE_PATHS = [
   "metadata.jobtitle",
   "metadata.job_title",
   "metadata.position",
+  "metadata.currenttitle",
+  "metadata.currentTitle",
+  "currenttitle",
+  "currentTitle",
   "title"
 ];
 
 const CONTACT_LEVEL_PATHS = [
   "metadata.level",
   "metadata.seniority",
-  "metadata.seniority_level"
+  "metadata.seniority_level",
+  "metadata.positionlevel",
+  "metadata.positionLevel",
+  "positionlevel",
+  "positionLevel"
 ];
 
 const CONTACT_EMAIL_PATH_GROUPS = [
@@ -333,8 +341,16 @@ function filterContacts(options) {
  * @returns {JSX.Element}
  */
 export function OrganizationOverviewPanel({ organizationDetail }) {
+  const organizationUUID =
+    typeof organizationDetail?.uuid === "string" && organizationDetail.uuid.trim()
+      ? organizationDetail.uuid.trim()
+      : typeof organizationDetail?.record?.uuid === "string" && organizationDetail.record.uuid.trim()
+        ? organizationDetail.record.uuid.trim()
+        : "";
+  const effectiveRecord = organizationDetail?.record || null;
+
   const overview = buildOrganizationOverviewViewModel({
-    record: organizationDetail?.record || null,
+    record: effectiveRecord,
     schema: organizationDetail?.schema || null,
     locations: Array.isArray(organizationDetail?.locations) ? organizationDetail.locations : []
   });
@@ -416,9 +432,19 @@ export function OrganizationOverviewPanel({ organizationDetail }) {
           </SurfaceCard>
 
           <SurfaceCard>
-            <Heading size="md" mb={5}>
-              Industry &amp; Expertise
-            </Heading>
+            <Flex justify="space-between" align="center" gap={3} mb={5}>
+              <Heading size="md">Industry &amp; Expertise</Heading>
+              <Button
+                as={RemixLink}
+                to={buildOrganizationDetailTabPath(organizationUUID, "segmentation") || "#"}
+                variant="outline"
+                borderColor={BORDER_COLOR}
+                size="sm"
+                isDisabled={!organizationUUID}
+              >
+                view segmentation
+              </Button>
+            </Flex>
             <Flex wrap="wrap" gap={3}>
               {overview.expertiseTags.map((tag) => (
                 <Badge

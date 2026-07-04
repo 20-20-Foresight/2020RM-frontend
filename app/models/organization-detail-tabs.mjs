@@ -1,4 +1,4 @@
-import organizationDetailTabsModule from "./organization-detail-tabs.js";
+import organizationDetailTabsModule from "./organization-detail-tabs.cjs";
 
 export const {
   getOrganizationDetailTabUiState,

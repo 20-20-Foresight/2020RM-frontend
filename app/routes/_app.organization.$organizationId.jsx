@@ -1,19 +1,19 @@
 import { json } from "@remix-run/node";
 import { Box } from "@chakra-ui/react";
 import { Outlet, useLoaderData, useLocation, useNavigation } from "@remix-run/react";
-import { BlockingLoadingOverlay } from "../components/BlockingLoadingOverlay";
 import { OrganizationDetailLayout } from "../components/OrganizationDetailLayout";
+import { OrganizationTabShimmer } from "../components/OrganizationDetailShimmer";
 import { loadEntityDetailPage } from "../models/entity-detail.server";
 import {
   buildOrganizationDetailTabPath
-} from "../models/entity-route";
+} from "../models/entity-route.mjs";
 import {
   getOrganizationDetailTabUiState,
   shouldRevalidateOrganizationDetailRoute
 } from "../models/organization-detail-tabs.mjs";
 import {
   ORGANIZATION_DETAIL_TABS
-} from "../models/organization-detail-config";
+} from "../models/organization-detail-config.mjs";
 
 export async function loader({ request, params }) {
   return json(
@@ -47,16 +47,12 @@ export default function OrganizationDetailRoute() {
 
   return (
     <OrganizationDetailLayout tabs={tabs} activeTabKey={tabState.activeTabKey} data={data}>
-      <Box position="relative" minH="240px">
-        <Outlet context={{ organizationDetail: data }} />
+      <Box minH="240px">
         {tabState.isLoading ? (
-          <BlockingLoadingOverlay
-            label={tabState.label || "Loading..."}
-            zIndex={2}
-            position="absolute"
-            borderRadius="20px"
-          />
-        ) : null}
+          <OrganizationTabShimmer tabKey={tabState.activeTabKey} />
+        ) : (
+          <Outlet context={{ organizationDetail: data }} />
+        )}
       </Box>
     </OrganizationDetailLayout>
   );

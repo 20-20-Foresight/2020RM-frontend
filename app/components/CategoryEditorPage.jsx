@@ -10,19 +10,22 @@ import {
   Heading,
   HStack,
   Input,
+  InputGroup,
+  InputLeftElement,
   Select,
   Switch,
   Text,
   Textarea,
   VStack
 } from "@chakra-ui/react";
-import { EditIcon } from "@chakra-ui/icons";
+import { EditIcon, SearchIcon } from "@chakra-ui/icons";
 import { useLocation } from "@remix-run/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { InlineSaveStatus } from "./InlineSaveStatus";
 import { useQueuedDocumentSave } from "../hooks/useQueuedDocumentSave";
 import { useRowSaveHighlight } from "../hooks/useRowSaveHighlight";
 import { CategoryEditorCard } from "./ui/organisms/CategoryEditorCard";
+import { applyLockedDimensionId, resolveLockedDimensionId } from "../models/category-editor-page.mjs";
 
 /**
  * Reads a trimmed string.
@@ -148,11 +151,22 @@ export function CategoryEditorPage({ data, actionData }) {
   const [metadata, setMetadata] = useState(() => (data.metadata && typeof data.metadata === "object" ? { ...data.metadata } : {}));
   const [description, setDescription] = useState(data.description || "");
   const [rows, setRows] = useState(() => cloneRows(data.categoryEditor?.rows));
+  const [searchQuery, setSearchQuery] = useState("");
   const [showRetired, setShowRetired] = useState(false);
   const [editingRowKey, setEditingRowKey] = useState("");
   const [draftRow, setDraftRow] = useState(null);
   const [isDraftNew, setIsDraftNew] = useState(false);
-  const defaultDimensionIdRef = useRef(readTrimmedString(data.dimensionCatalog?.[0]?.id));
+  const documentIdRef = useRef(readTrimmedString(data.id));
+  const lockedDimensionId = useMemo(
+    () =>
+      resolveLockedDimensionId({
+        documentName: data.name,
+        metadataName: data.metadata?.name,
+        dimensionCatalog: data.dimensionCatalog
+      }),
+    [data.dimensionCatalog, data.metadata?.name, data.name]
+  );
+  const defaultDimensionIdRef = useRef(lockedDimensionId || readTrimmedString(data.dimensionCatalog?.[0]?.id));
   const {
     saveSummary,
     isSaving: isQueuedSaving,
@@ -182,13 +196,24 @@ export function CategoryEditorPage({ data, actionData }) {
   });
 
   useEffect(() => {
+    defaultDimensionIdRef.current = lockedDimensionId || readTrimmedString(data.dimensionCatalog?.[0]?.id);
+  }, [data.dimensionCatalog, lockedDimensionId]);
+
+  useEffect(() => {
+    const nextDocumentId = readTrimmedString(data.id);
+    if (documentIdRef.current === nextDocumentId) {
+      return;
+    }
+
+    documentIdRef.current = nextDocumentId;
     setMetadata(data.metadata && typeof data.metadata === "object" ? { ...data.metadata } : {});
     setDescription(data.description || "");
     setRows(cloneRows(data.categoryEditor?.rows));
+    setSearchQuery("");
     setEditingRowKey("");
     setDraftRow(null);
     setIsDraftNew(false);
-  }, [data.categoryEditor?.rows, data.description, data.id, data.metadata, data.version]);
+  }, [data.categoryEditor?.rows, data.description, data.id, data.metadata]);
 
   const dimensionOptions = useMemo(
     () =>
@@ -208,7 +233,19 @@ export function CategoryEditorPage({ data, actionData }) {
     [dimensionOptions]
   );
 
-  const visibleRows = showRetired ? rows : rows.filter((row) => !isRetiredRow(row));
+  const visibleRows = (showRetired ? rows : rows.filter((row) => !isRetiredRow(row))).filter((row) => {
+    const query = readTrimmedString(searchQuery).toLowerCase();
+    if (!query) {
+      return true;
+    }
+
+    return [
+      row.label,
+      row.description,
+      row.examplesText,
+      dimensionNameById.get(row.dimensionId) || ""
+    ].some((value) => readTrimmedString(value).toLowerCase().includes(query));
+  });
   const displayName = readTrimmedString(metadata?.name) || data.name;
 
   /**
@@ -240,7 +277,7 @@ export function CategoryEditorPage({ data, actionData }) {
     }
 
     setEditingRowKey(rowKey);
-    setDraftRow(cloneRows([matchedRow])[0] || buildEmptyRow(defaultDimensionIdRef.current));
+    setDraftRow(applyLockedDimensionId(cloneRows([matchedRow])[0] || buildEmptyRow(defaultDimensionIdRef.current), lockedDimensionId));
     setIsDraftNew(false);
   }
 
@@ -248,7 +285,7 @@ export function CategoryEditorPage({ data, actionData }) {
    * Opens one unsaved row at the top of the list.
    */
   function startAddingRow() {
-    const nextDraft = buildEmptyRow(defaultDimensionIdRef.current);
+    const nextDraft = applyLockedDimensionId(buildEmptyRow(defaultDimensionIdRef.current), lockedDimensionId);
     setEditingRowKey(nextDraft.__clientKey);
     setDraftRow(nextDraft);
     setIsDraftNew(true);
@@ -280,7 +317,7 @@ export function CategoryEditorPage({ data, actionData }) {
       return;
     }
 
-    const nextRow = cloneRows([draftRow])[0];
+    const nextRow = applyLockedDimensionId(cloneRows([draftRow])[0], lockedDimensionId);
     const nextRows = isDraftNew
       ? [nextRow, ...rows]
       : rows.map((row) => (row.__clientKey === editingRowKey ? nextRow : row));
@@ -359,9 +396,25 @@ export function CategoryEditorPage({ data, actionData }) {
 
         <VStack align="stretch" spacing={4} flex="1" minH="0">
           <Flex justify="space-between" align={{ base: "stretch", md: "center" }} gap={4} wrap="wrap">
-            <HStack spacing={3}>
-              <Switch isChecked={showRetired} onChange={(event) => setShowRetired(event.target.checked)} />
-              <Text color="gray.600">Show retired</Text>
+            <HStack spacing={3} align="end" flexWrap="wrap">
+              <FormControl maxW={{ base: "100%", md: "360px" }}>
+                <FormLabel mb={2}>Search</FormLabel>
+                <InputGroup>
+                  <InputLeftElement pointerEvents="none">
+                    <SearchIcon color="gray.400" />
+                  </InputLeftElement>
+                  <Input
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Filter by category, dimension, description, or example"
+                  />
+                </InputGroup>
+              </FormControl>
+
+              <HStack spacing={3} pb={1}>
+                <Switch isChecked={showRetired} onChange={(event) => setShowRetired(event.target.checked)} />
+                <Text color="gray.600">Show retired</Text>
+              </HStack>
             </HStack>
 
             <Button colorScheme="blue" onClick={startAddingRow} isDisabled={Boolean(editingRowKey)}>
@@ -377,6 +430,7 @@ export function CategoryEditorPage({ data, actionData }) {
                 isEditing
                 supportsPreference={Boolean(data.categoryEditor?.supportsPreference)}
                 dimensionOptions={dimensionOptions}
+                showDimensionField={!lockedDimensionId}
                 onDraftChange={updateDraftField}
                 onSave={saveDraftRow}
                 onCancel={cancelEditing}
@@ -396,6 +450,7 @@ export function CategoryEditorPage({ data, actionData }) {
                     descriptionHtml={row.description}
                     examplesText={row.examplesText}
                     dimensionOptions={dimensionOptions}
+                    showDimensionField={!lockedDimensionId}
                     highlightState={rowHighlightStateByKey[row.__clientKey]}
                     isEditing={Boolean(isEditing)}
                     supportsPreference={Boolean(data.categoryEditor?.supportsPreference)}
@@ -409,7 +464,9 @@ export function CategoryEditorPage({ data, actionData }) {
               })
             ) : (
               <Box borderWidth="1px" borderColor="gray.200" borderRadius="xl" px={5} py={6} bg="white">
-                <Text color="gray.500">No categories are defined yet.</Text>
+                <Text color="gray.500">
+                  {rows.length ? "No categories matched the current filters." : "No categories are defined yet."}
+                </Text>
               </Box>
             )}
           </VStack>

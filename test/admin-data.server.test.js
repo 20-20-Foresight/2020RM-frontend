@@ -4,7 +4,8 @@ const {
   buildDocumentFromEditor,
   loadAdminDataDocument,
   loadRawAdminDataDocument,
-  loadAdminDataList
+  loadAdminDataList,
+  normalizeLoadedAdminDataDocument
 } = require("../app/models/admin-data.server");
 
 test("admin data list loader calls the normalized admin data REST route", async () => {
@@ -186,6 +187,85 @@ test("admin data detail loader calls the normalized admin data detail route", as
           target: "robert"
         }
       ]
+    },
+    metadata: {
+      type: "crosswalk",
+      name: "Nicknames",
+      description: "Nickname crosswalk for person matching",
+      shape: "crosswalk"
+    }
+  });
+});
+
+test("admin data detail normalization can reuse a raw payload without refetching", () => {
+  const detail = normalizeLoadedAdminDataDocument({
+    id: "crm.data:nicknames",
+    namespace: "crm.data",
+    key: "nicknames",
+    type: "crosswalk",
+    name: "Nicknames",
+    description: "Nickname crosswalk for person matching",
+    shape: "crosswalk",
+    version: 4,
+    lastmodifieddate: "2026-03-23T12:30:00.000Z",
+    lastmodifiedby: "admin@example.com",
+    document: {
+      crosswalk: {
+        bob: {
+          values: ["robert"]
+        }
+      }
+    },
+    editor: {
+      columns: ["source", "target"],
+      rows: [
+        {
+          source: "bob",
+          target: "robert"
+        }
+      ]
+    },
+    metadata: {
+      type: "crosswalk",
+      name: "Nicknames",
+      description: "Nickname crosswalk for person matching",
+      shape: "crosswalk"
+    }
+  });
+
+  assert.deepEqual(detail, {
+    id: "crm.data:nicknames",
+    namespace: "crm.data",
+    key: "nicknames",
+    type: "crosswalk",
+    name: "Nicknames",
+    description: "Nickname crosswalk for person matching",
+    shape: "crosswalk",
+    version: 4,
+    lastmodifieddate: "2026-03-23T12:30:00.000Z",
+    lastmodifiedby: "admin@example.com",
+    status: null,
+    document: {
+      crosswalk: {
+        bob: {
+          values: ["robert"]
+        }
+      }
+    },
+    editor: {
+      columns: ["source", "target"],
+      rows: [
+        {
+          source: "bob",
+          target: "robert"
+        }
+      ]
+    },
+    metadata: {
+      type: "crosswalk",
+      name: "Nicknames",
+      description: "Nickname crosswalk for person matching",
+      shape: "crosswalk"
     }
   });
 });
@@ -410,6 +490,102 @@ test("admin data detail infers a crosswalk editor from wrapped crosswalk documen
   });
 });
 
+test("admin data detail infers a keyed object editor from wrapped crosswalk maps with object leaves", async () => {
+  const detail = await loadAdminDataDocument({
+    request: new Request("http://localhost:3000/admin/data/crm.data%3Acontact%20titles", {
+      headers: {
+        cookie: "sid=123"
+      }
+    }),
+    id: "crm.data:contact titles",
+    fetchImpl: async () => ({
+      ok: true,
+      async json() {
+        return {
+          data: {
+            id: "crm.data:contact titles",
+            namespace: "crm.data",
+            key: "contact titles",
+            name: "Contact Titles",
+            document: {
+              "how this crosswalk works": [],
+              crosswalk: {
+                "Vice Chairman": {
+                  "ranking 0-5": 5,
+                  "initial bucket": "President"
+                },
+                Chief: {
+                  "ranking 0-5": 5,
+                  "initial bucket": "VP",
+                  notes: "Needs review"
+                }
+              }
+            }
+          }
+        };
+      }
+    })
+  });
+
+  assert.equal(detail.shape, "object");
+  assert.deepEqual(detail.editor, {
+    columns: ["contact title", "ranking 0-5", "initial bucket", "notes"],
+    rows: [
+      {
+        "contact title": "Vice Chairman",
+        "ranking 0-5": "5",
+        "initial bucket": "President",
+        notes: ""
+      },
+      {
+        "contact title": "Chief",
+        "ranking 0-5": "5",
+        "initial bucket": "VP",
+        notes: "Needs review"
+      }
+    ]
+  });
+});
+
+test("admin data detail normalizes skills values into a flat table editor", () => {
+  const detail = normalizeLoadedAdminDataDocument({
+    id: "crm.data:skills",
+    namespace: "crm.data",
+    key: "skills",
+    type: "list",
+    name: "Skills",
+    description: "Canonical skills list",
+    shape: "list",
+    version: 2,
+    document: {
+      values: [
+        {
+          id: "skill-react",
+          label: "React",
+          domains: ["any", "linkedin"],
+          alsoKnownAs: ["ReactJS", "React.js", "React JS"],
+          description: "The library for web and native user interfaces.",
+          commonality: 1
+        }
+      ]
+    }
+  });
+
+  assert.deepEqual(detail.editor, {
+    columns: ["id", "label", "domains", "also known as", "description", "commonality"],
+    rows: [
+      {
+        id: "skill-react",
+        label: "React",
+        domains: "any, linkedin",
+        "also known as": "ReactJS, React.js, React JS",
+        description: "The library for web and native user interfaces.",
+        commonality: "1"
+      }
+    ]
+  });
+});
+
 test("buildDocumentFromEditor rewrites crosswalk rows into the canonical document shape", () => {
   assert.deepEqual(
     buildDocumentFromEditor({
@@ -448,6 +624,82 @@ test("buildDocumentFromEditor rewrites crosswalk rows into the canonical documen
         },
         liz: {
           values: ["elizabeth"]
+        }
+      }
+    }
+  );
+});
+
+test("buildDocumentFromEditor rewrites skills table rows into the canonical values shape", () => {
+  assert.deepEqual(
+    buildDocumentFromEditor({
+      id: "crm.data:skills",
+      shape: "list",
+      columns: ["id", "label", "domains", "also known as", "description", "commonality"],
+      rows: [
+        {
+          id: "skill-react",
+          label: "React",
+          domains: "any, linkedin",
+          "also known as": "ReactJS, React.js, React JS",
+          description: "The library for web and native user interfaces.",
+          commonality: "1"
+        }
+      ],
+      document: {
+        values: []
+      }
+    }),
+    {
+      values: [
+        {
+          id: "skill-react",
+          label: "React",
+          domains: ["any", "linkedin"],
+          alsoKnownAs: ["ReactJS", "React.js", "React JS"],
+          description: "The library for web and native user interfaces.",
+          commonality: 1
+        }
+      ]
+    }
+  );
+});
+
+test("buildDocumentFromEditor preserves wrapped crosswalk maps for object-table editors", () => {
+  assert.deepEqual(
+    buildDocumentFromEditor({
+      shape: "object",
+      columns: ["contact title", "ranking 0-5", "initial bucket", "notes"],
+      rows: [
+        {
+          "contact title": "Vice Chairman",
+          "ranking 0-5": "5",
+          "initial bucket": "President",
+          notes: ""
+        },
+        {
+          "contact title": "Chief",
+          "ranking 0-5": "5",
+          "initial bucket": "VP",
+          notes: "Needs review"
+        }
+      ],
+      document: {
+        "how this crosswalk works": [],
+        crosswalk: {}
+      }
+    }),
+    {
+      "how this crosswalk works": [],
+      crosswalk: {
+        "Vice Chairman": {
+          "ranking 0-5": "5",
+          "initial bucket": "President"
+        },
+        Chief: {
+          "ranking 0-5": "5",
+          "initial bucket": "VP",
+          notes: "Needs review"
         }
       }
     }

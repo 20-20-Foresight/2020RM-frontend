@@ -1,0 +1,111 @@
+{
+  "person-stellar": {
+    "entityType": "person",
+    "uuid": "person-stellar",
+    "status": "completed",
+    "statusExplained": "Person detail loaded successfully.",
+    "record": {
+      "uuid": "person-stellar",
+      "name": "Eleanor Vance",
+      "metadata": {
+        "title": "Senior Vice President of Operations",
+        "level": "Level 2 (VP+)",
+        "company": "Stellaris Corp",
+        "summary": "Results-oriented executive with over 15 years of experience in operational excellence and strategic scaling. Proven track record of optimizing complex supply chain networks and leading cross-functional teams to achieve double-digit efficiency gains.",
+        "primaryemail": "evance@corporate.com",
+        "workemail": "evance@corporate.com",
+        "phone": "+1 (555) 902-4431",
+        "email": {
+          "personal": "eleanor.vance@gmail.com"
+        },
+        "mobilephone": "+1 (555) 128-9904",
+        "socials": {
+          "linkedin": "www.linkedin.com/in/eleanor-vance"
+        },
+        "homeaddress": "45 Oak Ridge Drive, Greenwich, CT 06830, USA",
+        "tenure": "since 2018",
+        "compensation": "$325,000",
+        "skills": [
+          "Strategic Planning",
+          "Operational Excellence",
+          "P&L Management",
+          "Change Management",
+          "Supply Chain Optimization",
+          "Executive Leadership",
+          "Digital Transformation",
+          "Lean Six Sigma"
+        ],
+        "work_history": [
+          {
+            "role": "Director of Global Logistics",
+            "organization": "Global Prime Logistics",
+            "period": "2014 — 2018",
+            "summary": "Managed a $45M annual budget and oversaw shipping operations for 14 regional hubs."
+          },
+          {
+            "role": "Operations Manager",
+            "organization": "Streamline Systems Inc.",
+            "period": "2010 — 2014",
+            "summary": "Focused on internal process automation and vendor relationship management."
+          }
+        ],
+        "education": [
+          {
+            "degree": "MBA in Strategic Management",
+            "institution": "Wharton School of Business",
+            "subtitle": "Graduated 2010"
+          },
+          {
+            "degree": "B.S. in Operations Research",
+            "institution": "Georgia Institute of Technology",
+            "subtitle": "Graduated 2008"
+          }
+        ],
+        "contactstrengthnote": "\"Last engagement noted high receptivity to operational restructuring topics.\""
+      }
+    },
+    "locations": [
+      {
+        "uuid": "loc-ny-1",
+        "address": "1201 Avenue of the Americas, 42nd Floor, New York, NY 10036, USA",
+        "city": "New York",
+        "regionCode": "NY",
+        "countryCode": "US",
+        "relationship": {
+          "metadata": {
+            "isHQ": true
+          }
+        }
+      }
+    ],
+    "meta": {
+      "count": 1
+    },
+    "schema": {
+      "namespace": "crm.schema",
+      "key": "person",
+      "version": 1,
+      "document": {
+        "fieldPaths": [
+          { "path": "metadata.title" },
+          { "path": "metadata.level" },
+          { "path": "metadata.company" },
+          { "path": "metadata.summary" },
+          { "path": "metadata.primaryemail" },
+          { "path": "metadata.workemail" },
+          { "path": "metadata.phone" },
+          { "path": "metadata.email.personal" },
+          { "path": "metadata.mobilephone" },
+          { "path": "metadata.socials.linkedin" },
+          { "path": "metadata.homeaddress" },
+          { "path": "metadata.tenure" },
+          { "path": "metadata.compensation" },
+          { "path": "metadata.skills" },
+          { "path": "metadata.work_history" },
+          { "path": "metadata.education" },
+          { "path": "metadata.contactstrengthnote" }
+        ]
+      }
+    }
+  }
+}

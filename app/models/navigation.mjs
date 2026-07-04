@@ -1,3 +1,15 @@
+import { designPages } from "./design-pages.mjs";
+import { listAdminDataCategories } from "./admin-data-categories.mjs";
+import { listAvailableTools, toolsConfig } from "./tools-config.mjs";
+
+const PERSONA_LANDING_PATHS = {
+  admin: "/dashboard",
+  recruiter: "/dashboard",
+  es_client: "/jobs/all-es-jobs",
+  em_client: "/dashboard/em-client",
+  super_admin: "/dashboard"
+};
+
 /**
  * Sidebar navigation model for the application shell.
  */
@@ -23,6 +35,11 @@ export const navItems = [
         key: "organizations-advanced-search",
         label: "Advanced Search",
         to: "/organizations/advanced-search"
+      },
+      {
+        key: "organizations-es-search-leads",
+        label: "ES Search Leads",
+        to: "/organizations/es-search-leads"
       }
     ]
   },
@@ -45,29 +62,29 @@ export const navItems = [
       {
         key: "people-advanced-search",
         label: "Advanced Search",
-        to: "/people/advanced-search"
+        to: "/people"
       }
     ]
   },
   {
     key: "jobs",
-    label: "Jobs",
+    label: "Services",
     to: "/jobs",
     icon: "work",
     children: [
       {
         key: "jobs-my-jobs",
-        label: "My Jobs",
+        label: "My Services",
         to: "/jobs/my-jobs"
       },
       {
         key: "jobs-all-em-jobs",
-        label: "All EM Jobs",
+        label: "EM Services",
         to: "/jobs/all-em-jobs"
       },
       {
         key: "jobs-all-es-jobs",
-        label: "All ES Jobs",
+        label: "ES Services",
         to: "/jobs/all-es-jobs"
       },
       {
@@ -78,10 +95,54 @@ export const navItems = [
     ]
   },
   {
+    key: "reports",
+    label: "Reports",
+    to: "/reports",
+    icon: "table_chart"
+  },
+  {
+    key: "lists",
+    label: "Lists",
+    to: "/lists",
+    icon: "format_list_bulleted",
+    children: [
+      {
+        key: "lists-campaigns",
+        label: "Campaigns",
+        to: "/lists/campaigns"
+      },
+      {
+        key: "lists-my-lists",
+        label: "My Lists",
+        to: "/lists/my-lists"
+      },
+      {
+        key: "lists-all",
+        label: "All Lists",
+        to: "/lists/all"
+      }
+    ]
+  },
+  {
+    key: "learn",
+    label: "Learn",
+    to: "/learn",
+    icon: "school"
+  },
+  {
     key: "marketing",
     label: "Marketing",
     to: "/marketing",
     icon: "campaign"
+  },
+  {
+    key: "tools",
+    label: "Tools",
+    to: "/tools",
+    icon: "build",
+    children: toolsConfig
+      .filter((t) => t.status === "available")
+      .map((t) => ({ key: `tools-${t.key}`, label: t.label, to: t.to }))
   },
   {
     key: "admin",
@@ -91,14 +152,14 @@ export const navItems = [
     dividerAbove: true,
     children: [
       {
+        key: "admin-roles",
+        label: "Roles",
+        to: "/admin/roles"
+      },
+      {
         key: "admin-user-management",
         label: "User Management",
         to: "/admin/user-management"
-      },
-      {
-        key: "admin-data",
-        label: "Data",
-        to: "/admin/data"
       }
     ]
   },
@@ -107,6 +168,27 @@ export const navItems = [
     label: "Settings",
     to: "/settings",
     icon: "settings"
+  },
+  {
+    key: "design",
+    label: "Design",
+    to: "/design",
+    icon: "palette",
+    dividerAbove: true,
+    children: designPages.map((p) => ({ key: `design-${p.key}`, label: p.label, to: p.to }))
+  },
+  {
+    key: "data",
+    label: "Data",
+    to: "/admin/data",
+    icon: "table_chart",
+    children: listAdminDataCategories()
+      .filter((category) => category.slug !== "view-all")
+      .map((category) => ({
+        key: `data-${category.slug}`,
+        label: category.title,
+        to: category.to
+      }))
   }
 ];
 
@@ -131,11 +213,17 @@ export function isPathWithinItem(item, pathname) {
  * @returns {boolean}
  */
 export function isNavItemActive(item, pathname) {
-  if (isPathWithinItem(item, pathname)) {
+  const hasChildren = Array.isArray(item?.children) && item.children.length > 0;
+
+  if (hasChildren) {
+    if (pathname === item.to) {
+      return true;
+    }
+  } else if (isPathWithinItem(item, pathname)) {
     return true;
   }
 
-  return Array.isArray(item?.children)
+  return hasChildren
     ? item.children.some((child) => isPathWithinItem(child, pathname))
     : false;
 }
@@ -153,27 +241,94 @@ export function getExpandedNavItemKeys(pathname) {
 
 /**
  * Returns the navigation model filtered by the current permission payload.
- * @param {{permissions?: {admin_access?: {system?: string[]}}}|null|undefined} meta
+ * @param {{permissions?: {admin_access?: {configuration?: string[], data_settings?: string[]}}}|null|undefined} meta
  * @returns {typeof navItems}
  */
 export function getNavigationItems(meta) {
-  const adminActions = Array.isArray(meta?.permissions?.admin_access?.system)
-    ? meta.permissions.admin_access.system
+  const persona = typeof meta?.personas?.current === "string" ? meta.personas.current : null;
+  const adminActions = Array.isArray(meta?.permissions?.admin_access?.configuration)
+    ? meta.permissions.admin_access.configuration
     : [];
+  const dataSettingsActions = Array.isArray(meta?.permissions?.admin_access?.data_settings)
+    ? meta.permissions.admin_access.data_settings
+    : [];
+  const availableTools = listAvailableTools(meta);
 
-  return navItems
+  if (persona === "es_client") {
+    return [
+      {
+        key: "es-client-active-searches",
+        label: "Active Searches",
+        to: "/jobs/all-es-jobs",
+        icon: "work"
+      },
+      {
+        key: "es-client-completed-searches",
+        label: "Completed Searches",
+        to: "/jobs/completed-searches",
+        icon: "work"
+      },
+      {
+        key: "es-client-agreements",
+        label: "Agreements",
+        to: "/agreements",
+        icon: "table_chart"
+      },
+      {
+        key: "es-client-invoices",
+        label: "Invoices",
+        to: "/invoices",
+        icon: "receipt_long"
+      }
+    ];
+  }
+
+  const personaScopedItems = navItems
+    .filter((item) => {
+      if (persona === "recruiter") {
+        return ["dashboard", "organizations", "people", "jobs", "tools"].includes(item.key);
+      }
+
+      if (persona === "em_client") {
+        return ["dashboard", "people", "organizations"].includes(item.key);
+      }
+
+      return true;
+    })
     .map((item) => {
+      if (persona === "em_client" && item.key === "dashboard") {
+        return {
+          ...item,
+          to: "/dashboard/em-client"
+        };
+      }
+
+      if (item.key === "tools") {
+        const children = (item.children || []).filter((child) =>
+          availableTools.some((tool) => `tools-${tool.key}` === child.key)
+        );
+
+        return {
+          ...item,
+          children
+        };
+      }
+
+      if (item.key === "data") {
+        return dataSettingsActions.includes("access") ? item : null;
+      }
+
       if (item.key !== "admin") {
         return item;
       }
 
       const children = (item.children || []).filter((child) => {
-        if (child.key === "admin-user-management") {
-          return adminActions.includes("access_control");
+        if (child.key === "admin-roles") {
+          return adminActions.includes("access");
         }
 
-        if (child.key === "admin-data") {
-          return adminActions.includes("object_editing");
+        if (child.key === "admin-user-management") {
+          return adminActions.includes("access");
         }
 
         return false;
@@ -185,10 +340,30 @@ export function getNavigationItems(meta) {
       };
     })
     .filter((item) => {
+      if (!item) {
+        return false;
+      }
+
+      if (item.key === "tools" || item.key === "admin") {
+        return Array.isArray(item.children) && item.children.length > 0;
+      }
+
       if (item.key !== "admin") {
         return true;
       }
 
       return Array.isArray(item.children) && item.children.length > 0;
     });
+
+  return personaScopedItems;
+}
+
+/**
+ * Returns the default landing path for the current effective persona.
+ * @param {{personas?: {current?: string|null}}|null|undefined} meta
+ * @returns {string}
+ */
+export function getDefaultLandingPath(meta) {
+  const persona = typeof meta?.personas?.current === "string" ? meta.personas.current : null;
+  return PERSONA_LANDING_PATHS[persona] || "/dashboard";
 }

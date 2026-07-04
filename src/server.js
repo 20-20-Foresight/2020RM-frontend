@@ -1,6 +1,5 @@
 require("dotenv").config();
 const path = require("node:path");
-const express = require("express");
 const { createRequestHandler } = require("@remix-run/express");
 const Logger = require("@20-20-Foresight/base/log");
 const { loadConfig } = require("./config");
@@ -27,9 +26,6 @@ const app = createApp(config, (req, res, next) => {
     }
   })(req, res, next);
 });
-
-app.use(express.static(config.publicDir, { maxAge: "1h" }));
-app.use("/build", express.static(path.resolve(__dirname, "../public/build"), { immutable: true, maxAge: "1y" }));
 
 app.listen(config.port, () => {
   log.system(`2020RM frontend listening on ${config.baseUrl}`);

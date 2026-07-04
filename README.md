@@ -8,8 +8,11 @@ Remix + Chakra UI frontend with Express BFF for Microsoft OIDC and `/api/*` prox
 - Server: `src/server.js`
 - Design: `../2020-Design/phase1/auth-replan.md`
 - Search UI: `/organizations` and `/people` proxy to backend REST search endpoints
-- Detail UI: `/organization/:uuid`, `/organization/:uuid/people`, `/organization/:uuid/jobs`, `/organization/:uuid/outreach`, `/organization/:uuid/similar-organizations`, `/organization/:uuid/locations`, `/organization/:uuid/notes`, and `/person/:uuid` load singular records through the frontend BFF, with the organization page now using a static local header plus stitched overview/contacts/jobs/outreach/similar-organizations/locations/notes tabs, mixing live detail fields with neutral placeholder values where backend data is not available yet
-- Admin data UI: `/admin/data` is a full-page list and `/admin/data/:id` is a dedicated full-page editor backed by `/api/rest/admin/data`, with `segmentation.default` documents switching into a modal-driven tree editor that uses header filter chips, metadata editing, and row edit dialogs, plus a global loading overlay for route changes and saves
+- Resegmentation tool: `/tools/resegmentation` now uses normalized `2020RM-backend` REST endpoints under `/api/rest/resegmentation/*`; `2020RM-backend` owns the upstream RPC calls for list browse/detail, organization lookup, and `entity/resegmentOrganization`, while `/design/tools-resegmentation` remains the fixture-backed mock for design review
+- Search feeds UI: `/settings/feeds`, `/settings/feeds/new`, and `/settings/feeds/:feedId` now load and mutate real feed records through `/api/rest/feeds*`, while `/design/settings-feeds` remains fixture-backed for design review
+- Detail UI: `/organization/:uuid`, `/organization/:uuid/people`, `/organization/:uuid/jobs`, `/organization/:uuid/outreach`, `/organization/:uuid/similar-organizations`, `/organization/:uuid/locations`, `/organization/:uuid/notes`, `/person/:uuid`, `/person/:uuid/lists`, `/person/:uuid/similar-contacts`, and `/person/:uuid/notes` load singular records through the frontend BFF, with the organization and contact pages now using static local headers plus stitched tab layouts that mix live detail fields with neutral placeholder values where backend data is not available yet
+- Learn UI: `/learn` and `/learn/:topicSlug` render read-only reference guides from the `crm.learn:topics` config document plus the referenced category admin-data documents
+- Admin data UI: `/admin/data` is a full-page list and `/admin/data/:id` is a dedicated full-page editor backed by `/api/rest/admin/data`, with `Data` now exposed as its own top-level shell section, `segmentation.default` documents switching into a modal-driven tree editor that uses header filter chips, metadata editing, and row edit dialogs, and wrapped object-map data such as contact-title crosswalks falling back to the generic keyed table editor instead of the segmentation workspace
 - Session meta/UI access state: the app shell now consumes the richer `/api/meta` payload so blocked users see an access-pending page and the sidebar hides admin areas the session cannot use
 - Branded shell/sign-in UI: the sign-in screen now uses a black ambient-video hero with 2020 Foresight branding, and the authenticated shell uses a black top bar, a branded collapsible sidebar, and an account dropdown in the header
 - Admin user management UI: `/admin/user-management` now loads the access-control role catalog and user list through `/api/admin/access/*`
@@ -33,10 +36,36 @@ Notes:
 - `npm run dev` pins the internal Remix dev server to port `8002` so it does not collide with the backend default port `3001`.
 - The Express BFF still serves the app on `http://localhost:3000`.
 
+## Worktrees
+
+When you need a separate CRM frontend worktree, use the helper script instead
+of raw `git worktree add`:
+
+```bash
+cd /Users/dmorgan/Projects/CRM/2020RM-frontend
+bash ./scripts/create-worktree.sh <branch-name> <worktree-path> [base-ref]
+```
+
+The helper creates the worktree and copies these local runtime paths from the
+main checkout when they exist:
+
+- `.env` and top-level `.env.*` files such as `.env.local`
+- `node_modules`
+- `.store`
+
+If you need to repair or refresh runtime state in an existing worktree, rerun
+the bootstrap step directly:
+
+```bash
+cd /Users/dmorgan/Projects/CRM/2020RM-frontend
+bash ./scripts/bootstrap-worktree-runtime.sh ../2020RM-frontend-some-worktree
+```
+
 ## UI Verification
 
 - `npm run test:e2e` runs the Playwright browser harness against a deterministic local shell with auth disabled and fixture-backed admin-data responses.
 - `e2e/dashboard-shell.spec.js` covers the authenticated shell and admin-data list navigation.
 - `e2e/admin-data-category-editor.spec.js` covers the Focus category editor route, including the inline card layout and the Toast rich text editor in WYSIWYG mode.
 - `e2e/organization-detail.spec.js` covers the stitched organization overview and contacts tabs with fixture-backed organization detail and related-people responses.
+- `e2e/contact-detail.spec.js` covers the stitched contact overview, lists, similar-contacts, and notes tabs with a fixture-backed person detail response.
 - `npm run test:e2e:update` refreshes visual baselines when an intentional UI change lands.

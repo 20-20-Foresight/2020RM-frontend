@@ -5,6 +5,7 @@ const { loadEntityDetailPage } = require("../app/models/entity-detail.server");
 const {
   buildEntityDetailPath,
   buildOrganizationDetailTabPath,
+  buildPersonDetailTabPath,
   buildEntityListPath,
   buildOrganizationPeoplePath
 } = require("../app/models/entity-route");
@@ -32,6 +33,16 @@ test("buildOrganizationDetailTabPath returns the expected organization tab route
   );
   assert.equal(buildOrganizationDetailTabPath("org-1", "locations"), "/organization/org-1/locations");
   assert.equal(buildOrganizationDetailTabPath("org-1", "notes"), "/organization/org-1/notes");
+});
+
+test("buildPersonDetailTabPath returns the expected contact tab routes", () => {
+  assert.equal(buildPersonDetailTabPath("person-1", "overview"), "/person/person-1");
+  assert.equal(buildPersonDetailTabPath("person-1", "lists"), "/person/person-1/lists");
+  assert.equal(
+    buildPersonDetailTabPath("person-1", "similarContacts"),
+    "/person/person-1/similar-contacts"
+  );
+  assert.equal(buildPersonDetailTabPath("person-1", "notes"), "/person/person-1/notes");
 });
 
 test("buildEntityListPath returns the matching list route", () => {
@@ -96,7 +107,31 @@ test("entity detail loader calls the organization detail REST endpoint and retur
               {
                 uuid: "loc-1",
                 city: "Chicago",
-                regionCode: "IL"
+                regionCode: "IL",
+                subject: {
+                  uuid: "org-1",
+                  type: "organization",
+                  name: "Acme"
+                }
+              }
+            ],
+            relationships: [
+              {
+                uuid: "rel-emp-1",
+                relation: "EMPLOYED_BY",
+                entity1uuid: "org-2",
+                entity2uuid: "person-1"
+              }
+            ],
+            workHistory: [
+              {
+                relationshipUUID: "rel-emp-1",
+                organizationUUID: "org-2",
+                organization: "Analytical Engines",
+                title: "Chief Mathematician",
+                start: "1833-01-01T00:00:00.000Z",
+                end: null,
+                current: true
               }
             ],
             meta: {
@@ -159,7 +194,31 @@ test("entity detail loader calls the organization detail REST endpoint and retur
       {
         uuid: "loc-1",
         city: "Chicago",
-        regionCode: "IL"
+        regionCode: "IL",
+        subject: {
+          uuid: "org-1",
+          type: "organization",
+          name: "Acme"
+        }
+      }
+    ],
+    relationships: [
+      {
+        uuid: "rel-emp-1",
+        relation: "EMPLOYED_BY",
+        entity1uuid: "org-2",
+        entity2uuid: "person-1"
+      }
+    ],
+    workHistory: [
+      {
+        relationshipUUID: "rel-emp-1",
+        organizationUUID: "org-2",
+        organization: "Analytical Engines",
+        title: "Chief Mathematician",
+        start: "1833-01-01T00:00:00.000Z",
+        end: null,
+        current: true
       }
     ],
     meta: {
@@ -202,6 +261,8 @@ test("entity detail loader returns a not found state when the backend returns 40
     statusExplained: "Requested record was not found.",
     record: null,
     locations: [],
+    relationships: [],
+    workHistory: [],
     meta: {
       count: 0
     },

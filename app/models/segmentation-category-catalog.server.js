@@ -1,6 +1,12 @@
 const { loadRawAdminDataDocument } = require("./admin-data.server");
 const { loadCategoryDocuments } = require("./segmentation-document.server");
 
+const categoryCatalogCache = {
+  signature: null,
+  catalog: null,
+  pending: null
+};
+
 /**
  * Reads a trimmed string or null.
  * @param {unknown} value
@@ -66,6 +72,29 @@ function collectCategoryLabels(document) {
 }
 
 /**
+ * Builds a stable cache signature for the relevant category summaries.
+ * @param {object|null} industrySummary
+ * @param {object|null} focusSummary
+ * @returns {string}
+ */
+function buildCategoryCatalogSignature(industrySummary, focusSummary) {
+  return JSON.stringify([
+    {
+      id: readTrimmedString(industrySummary?.id),
+      version: Number.isFinite(industrySummary?.version)
+        ? Number(industrySummary.version)
+        : null
+    },
+    {
+      id: readTrimmedString(focusSummary?.id),
+      version: Number.isFinite(focusSummary?.version)
+        ? Number(focusSummary.version)
+        : null
+    }
+  ]);
+}
+
+/**
  * Loads the category labels needed by segmentation rule editors.
  * @param {{
  *   request: Request,
@@ -86,8 +115,16 @@ async function loadSegmentationCategoryCatalog(options) {
     documents.find((item) => readTrimmedString(item.name)?.toLowerCase() === "industry") || null;
   const focusSummary =
     documents.find((item) => readTrimmedString(item.name)?.toLowerCase() === "focus") || null;
+  const signature = buildCategoryCatalogSignature(industrySummary, focusSummary);
 
-  const [industryDetail, focusDetail] = await Promise.all([
+  if (categoryCatalogCache.catalog && categoryCatalogCache.signature === signature) {
+    return categoryCatalogCache.catalog;
+  }
+  if (categoryCatalogCache.pending && categoryCatalogCache.pending.signature === signature) {
+    return categoryCatalogCache.pending.promise;
+  }
+
+  const promise = Promise.all([
     industrySummary?.id
       ? loadDocument({
           request: options.request,
@@ -100,15 +137,37 @@ async function loadSegmentationCategoryCatalog(options) {
           id: focusSummary.id
         })
       : Promise.resolve(null)
-  ]);
+  ])
+    .then(([industryDetail, focusDetail]) => {
+      const catalog = {
+        industryOptions: collectCategoryLabels(industryDetail?.document),
+        focusOptions: collectCategoryLabels(focusDetail?.document)
+      };
+      categoryCatalogCache.signature = signature;
+      categoryCatalogCache.catalog = catalog;
+      return catalog;
+    })
+    .finally(() => {
+      if (categoryCatalogCache.pending?.signature === signature) {
+        categoryCatalogCache.pending = null;
+      }
+    });
 
-  return {
-    industryOptions: collectCategoryLabels(industryDetail?.document),
-    focusOptions: collectCategoryLabels(focusDetail?.document)
+  categoryCatalogCache.pending = {
+    signature,
+    promise
   };
+  return promise;
 }
 
 module.exports = {
   collectCategoryLabels,
-  loadSegmentationCategoryCatalog
+  loadSegmentationCategoryCatalog,
+  __testOnly: {
+    resetCache() {
+      categoryCatalogCache.signature = null;
+      categoryCatalogCache.catalog = null;
+      categoryCatalogCache.pending = null;
+    }
+  }
 };

@@ -153,7 +153,6 @@ test("buildSegmentationDefaultDocument rebuilds the flat crosswalk structure and
       crosswalk: {
         Blogs: {
           rowId: "row-blogs-1",
-          sector: "Financial Services",
           industry: "Banking Services",
           industries: [{ name: "Banking Services", score: 3 }],
           focus: "Commercial Banking",
@@ -164,7 +163,6 @@ test("buildSegmentationDefaultDocument rebuilds the flat crosswalk structure and
         },
         Brokerage: {
           rowId: "<generated>",
-          sector: "Real Estate",
           industry: "Real Estate Services",
           industries: [{ name: "Real Estate Services", score: 4 }],
           focus: "Brokerage",
@@ -344,7 +342,6 @@ test("buildSegmentationDefaultDocument saves segmentation.code rows with canonic
       crosswalk: {
         "21": {
           description: "Mining, Quarrying, and Oil and Gas Extraction",
-          sector: "Energy",
           industry: "Oil and Gas",
           focus: "Mining",
           notes: "Reviewed",
@@ -352,7 +349,6 @@ test("buildSegmentationDefaultDocument saves segmentation.code rows with canonic
         },
         "237": {
           description: "Heavy and Civil Engineering Construction",
-          sector: "Construction",
           industry: "Civil Engineering",
           rowId: "<generated>"
         }
@@ -476,7 +472,6 @@ test("buildSegmentationDefaultDocument saves segmentation.list rows back to the 
         {
           code: "21",
           description: "Mining, Quarrying, and Oil and Gas Extraction",
-          sector: "Energy",
           industry: "Oil and Gas",
           focus: "Mining",
           notes: "Reviewed",
@@ -485,7 +480,6 @@ test("buildSegmentationDefaultDocument saves segmentation.list rows back to the 
         {
           code: "237",
           description: "Heavy and Civil Engineering Construction",
-          sector: "Construction",
           industry: "Civil Engineering",
           rowId: "<generated>"
         }
@@ -544,9 +538,25 @@ test("resolveSegmentationDefaultEditorType honors explicit editor config and fal
             "category heading": "Technology, Information and Media"
           }
         }
-      }
+      },
+      "segmentation"
     ),
     "segmentation.default"
+  );
+  assert.equal(
+    resolveSegmentationDefaultEditorType(
+      null,
+      {
+        crosswalk: {
+          Blogs: {
+            sector: "Other",
+            focus: "Electric Power Transmission, Control, and Distribution",
+            "category heading": "Technology, Information and Media"
+          }
+        }
+      }
+    ),
+    null
   );
   assert.equal(resolveSegmentationDefaultEditorType(null, { entries: { us: "United States" } }), null);
 });

@@ -1,31 +1,42 @@
 import { ColorModeScript, ChakraProvider } from "@chakra-ui/react";
 import { withEmotionCache } from "@emotion/react";
-import { useState, useMemo } from "react";
+import { useContext, useEffect } from "react";
 import { Links, LiveReload, Meta, Outlet, Scripts, ScrollRestoration } from "@remix-run/react";
-import { createEmotionCache } from "./emotion-cache";
+import { ClientStyleContext, ServerStyleContext } from "./emotion-context";
 import { theme } from "./theme";
 import "@toast-ui/editor/dist/toastui-editor.css";
 
 const Document = withEmotionCache(({ children }, emotionCache) => {
-  const serverSsrStyles = useMemo(() => {
-    const styles = emotionCache.inserted;
-    const styleKeys = Object.keys(styles);
-    if (styleKeys.length === 0) return null;
-    return styleKeys.map((key) => (
-      <style
-        key={key}
-        data-emotion={`${emotionCache.key} ${key}`}
-        dangerouslySetInnerHTML={{ __html: styles[key] }}
-      />
-    ));
-  }, [emotionCache]);
+  const serverStyleData = useContext(ServerStyleContext);
+  const clientStyleData = useContext(ClientStyleContext);
+
+  useEffect(() => {
+    emotionCache.sheet.container = document.head;
+
+    const tags = emotionCache.sheet.tags;
+    emotionCache.sheet.flush();
+
+    tags.forEach((tag) => {
+      emotionCache.sheet._insertTag(tag);
+    });
+
+    clientStyleData.reset();
+  }, [clientStyleData, emotionCache]);
 
   return (
     <html lang="en">
       <head>
         <Meta />
         <Links />
-        {serverSsrStyles}
+        {serverStyleData
+          ? serverStyleData.map(({ key, ids, css }) => (
+              <style
+                key={key}
+                data-emotion={`${key} ${ids.join(" ")}`}
+                dangerouslySetInnerHTML={{ __html: css }}
+              />
+            ))
+          : null}
       </head>
       <body>
         {children}
@@ -38,7 +49,6 @@ const Document = withEmotionCache(({ children }, emotionCache) => {
 });
 
 export default function App() {
-  const [cache] = useState(() => createEmotionCache());
   return (
     <Document>
       <ColorModeScript initialColorMode={theme.config?.initialColorMode} />

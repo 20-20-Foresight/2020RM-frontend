@@ -124,7 +124,19 @@ async function handleCallback(cfg, req, sessionState) {
   return { user, tokenSet };
 }
 
+/**
+ * Refreshes one Microsoft token set using the stored refresh token.
+ * @param {MicrosoftAuthConfig} cfg
+ * @param {string} refreshToken
+ * @returns {Promise<import("openid-client").TokenSet>}
+ */
+async function refreshTokenSet(cfg, refreshToken) {
+  const client = await getClient(cfg);
+  return client.refresh(refreshToken);
+}
+
 module.exports = {
   buildAuthorizationUrl,
-  handleCallback
+  handleCallback,
+  refreshTokenSet
 };

@@ -15,7 +15,7 @@ import {
 } from "@chakra-ui/react";
 import { Link } from "@remix-run/react";
 
-import { buildSegmentationDocumentPath } from "../models/segmentation-document";
+import { buildSegmentationDocumentPath } from "../models/segmentation-document.mjs";
 
 /**
  * Renders one segmentation document list page.

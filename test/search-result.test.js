@@ -56,6 +56,22 @@ test("getSearchResultFieldValue returns linkedin url from socials metadata", () 
   );
 });
 
+test("getSearchResultFieldValue returns null for object-valued fields", () => {
+  assert.equal(
+    getSearchResultFieldValue(
+      {
+        metadata: {
+          email: {
+            work: "ada@example.com"
+          }
+        }
+      },
+      "metadata.email"
+    ),
+    null
+  );
+});
+
 test("getSchemaFieldPaths reads field paths from schema documents", () => {
   assert.deepEqual(
     getSchemaFieldPaths({

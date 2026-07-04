@@ -2,6 +2,9 @@ import {
   Box,
   Button,
   Heading,
+  HStack,
+  Icon,
+  Link,
   Modal,
   ModalBody,
   ModalCloseButton,
@@ -22,7 +25,9 @@ import {
   Wrap,
   WrapItem
 } from "@chakra-ui/react";
-import { buildOrganizationSegmentationViewModel } from "../models/organization-segmentation";
+import { MdOpenInNew } from "react-icons/md";
+import { buildOrganizationSegmentationViewModel } from "../models/organization-segmentation.mjs";
+import { buildSegmentationDocumentPath } from "../models/segmentation-document.mjs";
 
 /**
  * Renders one segmentation chip.
@@ -50,25 +55,29 @@ function SegmentationChip({ value }) {
 /**
  * Renders one labeled segmentation group.
  * @param {{label: string, values: string[]}} props
- * @returns {JSX.Element|null}
+ * @returns {JSX.Element}
  */
 function SegmentationGroup({ label, values }) {
-  if (!Array.isArray(values) || !values.length) {
-    return null;
-  }
+  const hasValues = Array.isArray(values) && values.length;
 
   return (
     <Box>
       <Text fontWeight="semibold" color="gray.800">
         {label}
       </Text>
-      <Wrap spacing={2} mt={2}>
-        {values.map((value) => (
-          <WrapItem key={`${label}-${value}`}>
-            <SegmentationChip value={value} />
-          </WrapItem>
-        ))}
-      </Wrap>
+      {hasValues ? (
+        <Wrap spacing={2} mt={2}>
+          {values.map((value) => (
+            <WrapItem key={`${label}-${value}`}>
+              <SegmentationChip value={value} />
+            </WrapItem>
+          ))}
+        </Wrap>
+      ) : (
+        <Text color="gray.500" fontSize="sm" mt={2}>
+          No entries
+        </Text>
+      )}
     </Box>
   );
 }
@@ -82,18 +91,60 @@ function formatExplanationCell(value) {
   return value || "Not set";
 }
 
+function readTrimmedString(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readExplanationFieldLabel(row) {
+  return (
+    readTrimmedString(row?.sourceField) ||
+    readTrimmedString(row?.source) ||
+    "Not set"
+  );
+}
+
+function renderExplanationCrosswalk(row) {
+  const crosswalkName = readTrimmedString(row?.crosswalkDocumentName);
+  const crosswalkId = readTrimmedString(row?.crosswalkDocumentId);
+  const label = crosswalkName || crosswalkId;
+
+  if (!label) {
+    return "Not set";
+  }
+
+  if (!crosswalkId) {
+    return label;
+  }
+
+  return (
+    <HStack spacing={1} align="center">
+      <Text as="span" fontSize="sm">
+        {label}
+      </Text>
+      <Link
+        href={buildSegmentationDocumentPath(crosswalkId)}
+        isExternal
+        color="blue.500"
+        aria-label={`Open ${label} crosswalk`}
+      >
+        <Icon as={MdOpenInNew} boxSize={3.5} />
+      </Link>
+    </HStack>
+  );
+}
+
 /**
  * Renders one organization segmentation section and explanation modal.
  * @param {{record: object|null}} props
- * @returns {JSX.Element|null}
+ * @returns {JSX.Element}
  */
 export function OrganizationSegmentationSection({ record }) {
-  const segmentation = buildOrganizationSegmentationViewModel(record);
+  const segmentation = buildOrganizationSegmentationViewModel(record) || {
+    industries: [],
+    focuses: [],
+    explanations: []
+  };
   const { isOpen, onOpen, onClose } = useDisclosure();
-
-  if (!segmentation) {
-    return null;
-  }
 
   return (
     <Box borderWidth="1px" borderColor="gray.200" borderRadius="md" p={5}>
@@ -103,13 +154,14 @@ export function OrganizationSegmentationSection({ record }) {
 
       <VStack align="stretch" spacing={4}>
         <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6}>
-          <SegmentationGroup label="Sector:" values={segmentation.sectors} />
           <SegmentationGroup label="Industries" values={segmentation.industries} />
+          <SegmentationGroup label="Focuses" values={segmentation.focuses} />
         </SimpleGrid>
-        <SegmentationGroup label="Focuses" values={segmentation.focuses} />
-        <Button variant="link" alignSelf="flex-start" colorScheme="blue" size="sm" onClick={onOpen}>
-          explain
-        </Button>
+        {segmentation.explanations.length ? (
+          <Button variant="link" alignSelf="flex-start" colorScheme="blue" size="sm" onClick={onOpen}>
+            explain
+          </Button>
+        ) : null}
       </VStack>
 
       <Modal isOpen={isOpen} onClose={onClose} size="6xl" scrollBehavior="inside">
@@ -123,7 +175,7 @@ export function OrganizationSegmentationSection({ record }) {
                 <Table size="sm" variant="simple">
                   <Thead>
                     <Tr>
-                      <Th>Source</Th>
+                      <Th>Field</Th>
                       <Th>Dimension</Th>
                       <Th>Value</Th>
                       <Th>Score</Th>
@@ -134,12 +186,12 @@ export function OrganizationSegmentationSection({ record }) {
                   </Thead>
                   <Tbody>
                     {segmentation.explanations.map((row, index) => (
-                      <Tr key={`${row.source || "source"}-${index}`}>
-                        <Td>{formatExplanationCell(row.source)}</Td>
+                      <Tr key={`${row.sourceField || row.source || "source"}-${index}`}>
+                        <Td>{readExplanationFieldLabel(row)}</Td>
                         <Td>{formatExplanationCell(row.dimension)}</Td>
-                        <Td>{formatExplanationCell(row.value)}</Td>
+                        <Td whiteSpace="pre-line">{formatExplanationCell(row.value)}</Td>
                         <Td>{row.score == null ? "Not set" : String(row.score)}</Td>
-                        <Td>{formatExplanationCell(row.crosswalkDocumentName)}</Td>
+                        <Td>{renderExplanationCrosswalk(row)}</Td>
                         <Td>{formatExplanationCell(row.rule)}</Td>
                         <Td>
                           <Box

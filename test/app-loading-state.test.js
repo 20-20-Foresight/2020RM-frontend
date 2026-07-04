@@ -130,7 +130,23 @@ test("loading overlay labels person detail navigations clearly", () => {
   );
 });
 
-test("loading overlay preserves saving copy for admin data submissions", () => {
+test("loading overlay ignores same-person detail tab navigations so the page can render its inline loader", () => {
+  assert.deepEqual(
+    getAppLoadingOverlayState({
+      currentPathname: "/person/person-1",
+      navigationState: "loading",
+      navigationPathname: "/person/person-1/similar-contacts",
+      fetcherStates: []
+    }),
+    {
+      isLoading: false,
+      isSubmitting: false,
+      label: null
+    }
+  );
+});
+
+test("loading overlay ignores same-route admin data submissions", () => {
   assert.deepEqual(
     getAppLoadingOverlayState({
       currentPathname: "/admin/data/crm.data%3Acompany%20abbreviations",
@@ -139,9 +155,25 @@ test("loading overlay preserves saving copy for admin data submissions", () => {
       fetcherStates: []
     }),
     {
-      isLoading: true,
-      isSubmitting: true,
-      label: "Saving changes..."
+      isLoading: false,
+      isSubmitting: false,
+      label: null
+    }
+  );
+});
+
+test("loading overlay ignores same-route admin data reloads", () => {
+  assert.deepEqual(
+    getAppLoadingOverlayState({
+      currentPathname: "/admin/data/segmentation/keywords",
+      navigationState: "loading",
+      navigationPathname: "/admin/data/segmentation/keywords",
+      fetcherStates: []
+    }),
+    {
+      isLoading: false,
+      isSubmitting: false,
+      label: null
     }
   );
 });
@@ -167,7 +199,28 @@ test("loading overlay ignores inline fetcher saves on the current admin data pag
   );
 });
 
-test("loading overlay uses segmentation-specific copy for segmentation navigations and saves", () => {
+test("loading overlay ignores embedded company research drawer fetchers", () => {
+  assert.deepEqual(
+    getAppLoadingOverlayState({
+      currentPathname: "/tools/company-research/feeds",
+      navigationState: "idle",
+      fetchers: [
+        {
+          state: "submitting",
+          formMethod: "post",
+          formAction: "/tools/company-research/feeds/new"
+        }
+      ]
+    }),
+    {
+      isLoading: false,
+      isSubmitting: false,
+      label: null
+    }
+  );
+});
+
+test("loading overlay uses segmentation-specific copy for navigations but not same-route segmentation saves", () => {
   assert.deepEqual(
     getAppLoadingOverlayState({
       currentPathname: "/admin/segmentation/sectors",
@@ -190,9 +243,9 @@ test("loading overlay uses segmentation-specific copy for segmentation navigatio
       fetcherStates: []
     }),
     {
-      isLoading: true,
-      isSubmitting: true,
-      label: "Saving changes..."
+      isLoading: false,
+      isSubmitting: false,
+      label: null
     }
   );
 });

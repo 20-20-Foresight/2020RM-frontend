@@ -82,6 +82,7 @@ function DescriptionMarkup({ html = "" }) {
  *   descriptionHtml?: string,
  *   examplesText?: string,
  *   dimensionOptions?: Array<{id: string, label: string}>,
+ *   showDimensionField?: boolean,
  *   onEdit?: () => void,
  *   onSave?: () => void,
  *   onCancel?: () => void,
@@ -101,6 +102,7 @@ export function CategoryEditorCard({
   descriptionHtml = "",
   examplesText = "",
   dimensionOptions = [],
+  showDimensionField = true,
   onEdit,
   onSave,
   onCancel,
@@ -127,17 +129,19 @@ export function CategoryEditorCard({
             <Input value={draftRow.label || ""} onChange={(event) => onDraftChange?.("label", event.target.value)} bg="white" />
           </FormControl>
 
-          <FormControl>
-            <FormLabel>Dimension</FormLabel>
-            <Select value={draftRow.dimensionId || ""} onChange={(event) => onDraftChange?.("dimensionId", event.target.value)} bg="white">
-              <option value="">Select a dimension</option>
-              {dimensionOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-          </FormControl>
+          {showDimensionField ? (
+            <FormControl>
+              <FormLabel>Dimension</FormLabel>
+              <Select value={draftRow.dimensionId || ""} onChange={(event) => onDraftChange?.("dimensionId", event.target.value)} bg="white">
+                <option value="">Select a dimension</option>
+                {dimensionOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </FormControl>
+          ) : null}
 
           <RichTextField
             label="Description"

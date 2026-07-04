@@ -1,4 +1,5 @@
 const { isSameOrganizationDetailNavigation } = require("./organization-detail-tabs");
+const { isSamePersonDetailNavigation } = require("./person-detail-tabs");
 
 /**
  * Returns whether one pathname belongs to the admin data area.
@@ -70,6 +71,22 @@ function isInlineCurrentRouteSaveFetcher(fetcher, currentPathname) {
   return isAdminDataPath(currentPathname) || isSegmentationPath(currentPathname);
 }
 
+function isInlineCompanyResearchFetcher(fetcher, currentPathname) {
+  const formMethod = typeof fetcher?.formMethod === "string" ? fetcher.formMethod.toLowerCase() : "";
+  const formAction = typeof fetcher?.formAction === "string" ? fetcher.formAction : "";
+  const formActionPathname = formAction ? new URL(formAction, "http://localhost").pathname : "";
+
+  if (fetcher?.state === "idle" || formMethod !== "post") {
+    return false;
+  }
+
+  if (!currentPathname.startsWith("/tools/company-research")) {
+    return false;
+  }
+
+  return formActionPathname === currentPathname || formActionPathname === `${currentPathname}/new`;
+}
+
 /**
  * Returns the best loading label for the current navigation state.
  * @param {{
@@ -87,7 +104,11 @@ function getAppLoadingOverlayState(options) {
     : Array.isArray(options.fetcherStates)
       ? options.fetcherStates.map((state) => ({ state }))
       : [];
-  const fetchers = rawFetchers.filter((fetcher) => !isInlineCurrentRouteSaveFetcher(fetcher, options.currentPathname));
+  const fetchers = rawFetchers.filter(
+    (fetcher) =>
+      !isInlineCurrentRouteSaveFetcher(fetcher, options.currentPathname) &&
+      !isInlineCompanyResearchFetcher(fetcher, options.currentPathname)
+  );
   const fetcherStates = fetchers.map((fetcher) => fetcher.state);
   const hasActiveFetchers = fetcherStates.some((state) => state !== "idle");
   const isLoading = options.navigationState !== "idle" || hasActiveFetchers;
@@ -116,6 +137,29 @@ function getAppLoadingOverlayState(options) {
     };
   }
 
+  if (
+    pendingPathname === options.currentPathname &&
+    (isAdminDataPath(pendingPathname) || isSegmentationPath(pendingPathname))
+  ) {
+    return {
+      isLoading: false,
+      isSubmitting: false,
+      label: null
+    };
+  }
+
+  if (
+    isSubmitting &&
+    isAdminDataPath(pendingPathname) &&
+    pendingPathname === options.currentPathname
+  ) {
+    return {
+      isLoading: false,
+      isSubmitting: false,
+      label: null
+    };
+  }
+
   if (isSubmitting && isAdminDataPath(pendingPathname)) {
     return {
       isLoading: true,
@@ -134,6 +178,19 @@ function getAppLoadingOverlayState(options) {
 
   if (
     isSameOrganizationDetailNavigation({
+      currentPathname: options.currentPathname,
+      navigationPathname: pendingPathname
+    })
+  ) {
+    return {
+      isLoading: false,
+      isSubmitting: false,
+      label: null
+    };
+  }
+
+  if (
+    isSamePersonDetailNavigation({
       currentPathname: options.currentPathname,
       navigationPathname: pendingPathname
     })

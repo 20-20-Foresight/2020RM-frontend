@@ -9,19 +9,49 @@ import {
   Icon,
   IconButton,
   Link as ChakraLink,
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuList,
   Text,
+  useDisclosure,
   VStack
 } from "@chakra-ui/react";
-import { Link as RemixLink } from "@remix-run/react";
+import { Link as RemixLink, useFetcher, useRevalidator } from "@remix-run/react";
 import { FaLinkedin } from "react-icons/fa";
-import { FiGlobe, FiMapPin, FiPhone, FiSettings } from "react-icons/fi";
+import { FiDatabase, FiGlobe, FiMapPin, FiPhone, FiPlus, FiSearch, FiSettings } from "react-icons/fi";
 import { MdBusiness } from "react-icons/md";
-import { buildOrganizationHeaderViewModel } from "../models/organization-detail-view";
+import AddToListDrawer from "./AddToListDrawer";
+import { CompanyResearchRequestDrawer } from "./CompanyResearchRequestDrawer";
+import { buildOrganizationHeaderViewModel } from "../models/organization-detail-view.mjs";
+import { SourceDataFlyout } from "./SourceDataFlyout";
 
 const BRAND_BLUE = "#0F4C81";
 const PAGE_BG = "#F8FAFC";
 const BORDER_COLOR = "#D7DFEC";
 const SURFACE_TINT = "#EEF4FF";
+
+function readTrimmedString(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function buildCompanyResearchInitialValues(data, header) {
+  const companyName = readTrimmedString(data?.record?.name) || header?.name || "";
+  const website = readTrimmedString(header?.websiteUrl);
+  const linkedInUrl = readTrimmedString(header?.linkedInUrl);
+  const organizationUUID = readTrimmedString(data?.uuid);
+  const noteParts = [
+    `Requested from organization detail page for ${companyName || "this organization"}.`,
+    organizationUUID ? `Organization UUID: ${organizationUUID}.` : null,
+  ].filter(Boolean);
+
+  return {
+    companyName,
+    website,
+    linkedInUrl,
+    notes: noteParts.join(" "),
+  };
+}
 
 /**
  * Renders one inline organization metadata item in the header row.
@@ -88,11 +118,21 @@ function HeaderMetaItem({ icon, label, href = null, isExternal = false }) {
  * @returns {JSX.Element}
  */
 export function OrganizationDetailLayout({ data, tabs, activeTabKey, children = null }) {
+  const revalidator = useRevalidator();
+  const companyResearchFetcher = useFetcher();
+  const { isOpen: isAddToListOpen, onOpen: onAddToListOpen, onClose: onAddToListClose } = useDisclosure();
+  const { isOpen: isSourceOpen, onOpen: onSourceOpen, onClose: onSourceClose } = useDisclosure();
+  const {
+    isOpen: isCompanyResearchOpen,
+    onOpen: onCompanyResearchOpen,
+    onClose: onCompanyResearchClose
+  } = useDisclosure();
   const header = buildOrganizationHeaderViewModel({
     record: data?.record || null,
     schema: data?.schema || null,
     locations: Array.isArray(data?.locations) ? data.locations : []
   });
+  const companyResearchInitialValues = buildCompanyResearchInitialValues(data, header);
 
   return (
     <VStack align="stretch" spacing={6} data-testid="organization-detail-page">
@@ -181,15 +221,56 @@ export function OrganizationDetailLayout({ data, tabs, activeTabKey, children = 
               </Box>
             </HStack>
 
-            <IconButton
-              aria-label="Organization options"
-              icon={<FiSettings />}
-              variant="outline"
-              colorScheme="gray"
-              borderColor={BORDER_COLOR}
-              color={BRAND_BLUE}
-              alignSelf={{ base: "stretch", lg: "flex-start" }}
-              isDisabled
+            <Menu placement="bottom-end">
+              <MenuButton
+                as={IconButton}
+                aria-label="Organization options"
+                icon={<FiSettings />}
+                variant="outline"
+                colorScheme="gray"
+                borderColor={BORDER_COLOR}
+                color={BRAND_BLUE}
+                alignSelf={{ base: "stretch", lg: "flex-start" }}
+              />
+              <MenuList minW="200px" shadow="lg" borderColor={BORDER_COLOR}>
+                <MenuItem icon={<FiPlus />} onClick={onAddToListOpen} fontSize="sm">
+                  Add To List
+                </MenuItem>
+                <MenuItem icon={<FiSearch />} onClick={onCompanyResearchOpen} fontSize="sm">
+                  Request Company Research
+                </MenuItem>
+                <MenuItem icon={<FiDatabase />} onClick={onSourceOpen} fontSize="sm">
+                  View Data Sources
+                </MenuItem>
+              </MenuList>
+            </Menu>
+
+            <AddToListDrawer
+              isOpen={isAddToListOpen}
+              onClose={onAddToListClose}
+              entityType="organization"
+              entityUUID={data?.uuid || ""}
+              onAdded={async () => {
+                revalidator.revalidate();
+              }}
+            />
+            <SourceDataFlyout
+              isOpen={isSourceOpen}
+              onClose={onSourceClose}
+              data={data}
+              entityType="organization"
+              externalSourcesRequestPath={
+                data?.uuid
+                  ? `/api/rest/organization/${encodeURIComponent(data.uuid)}/external-organizations`
+                  : null
+              }
+            />
+            <CompanyResearchRequestDrawer
+              isOpen={isCompanyResearchOpen}
+              onClose={onCompanyResearchClose}
+              fetcher={companyResearchFetcher}
+              onSuccess={onCompanyResearchClose}
+              initialValues={companyResearchInitialValues}
             />
           </Flex>
         </Box>

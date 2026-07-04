@@ -1,8 +1,9 @@
 const express = require("express");
 const session = require("express-session");
 const fs = require("node:fs");
+const path = require("node:path");
 const Logger = require("@20-20-Foresight/base/log");
-const { buildAuthorizationUrl, handleCallback } = require("./auth/microsoft");
+const { buildAuthorizationUrl, handleCallback, refreshTokenSet } = require("./auth/microsoft");
 const {
   DEFAULT_RETURN_TO_PATH,
   buildSigninPath,
@@ -10,6 +11,8 @@ const {
 } = require("./auth/return-to");
 const { getSessionStore } = require("./session/store");
 const DEFAULT_FAVICON_PATH = "/assets/2020-ets-horiz-logo-rgb-color-lg.png";
+const pendingSessionRefreshes = new Map();
+const LOCAL_BACKEND_HOST_CANDIDATES = ["localhost", "127.0.0.1", "[::1]"];
 
 /**
  * Returns whether the proxied request method can include a body.
@@ -41,6 +44,9 @@ function buildBackendProxyRequestInit(req) {
   if (req.accessToken) {
     headers.set("authorization", `Bearer ${req.accessToken}`);
   }
+  if (req.session?.ghost?.effectiveUserId) {
+    headers.set("x-2020rm-ghost-user-id", req.session.ghost.effectiveUserId);
+  }
 
   /** @type {RequestInit} */
   const init = {
@@ -55,6 +61,66 @@ function buildBackendProxyRequestInit(req) {
   }
 
   return init;
+}
+
+/**
+ * Returns whether the configured backend base URL points at a local host.
+ * @param {string} backendBaseUrl
+ * @returns {boolean}
+ */
+function isLocalBackendBaseUrl(backendBaseUrl) {
+  try {
+    const url = new URL(backendBaseUrl);
+    return ["localhost", "127.0.0.1", "::1", "[::1]"].includes(url.hostname);
+  } catch (_error) {
+    return false;
+  }
+}
+
+/**
+ * Builds one list of backend URL candidates, preserving the original first.
+ * @param {string} requestPath
+ * @param {string} backendBaseUrl
+ * @returns {URL[]}
+ */
+function buildBackendTargetCandidates(requestPath, backendBaseUrl) {
+  const primary = new URL(requestPath, backendBaseUrl);
+  if (!isLocalBackendBaseUrl(backendBaseUrl)) {
+    return [primary];
+  }
+
+  const candidates = [primary];
+  for (const host of LOCAL_BACKEND_HOST_CANDIDATES) {
+    const next = new URL(primary.toString());
+    next.hostname = host === "[::1]" ? "::1" : host;
+    if (!candidates.some((candidate) => candidate.toString() === next.toString())) {
+      candidates.push(next);
+    }
+  }
+
+  return candidates;
+}
+
+/**
+ * Fetches one backend endpoint and retries across local host candidates when needed.
+ * @param {string} requestPath
+ * @param {string} backendBaseUrl
+ * @param {RequestInit} requestInit
+ * @returns {Promise<Response>}
+ */
+async function fetchBackendWithFallback(requestPath, backendBaseUrl, requestInit) {
+  const candidates = buildBackendTargetCandidates(requestPath, backendBaseUrl);
+  let lastError = null;
+
+  for (const target of candidates) {
+    try {
+      return await fetch(target, requestInit);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("backend_fetch_failed");
 }
 
 /**
@@ -129,6 +195,229 @@ function filterAdminDataFixtureList(fixture, query = {}) {
 }
 
 /**
+ * Clears all authentication state from one session object.
+ * @param {import("express-session").Session|null|undefined} sessionData
+ */
+function clearSessionAuthentication(sessionData) {
+  if (!sessionData || typeof sessionData !== "object") {
+    return;
+  }
+
+  delete sessionData.user;
+  delete sessionData.tokens;
+  delete sessionData.msAuth;
+  delete sessionData.ghost;
+}
+
+/**
+ * Returns one numeric token expiry (seconds since epoch) when available.
+ * @param {unknown} value
+ * @returns {number|null}
+ */
+function parseExpiresAt(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Returns whether the current access token is expired or about to expire.
+ * @param {{accessToken?: string|null, expiresAt?: number|string|null}|null|undefined} tokens
+ * @param {number} [nowSeconds]
+ * @param {number} [skewSeconds]
+ * @returns {boolean}
+ */
+function isAccessTokenExpired(tokens, nowSeconds = Math.floor(Date.now() / 1000), skewSeconds = 60) {
+  if (!tokens || !tokens.accessToken) {
+    return true;
+  }
+
+  const expiresAt = parseExpiresAt(tokens.expiresAt);
+  if (expiresAt == null) {
+    return false;
+  }
+
+  return expiresAt <= nowSeconds + skewSeconds;
+}
+
+/**
+ * Refreshes one expired session token set while coalescing concurrent refreshes
+ * for the same browser session.
+ * @param {{
+ *   sessionKey: string,
+ *   tokens: {refreshToken: string, expiresAt?: number|string|null, scope?: string|null},
+ *   userEmail: string,
+ *   config: AppConfig,
+ *   log: { info: Function },
+ *   refreshTokenSetImpl: typeof refreshTokenSet
+ * }} options
+ * @returns {Promise<{accessToken: string, refreshToken: string|null, expiresAt: number|string|null, scope: string}>}
+ */
+async function refreshExpiredSessionTokens(options) {
+  const {
+    sessionKey,
+    tokens,
+    userEmail,
+    config,
+    log,
+    refreshTokenSetImpl
+  } = options;
+
+  const existingRefresh = pendingSessionRefreshes.get(sessionKey);
+  if (existingRefresh) {
+    return existingRefresh;
+  }
+
+  const refreshPromise = (async () => {
+    const tokenSet = await refreshTokenSetImpl(
+      {
+        tenantId: config.msTenantId,
+        clientId: config.msClientId,
+        clientSecret: config.msClientSecret,
+        redirectUri: `${config.baseUrl}${config.redirectPath}`,
+        apiScope: config.msApiScope
+      },
+      tokens.refreshToken
+    );
+
+    const accessToken = tokenSet.access_token || null;
+    if (!accessToken) {
+      throw new Error("token_refresh_missing_access_token");
+    }
+
+    const nextTokens = {
+      accessToken,
+      refreshToken: tokenSet.refresh_token ?? tokens.refreshToken ?? null,
+      expiresAt: tokenSet.expires_at ?? tokens.expiresAt ?? null,
+      scope: tokenSet.scope ?? tokens.scope ?? ""
+    };
+
+    log.info("session access token refreshed", {
+      userEmail,
+      expiresAt: nextTokens.expiresAt ?? null
+    });
+
+    return nextTokens;
+  })().finally(() => {
+    if (pendingSessionRefreshes.get(sessionKey) === refreshPromise) {
+      pendingSessionRefreshes.delete(sessionKey);
+    }
+  });
+
+  pendingSessionRefreshes.set(sessionKey, refreshPromise);
+  return refreshPromise;
+}
+
+/**
+ * Ensures the request carries one valid authenticated session, refreshing the
+ * access token when it is expired and a refresh token is available.
+ * @param {import("express").Request} req
+ * @param {{
+ *   config: AppConfig,
+ *   log: { info: Function, warn: Function },
+ *   refreshTokenSetImpl?: typeof refreshTokenSet,
+ *   nowSeconds?: number
+ * }} options
+ * @returns {Promise<{authenticated: boolean, refreshed: boolean, reason?: string}>}
+ */
+async function authenticateRequestSession(req, options) {
+  const {
+    config,
+    log,
+    refreshTokenSetImpl = refreshTokenSet,
+    nowSeconds = Math.floor(Date.now() / 1000)
+  } = options;
+
+  if (!config.authEnabled) {
+    req.user = config.mockUser;
+    req.accessToken = null;
+    return { authenticated: true, refreshed: false };
+  }
+
+  const sessionData = req.session || {};
+  const user = sessionData.user || null;
+  const tokens = sessionData.tokens || null;
+  if (!user || !tokens || (!tokens.accessToken && !tokens.refreshToken)) {
+    log.warn("missing session user/tokens", {
+      hasSession: Boolean(req.session),
+      hasUser: Boolean(user),
+      hasTokens: Boolean(tokens),
+      hasAccessToken: Boolean(tokens && tokens.accessToken),
+      hasRefreshToken: Boolean(tokens && tokens.refreshToken)
+    });
+    return { authenticated: false, refreshed: false, reason: "missing_session" };
+  }
+
+  let refreshed = false;
+  if (isAccessTokenExpired(tokens, nowSeconds)) {
+    if (!tokens.refreshToken) {
+      log.warn("session access token expired without refresh token", {
+        userEmail: user && user.email ? user.email : "unknown",
+        expiresAt: tokens.expiresAt ?? null
+      });
+      clearSessionAuthentication(req.session);
+      return { authenticated: false, refreshed: false, reason: "expired_without_refresh_token" };
+    }
+
+    try {
+      const sessionKey =
+        typeof req.sessionID === "string" && req.sessionID
+          ? req.sessionID
+          : user && user.email
+            ? user.email
+            : tokens.refreshToken;
+      req.session.tokens = await refreshExpiredSessionTokens({
+        sessionKey,
+        tokens,
+        userEmail: user && user.email ? user.email : "unknown",
+        config,
+        log,
+        refreshTokenSetImpl
+      });
+      refreshed = true;
+    } catch (error) {
+      log.warn("session token refresh failed", {
+        userEmail: user && user.email ? user.email : "unknown",
+        message:
+          error instanceof Error
+            ? error.message === "token_refresh_missing_access_token"
+              ? "token refresh returned no access token"
+              : error.message
+            : "token_refresh_failed"
+      });
+      clearSessionAuthentication(req.session);
+      return {
+        authenticated: false,
+        refreshed: false,
+        reason:
+          error instanceof Error && error.message === "token_refresh_missing_access_token"
+            ? "refresh_missing_access_token"
+            : "refresh_failed"
+      };
+    }
+  }
+
+  const authenticatedSession = req.session || sessionData;
+  if (
+    !authenticatedSession.user ||
+    !authenticatedSession.tokens ||
+    !authenticatedSession.tokens.accessToken
+  ) {
+    return { authenticated: false, refreshed, reason: "missing_authenticated_session" };
+  }
+
+  req.user = authenticatedSession.user;
+  req.accessToken = authenticatedSession.tokens.accessToken;
+  log.info("session authenticated", {
+    userEmail:
+      authenticatedSession.user && authenticatedSession.user.email
+        ? authenticatedSession.user.email
+        : "unknown",
+    scope: authenticatedSession.tokens.scope || ""
+  });
+  return { authenticated: true, refreshed };
+}
+
+/**
  * @typedef {import("./config").AppConfig} AppConfig
  */
 
@@ -137,7 +426,8 @@ function filterAdminDataFixtureList(fixture, query = {}) {
  * @param {import("@remix-run/express").RequestHandler} [remixHandler]
  * @param {{
  *   buildAuthorizationUrl?: typeof buildAuthorizationUrl,
- *   handleCallback?: typeof handleCallback
+ *   handleCallback?: typeof handleCallback,
+ *   refreshTokenSet?: typeof refreshTokenSet
  * }} [deps]
  * @returns {import("express").Express}
  */
@@ -150,11 +440,15 @@ function createApp(config, remixHandler, deps = {}) {
       : buildAuthorizationUrl;
   const handleCallbackImpl =
     typeof deps.handleCallback === "function" ? deps.handleCallback : handleCallback;
+  const refreshTokenSetImpl =
+    typeof deps.refreshTokenSet === "function" ? deps.refreshTokenSet : refreshTokenSet;
   const faviconTarget = resolveFaviconTarget();
   const adminDataListFixture = readJsonFixture("ADMIN_DATA_LIST_FIXTURE_PATH");
   const adminDataDetailFixture = readJsonFixture("ADMIN_DATA_DETAIL_FIXTURE_PATH");
   const organizationDetailFixture = readJsonFixture("ORGANIZATION_DETAIL_FIXTURE_PATH");
   const organizationPeopleFixture = readJsonFixture("ORGANIZATION_PEOPLE_FIXTURE_PATH");
+  const organizationExternalSourcesFixture = readJsonFixture("ORGANIZATION_EXTERNAL_SOURCES_FIXTURE_PATH");
+  const personDetailFixture = readJsonFixture("PERSON_DETAIL_FIXTURE_PATH");
 
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
@@ -165,7 +459,7 @@ function createApp(config, remixHandler, deps = {}) {
       secret: config.sessionSecret,
       resave: false,
       saveUninitialized: false,
-      store: getSessionStore(),
+      store: getSessionStore({ filePath: config.sessionStoreFile }),
       cookie: {
         httpOnly: true,
         sameSite: "lax",
@@ -179,32 +473,28 @@ function createApp(config, remixHandler, deps = {}) {
    * In mock mode, sets mock user.
    * @type {import("express").RequestHandler}
    */
-  const requireSessionAuth = (req, res, next) => {
-    if (!config.authEnabled) {
-      req.user = config.mockUser;
-      req.accessToken = null;
-      log.info("mock auth enabled; bypassing token check");
-      return next();
-    }
+  const requireSessionAuth = async (req, res, next) => {
+    try {
+      if (!config.authEnabled) {
+        req.user = config.mockUser;
+        req.accessToken = null;
+        log.info("mock auth enabled; bypassing token check");
+        return next();
+      }
 
-    const sessionData = req.session || {};
-    if (!sessionData.user || !sessionData.tokens || !sessionData.tokens.accessToken) {
-      log.warn("missing session user/tokens", {
-        hasSession: Boolean(req.session),
-        hasUser: Boolean(sessionData.user),
-        hasTokens: Boolean(sessionData.tokens),
-        hasAccessToken: Boolean(sessionData.tokens && sessionData.tokens.accessToken)
+      const authResult = await authenticateRequestSession(req, {
+        config,
+        log,
+        refreshTokenSetImpl
       });
-      return res.status(401).json({ error: "not_authenticated" });
-    }
+      if (!authResult.authenticated) {
+        return res.status(401).json({ error: "not_authenticated" });
+      }
 
-    req.user = sessionData.user;
-    req.accessToken = sessionData.tokens.accessToken;
-    log.info("session authenticated", {
-      userEmail: sessionData.user && sessionData.user.email ? sessionData.user.email : "unknown",
-      scope: sessionData.tokens.scope || ""
-    });
-    return next();
+      return next();
+    } catch (error) {
+      return next(error);
+    }
   };
 
   app.get("/health", (_req, res) => {
@@ -252,7 +542,7 @@ function createApp(config, remixHandler, deps = {}) {
     });
   }
 
-  if (organizationPeopleFixture || organizationDetailFixture) {
+  if (organizationPeopleFixture || organizationDetailFixture || organizationExternalSourcesFixture) {
     app.get("/api/rest/organization/:organizationId/people", (req, res, next) => {
       if (!organizationPeopleFixture) {
         return next();
@@ -290,7 +580,216 @@ function createApp(config, remixHandler, deps = {}) {
 
       return res.json(payload);
     });
+
+    app.get("/api/rest/organization/:organizationId/external-organizations", (req, res, next) => {
+      if (!organizationExternalSourcesFixture) {
+        return next();
+      }
+
+      const requestedId = decodeURIComponent(req.params.organizationId || "");
+      const payload = organizationExternalSourcesFixture && typeof organizationExternalSourcesFixture === "object"
+        ? organizationExternalSourcesFixture[requestedId]
+        : null;
+
+      if (!payload) {
+        return res.status(404).json({
+          message: `Fixture organization external source data not found for ${requestedId}`
+        });
+      }
+
+      return res.json(payload);
+    });
   }
+
+  if (personDetailFixture) {
+    app.get("/api/rest/person/:personId", (req, res, next) => {
+      if (!personDetailFixture) {
+        return next();
+      }
+
+      const requestedId = decodeURIComponent(req.params.personId || "");
+      const payload = personDetailFixture && typeof personDetailFixture === "object"
+        ? personDetailFixture[requestedId]
+        : null;
+
+      if (!payload) {
+        return res.status(404).json({
+          message: `Fixture person data not found for ${requestedId}`
+        });
+      }
+
+      return res.json(payload);
+    });
+  }
+
+  app.post(
+    "/api/rest/organization/:organizationId/segmentation-review/chat",
+    express.json({ limit: "2mb" }),
+    requireSessionAuth,
+    async (req, res) => {
+      const organizationId =
+        typeof req.params?.organizationId === "string"
+          ? req.params.organizationId.trim()
+          : "";
+      if (!organizationId) {
+        return res.status(400).json({
+          error: "invalid_uuid",
+          message: 'Route parameter "organizationId" is required.',
+        });
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), config.chatbotTimeoutMs);
+
+      try {
+        const target = new URL("/api/segmentation-review", config.chatbotBaseUrl);
+        const chatbotResponse = await fetch(target, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-2020rm-chatbot-token": config.chatbotSharedToken,
+            "x-2020rm-auth-disabled": config.authEnabled ? "false" : "true",
+            "x-2020rm-transport-base-url": config.backendBaseUrl,
+            ...(req.accessToken ? { "x-2020rm-access-token": req.accessToken } : {}),
+          },
+          body: JSON.stringify({
+            uuid: organizationId,
+            messages: Array.isArray(req.body?.messages) ? req.body.messages : [],
+          }),
+          signal: controller.signal,
+        });
+
+        const bodyBuffer = Buffer.from(await chatbotResponse.arrayBuffer());
+        res.status(chatbotResponse.status);
+        chatbotResponse.headers.forEach((value, key) => {
+          if (["content-encoding", "transfer-encoding"].includes(key.toLowerCase())) {
+            return;
+          }
+          res.setHeader(key, value);
+        });
+
+        return res.send(bodyBuffer);
+      } catch (error) {
+        const isAbortError =
+          error instanceof Error &&
+          (error.name === "AbortError" || /aborted/i.test(error.message));
+        const isUnavailableError =
+          error instanceof Error &&
+          (/fetch failed/i.test(error.message) ||
+            /econnrefused/i.test(error.message) ||
+            /connect/i.test(error.message));
+
+        log.error("chatbot proxy error", {
+          organizationId,
+          userEmail: req.user?.email || "unknown",
+          message: error instanceof Error ? error.message : "chatbot_proxy_error",
+        });
+
+        return res.status(isAbortError ? 504 : 502).json({
+          error: isAbortError ? "chatbot_timeout" : "chatbot_proxy_error",
+          message: isAbortError
+            ? "Chatbot request timed out."
+            : isUnavailableError
+              ? "Segmentation Review AI is not available right now."
+            : error instanceof Error
+              ? error.message
+              : "Chatbot request failed.",
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+  );
+
+  app.post(
+    "/api/rest/organization/:organizationId/segmentation-review/actions",
+    express.json({ limit: "2mb" }),
+    requireSessionAuth,
+    async (req, res) => {
+      const organizationId =
+        typeof req.params?.organizationId === "string"
+          ? req.params.organizationId.trim()
+          : "";
+      if (!organizationId) {
+        return res.status(400).json({
+          error: "invalid_uuid",
+          message: 'Route parameter "organizationId" is required.',
+        });
+      }
+
+      const action =
+        req.body && typeof req.body === "object" && req.body.action && typeof req.body.action === "object"
+          ? req.body.action
+          : null;
+      if (!action || typeof action.type !== "string" || !action.type.trim()) {
+        return res.status(400).json({
+          error: "invalid_action",
+          message: 'Body field "action.type" is required.',
+        });
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), config.chatbotTimeoutMs);
+
+      try {
+        const target = new URL("/api/segmentation-review/actions", config.chatbotBaseUrl);
+        const chatbotResponse = await fetch(target, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-2020rm-chatbot-token": config.chatbotSharedToken,
+            "x-2020rm-auth-disabled": config.authEnabled ? "false" : "true",
+            "x-2020rm-transport-base-url": config.backendBaseUrl,
+            ...(req.accessToken ? { "x-2020rm-access-token": req.accessToken } : {}),
+          },
+          body: JSON.stringify({
+            uuid: organizationId,
+            action,
+          }),
+          signal: controller.signal,
+        });
+
+        const bodyBuffer = Buffer.from(await chatbotResponse.arrayBuffer());
+        res.status(chatbotResponse.status);
+        chatbotResponse.headers.forEach((value, key) => {
+          if (["content-encoding", "transfer-encoding"].includes(key.toLowerCase())) {
+            return;
+          }
+          res.setHeader(key, value);
+        });
+
+        return res.send(bodyBuffer);
+      } catch (error) {
+        const isAbortError =
+          error instanceof Error &&
+          (error.name === "AbortError" || /aborted/i.test(error.message));
+        const isUnavailableError =
+          error instanceof Error &&
+          (/fetch failed/i.test(error.message) ||
+            /econnrefused/i.test(error.message) ||
+            /connect/i.test(error.message));
+
+        log.error("chatbot action proxy error", {
+          organizationId,
+          userEmail: req.user?.email || "unknown",
+          message: error instanceof Error ? error.message : "chatbot_action_proxy_error",
+        });
+
+        return res.status(isAbortError ? 504 : 502).json({
+          error: isAbortError ? "chatbot_timeout" : "chatbot_proxy_error",
+          message: isAbortError
+            ? "Chatbot action request timed out."
+            : isUnavailableError
+              ? "Segmentation Review AI is not available right now."
+              : error instanceof Error
+                ? error.message
+                : "Chatbot action request failed.",
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+  );
 
   app.get("/auth/login", async (req, res, next) => {
     try {
@@ -383,12 +882,95 @@ function createApp(config, remixHandler, deps = {}) {
     });
   });
 
+  app.use("/build", express.static(path.join(config.publicDir, "build"), { immutable: true, maxAge: "1y" }));
+  app.use(express.static(config.publicDir, { maxAge: "1h" }));
+
+  app.post("/api/ghost/start", requireSessionAuth, express.json({ limit: "64kb" }), async (req, res) => {
+    try {
+      const effectiveUserId =
+        typeof req.body?.effectiveUserId === "string" ? req.body.effectiveUserId.trim() : "";
+      const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+
+      if (!effectiveUserId) {
+        return res.status(400).json({
+          error: "invalid_ghost_start",
+          message: "Effective user id is required."
+        });
+      }
+
+      const backendRes = await fetchBackendWithFallback("/api/admin/access/ghost/start", config.backendBaseUrl, {
+        method: "POST",
+        headers: {
+          ...(req.accessToken ? { authorization: `Bearer ${req.accessToken}` } : {}),
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          effectiveUserId,
+          reason: reason || null
+        })
+      });
+      const payload = await backendRes.json().catch(() => ({}));
+
+      if (!backendRes.ok) {
+        return res.status(backendRes.status).json(payload);
+      }
+
+      req.session.ghost = payload.ghost || null;
+      return res.status(201).json(payload);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "ghost_start_failed";
+      log.error("ghost start error", {
+        userEmail: req.user?.email || "unknown",
+        message
+      });
+      return res.status(502).json({ error: "proxy_error", message });
+    }
+  });
+
+  app.post("/api/ghost/stop", requireSessionAuth, express.json({ limit: "16kb" }), async (req, res) => {
+    try {
+      if (!req.session?.ghost?.active) {
+        delete req.session.ghost;
+        return res.json({
+          ghost: {
+            active: false
+          }
+        });
+      }
+
+      const backendRes = await fetchBackendWithFallback("/api/admin/access/ghost/stop", config.backendBaseUrl, {
+        method: "POST",
+        headers: {
+          ...(req.accessToken ? { authorization: `Bearer ${req.accessToken}` } : {}),
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({})
+      });
+      const payload = await backendRes.json().catch(() => ({}));
+
+      delete req.session.ghost;
+
+      if (!backendRes.ok) {
+        return res.status(backendRes.status).json(payload);
+      }
+
+      return res.json(payload);
+    } catch (error) {
+      delete req.session.ghost;
+      const message = error instanceof Error ? error.message : "ghost_stop_failed";
+      log.error("ghost stop error", {
+        userEmail: req.user?.email || "unknown",
+        message
+      });
+      return res.status(502).json({ error: "proxy_error", message });
+    }
+  });
+
   app.use("/api", requireSessionAuth, async (req, res) => {
     try {
-      // Preserve the full API path when proxying to backend.
+      // Preserve the full API path when proxying to 2020RM-backend.
       const backendPath = req.originalUrl || "/";
-      const target = new URL(backendPath, config.backendBaseUrl);
-      const backendRes = await fetch(target, buildBackendProxyRequestInit(req));
+      const backendRes = await fetchBackendWithFallback(backendPath, config.backendBaseUrl, buildBackendProxyRequestInit(req));
 
       if (backendRes.status >= 500) {
         log.error("api proxy upstream server error", {
@@ -427,7 +1009,7 @@ function createApp(config, remixHandler, deps = {}) {
   });
 
   // Page auth guard (Remix-rendered routes).
-  app.use((req, res, next) => {
+  app.use(async (req, res, next) => {
     const path = req.path.toLowerCase();
     const allowList = [
       "/signin",
@@ -437,6 +1019,7 @@ function createApp(config, remixHandler, deps = {}) {
       "/auth/logout",
       "/health",
       "/assets",
+      "/build",
       "/favicon.ico"
     ];
     if (allowList.some((allowed) => path.startsWith(allowed))) return next();
@@ -446,14 +1029,16 @@ function createApp(config, remixHandler, deps = {}) {
       req.accessToken = null;
       return next();
     }
-    const sessionData = req.session || {};
-    if (!sessionData.user || !sessionData.tokens || !sessionData.tokens.accessToken) {
+    const authResult = await authenticateRequestSession(req, {
+      config,
+      log,
+      refreshTokenSetImpl
+    });
+    if (!authResult.authenticated) {
       return res.redirect(buildSigninPath(req.originalUrl || req.url || DEFAULT_RETURN_TO_PATH));
     }
     return next();
   });
-
-  app.use(express.static(config.publicDir));
 
   if (remixHandler) {
     app.all("*", remixHandler);
@@ -473,8 +1058,11 @@ function createApp(config, remixHandler, deps = {}) {
 }
 
 module.exports = {
+  authenticateRequestSession,
   buildBackendProxyRequestInit,
+  clearSessionAuthentication,
   createApp,
   filterAdminDataFixtureList,
+  isAccessTokenExpired,
   resolveFaviconTarget
 };

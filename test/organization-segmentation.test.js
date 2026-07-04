@@ -5,7 +5,7 @@ const {
   buildOrganizationSegmentationViewModel
 } = require("../app/models/organization-segmentation");
 
-test("buildOrganizationSegmentationViewModel chooses the most common sector and filters empty chips", () => {
+test("buildOrganizationSegmentationViewModel filters empty Industry and Focus chips", () => {
   const result = buildOrganizationSegmentationViewModel({
     metadata: {
       segmentation: {
@@ -48,11 +48,6 @@ test("buildOrganizationSegmentationViewModel chooses the most common sector and 
     }
   });
 
-  assert.deepEqual(result.sectors, [
-    "Real Estate",
-    "Financial Services"
-  ]);
-  assert.equal(result.primarySector, "Real Estate");
   assert.deepEqual(result.industries, [
     "real estate operating companies",
     "investment services"
@@ -61,8 +56,45 @@ test("buildOrganizationSegmentationViewModel chooses the most common sector and 
     "development",
     "property management"
   ]);
-  assert.equal(result.explanations.length, 3);
+  assert.equal(result.explanations.length, 2);
   assert.match(result.explanations[0].reasonHtml, /<mark>/);
+});
+
+test("buildOrganizationSegmentationViewModel reads score-map segmentation", () => {
+  const result = buildOrganizationSegmentationViewModel({
+    metadata: {
+      segmentation: {
+        industry: {
+          banking: 3,
+          healthcare: 5
+        },
+        focus: {
+          "family-office": 2.5
+        },
+        reasons: [
+          {
+            source: "description",
+            industry: {
+              healthcare: 1
+            },
+            focus: {
+              "family-office": 2.5
+            },
+            match: "healthcare",
+            phrase: "healthcare family office"
+          }
+        ]
+      }
+    }
+  });
+
+  assert.deepEqual(result.industries, ["healthcare", "banking"]);
+  assert.deepEqual(result.focuses, ["family-office"]);
+  assert.equal(result.explanations.length, 1);
+  assert.equal(
+    result.explanations[0].value,
+    "Industry: healthcare (+1)\nFocus: family-office (+2.5)"
+  );
 });
 
 test("buildOrganizationSegmentationViewModel uses nested projection reasons when available", () => {
@@ -72,14 +104,16 @@ test("buildOrganizationSegmentationViewModel uses nested projection reasons when
         {
           name: "PE RE",
           score: 8,
+          sourceDocumentId: "segmentation.description-rules",
           sourceDocumentName: "Description Rules",
           reasons: [
             {
               reason: {
-                source: "description",
+                source: "biscred.description",
                 match: "reit",
                 phrase: "Public REIT platform with private real estate investments"
               },
+              crosswalkDocumentId: "segmentation.description-rules",
               crosswalkDocumentName: "Description Rules",
               rule: "row-reit-1"
             }
@@ -93,9 +127,10 @@ test("buildOrganizationSegmentationViewModel uses nested projection reasons when
           reasons: [
             {
               reason: {
-                source: "description",
+                source: "biscred.description",
                 description: "Derived from existing data, awaiting fresh segmentation"
               },
+              crosswalkDocumentId: "segmentation.description-rules",
               crosswalkDocumentName: "Description Rules",
               rule: "row-reit-1"
             }
@@ -109,10 +144,12 @@ test("buildOrganizationSegmentationViewModel uses nested projection reasons when
   assert.deepEqual(result.focuses, ["REIT"]);
   assert.equal(result.explanations.length, 2);
   assert.deepEqual(result.explanations[0], {
-    source: "description",
+    source: "biscred.description",
+    sourceField: "biscred.description",
     dimension: "Industry",
     value: "PE RE",
     score: 8,
+    crosswalkDocumentId: "segmentation.description-rules",
     crosswalkDocumentName: "Description Rules",
     rule: "row-reit-1",
     reasonHtml:
@@ -135,21 +172,18 @@ test("buildOrganizationSegmentationViewModel falls back to top-level segmentatio
   });
 
   assert.deepEqual(result, {
-    primarySector: "Financial Services",
-    sectors: [
-      "Financial Services"
-    ],
     industries: [
       "banking services"
     ],
     focuses: [
       "retail banking"
     ],
-    explanations: []
+    explanations: [],
+    state: "ready"
   });
 });
 
-test("buildOrganizationSegmentationViewModel returns null when segmentation has no usable values", () => {
+test("buildOrganizationSegmentationViewModel reports empty stored segmentation distinctly", () => {
   const result = buildOrganizationSegmentationViewModel({
     metadata: {
       segmentation: {
@@ -171,7 +205,12 @@ test("buildOrganizationSegmentationViewModel returns null when segmentation has 
     }
   });
 
-  assert.equal(result, null);
+  assert.deepEqual(result, {
+    industries: [],
+    focuses: [],
+    explanations: [],
+    state: "empty"
+  });
 });
 
 test("buildOrganizationSegmentationViewModel escapes explanation fallback text", () => {
@@ -186,7 +225,7 @@ test("buildOrganizationSegmentationViewModel escapes explanation fallback text",
         reasons: [
           {
             source: "custom",
-            sector: "Technology",
+            industry: "software",
             reason: "Used <unsafe> literal"
           }
         ]

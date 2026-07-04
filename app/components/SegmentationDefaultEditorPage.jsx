@@ -4,6 +4,14 @@ import {
   AlertIcon,
   Box,
   Button,
+  Checkbox,
+  Drawer,
+  DrawerBody,
+  DrawerCloseButton,
+  DrawerContent,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerOverlay,
   Flex,
   FormControl,
   FormLabel,
@@ -11,17 +19,7 @@ import {
   Heading,
   IconButton,
   Input,
-  Modal,
-  ModalBody,
-  ModalCloseButton,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
   Select,
-  Tag,
-  TagCloseButton,
-  TagLabel,
   Table,
   Tbody,
   Td,
@@ -34,14 +32,26 @@ import {
   useDisclosure,
   VStack
 } from "@chakra-ui/react";
-import { EditIcon, SearchIcon } from "@chakra-ui/icons";
-import { useLocation } from "@remix-run/react";
-import { useEffect, useState } from "react";
+import { EditIcon } from "@chakra-ui/icons";
+import { useFetcher, useLocation } from "@remix-run/react";
+import { useEffect, useRef, useState } from "react";
 import { MdDescription } from "react-icons/md";
+import { appendFocusOption, buildCreatedFocusRow, NEW_FOCUS_OPTION_VALUE } from "../models/focus-shortcut.mjs";
+import {
+  applyBulkSelectionUpdate,
+  buildTaxonomyOptions,
+  readDisplayValue,
+  readRowTaxonomyWarnings,
+  resolveFriendlyTaxonomyLabel,
+  rowMatchesFilters
+} from "../models/segmentation-default-page.mjs";
 import { buildSegmentationDefaultSubmitFormData } from "../models/segmentation-default-submit.mjs";
 import { InlineSaveStatus } from "./InlineSaveStatus";
+import { RichTextField } from "./ui/molecules/RichTextField";
+import { RegexBuilder, RegexTokenDisplay, parseRegexToTokens } from "./ui/molecules/RegexBuilder";
 import { useQueuedDocumentSave } from "../hooks/useQueuedDocumentSave";
 import { useRowSaveHighlight } from "../hooks/useRowSaveHighlight";
+import { ColumnFilterHeader } from "./ui/molecules/ColumnFilterHeader";
 
 /**
  * Returns whether a value is a plain object.
@@ -101,31 +111,6 @@ function buildEmptyTargetRow() {
     name: "",
     score: "3"
   };
-}
-
-/**
- * Builds a compact display string for one target list.
- * @param {Array<{name?: string, score?: string|number}>|null|undefined} targets
- * @param {string} fallback
- * @returns {string}
- */
-function summarizeTargets(targets, fallback = "") {
-  const entries = Array.isArray(targets) ? targets : [];
-  if (!entries.length) {
-    return fallback;
-  }
-
-  return entries
-    .map((entry) => {
-      const name = readTrimmedString(entry?.name);
-      const score = entry?.score == null ? "" : String(entry.score).trim();
-      if (!name) {
-        return "";
-      }
-      return score ? `${name} (${score})` : name;
-    })
-    .filter(Boolean)
-    .join(", ");
 }
 
 /**
@@ -222,6 +207,28 @@ function buildEmptySegmentationRow(categoryDepth, branchFieldNames = []) {
 }
 
 /**
+ * Builds one empty bulk-change draft.
+ * @returns {{industry: string, focus: string}}
+ */
+function buildEmptyBulkChangeDraft() {
+  return {
+    industry: "",
+    focus: ""
+  };
+}
+
+/**
+ * Builds one empty draft for inline Focus creation.
+ * @returns {{label: string, description: string}}
+ */
+function buildEmptyNewFocusDraft() {
+  return {
+    label: "",
+    description: ""
+  };
+}
+
+/**
  * Builds one normalized column key for category filters.
  * @param {number} index
  * @returns {string}
@@ -231,190 +238,77 @@ function buildCategoryFilterKey(index) {
 }
 
 /**
- * Builds category options for segmentation rules from the current category docs plus current rows.
- * @param {{industryOptions?: string[], focusOptions?: string[]}|null|undefined} categoryCatalog
- * @param {Array<{sector: string, industry: string, focus: string, industryTargets?: Array<{name?: string, score?: string|number}>, focusTargets?: Array<{name?: string, score?: string|number}>}>} rows
- * @returns {{
- *   industryOptions: string[],
- *   focusOptions: string[]
- * }}
- */
-function buildTaxonomyOptions(categoryCatalog, rows) {
-  const industrySet = new Set(Array.isArray(categoryCatalog?.industryOptions) ? categoryCatalog.industryOptions : []);
-  const focusSet = new Set(Array.isArray(categoryCatalog?.focusOptions) ? categoryCatalog.focusOptions : []);
-
-  for (const row of Array.isArray(rows) ? rows : []) {
-    const industry = readTrimmedString(row.industry);
-    const focus = readTrimmedString(row.focus);
-    const industryTargets = cloneTargetRows(row.industryTargets);
-    const focusTargets = cloneTargetRows(row.focusTargets);
-
-    if (industry) {
-      industrySet.add(industry);
-    }
-    industryTargets.forEach((target) => {
-      if (target.name) {
-        industrySet.add(target.name);
-      }
-    });
-
-    if (focus) {
-      focusSet.add(focus);
-    }
-    focusTargets.forEach((target) => {
-      if (target.name) {
-        focusSet.add(target.name);
-      }
-    });
-  }
-
-  return {
-    industryOptions: Array.from(industrySet).sort((left, right) => left.localeCompare(right)),
-    focusOptions: Array.from(focusSet).sort((left, right) => left.localeCompare(right))
-  };
-}
-
-/**
- * Returns whether one row matches the active filter set.
+ * Renders the inline Focus-creation editor used by the row and bulk-change flyouts.
  * @param {{
- *   categories: string[],
- *   description?: string,
- *   sector: string,
- *   industry: string,
- *   focus: string,
- *   industryTargets?: Array<{name?: string, score?: string|number}>,
- *   focusTargets?: Array<{name?: string, score?: string|number}>
- * }} row
- * @param {Record<string, string>} filters
- * @returns {boolean}
- */
-function rowMatchesFilters(row, filters) {
-  for (const [key, value] of Object.entries(filters)) {
-    const normalizedFilter = readTrimmedString(value);
-    if (!normalizedFilter) {
-      continue;
-    }
-
-    if (key.startsWith("category-")) {
-      const index = Number(key.slice("category-".length));
-      const cellValue = readTrimmedString(row.categories?.[index]).toLowerCase();
-      if (!cellValue.includes(normalizedFilter.toLowerCase())) {
-        return false;
-      }
-      continue;
-    }
-
-    if (key === "description") {
-      const cellValue = readTrimmedString(row.description).toLowerCase();
-      if (!cellValue.includes(normalizedFilter.toLowerCase())) {
-        return false;
-      }
-      continue;
-    }
-
-    const rowValue =
-      key === "industry"
-        ? summarizeTargets(row.industryTargets, readTrimmedString(row[key])).toLowerCase()
-        : key === "focus"
-          ? summarizeTargets(row.focusTargets, readTrimmedString(row[key])).toLowerCase()
-          : readTrimmedString(row[key]).toLowerCase();
-    if (rowValue !== normalizedFilter.toLowerCase()) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-/**
- * Renders one compact search toggle and control.
- * @param {{
- *   columnKey: string,
- *   label: string,
- *   isOpen: boolean,
- *   activeValue: string,
- *   draftValue?: string,
- *   onToggle: () => void,
- *   onDraftChange: (value: string) => void,
- *   onApply: (value?: string) => void,
- *   onClear: () => void,
- *   selectOptions?: string[]|null,
- *   disabled?: boolean
+ *   isVisible?: boolean,
+ *   draft?: {label?: string, description?: string},
+ *   errorMessage?: string,
+ *   isSaving?: boolean,
+ *   onDraftChange?: (field: "label"|"description", value: string) => void,
+ *   onCancel?: () => void,
+ *   onSave?: () => void
  * }} props
- * @returns {JSX.Element}
+ * @returns {JSX.Element|null}
  */
-function SearchableHeader({
-  columnKey,
-  label,
-  isOpen,
-  activeValue,
-  draftValue = "",
-  onToggle,
+function NewFocusEditorPanel({
+  isVisible = false,
+  draft = buildEmptyNewFocusDraft(),
+  errorMessage = "",
+  isSaving = false,
   onDraftChange,
-  onApply,
-  onClear,
-  selectOptions = null,
-  disabled = false
+  onCancel,
+  onSave
 }) {
+  if (!isVisible) {
+    return null;
+  }
+
   return (
-    <VStack align="stretch" spacing={2}>
-      <HStack spacing={2} align="center">
-        <Text>{label}</Text>
-        {disabled || activeValue ? null : (
-          <IconButton
-            aria-label={`Search ${columnKey}`}
-            icon={<SearchIcon />}
-            size="xs"
-            type="button"
-            variant={isOpen ? "solid" : "ghost"}
-            colorScheme={isOpen ? "blue" : "gray"}
-            onClick={onToggle}
-          />
-        )}
-      </HStack>
-      {activeValue ? (
-        <Tag size="sm" colorScheme="blue" alignSelf="flex-start" maxW="100%">
-          <TagLabel overflow="hidden" textOverflow="ellipsis">
-            {activeValue}
-          </TagLabel>
-          <TagCloseButton onClick={onClear} />
-        </Tag>
-      ) : isOpen ? (
-        Array.isArray(selectOptions) ? (
-          <Select
-            size="xs"
-            value={draftValue}
-            onChange={(event) => {
-              onDraftChange(event.target.value);
-              onApply(event.target.value);
-            }}
-            bg="white"
-          >
-            <option value="">All</option>
-            {selectOptions.map((option) => (
-              <option key={`${columnKey}-${option}`} value={option}>
-                {option}
-              </option>
-            ))}
-          </Select>
-        ) : (
+    <Box borderWidth="1px" borderColor="blue.200" borderRadius="lg" bg="blue.50" px={4} py={4}>
+      <VStack align="stretch" spacing={4}>
+        <Box>
+          <Text fontWeight="semibold" color="blue.900">
+            New Focus
+          </Text>
+          <Text fontSize="sm" color="blue.800">
+            Add the Focus here and save it back to the Focus page without leaving this editor.
+          </Text>
+        </Box>
+
+        {errorMessage ? (
+          <Alert status="error" borderRadius="md">
+            <AlertIcon />
+            <AlertDescription>{errorMessage}</AlertDescription>
+          </Alert>
+        ) : null}
+
+        <FormControl isRequired>
+          <FormLabel>Focus Name</FormLabel>
           <Input
-            size="xs"
-            value={draftValue}
-            onChange={(event) => onDraftChange(event.target.value)}
-            onBlur={onApply}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                onApply();
-              }
-            }}
+            value={draft.label || ""}
+            onChange={(event) => onDraftChange?.("label", event.target.value)}
             bg="white"
-            autoFocus
+            placeholder="Enter a new Focus"
           />
-        )
-      ) : null}
-    </VStack>
+        </FormControl>
+
+        <RichTextField
+          label="Description"
+          value={draft.description || ""}
+          onChange={(value) => onDraftChange?.("description", value)}
+          height="220px"
+        />
+
+        <HStack justify="flex-end" spacing={3}>
+          <Button type="button" variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="button" colorScheme="blue" onClick={onSave} isLoading={isSaving} loadingText="Saving Focus">
+            Save Focus
+          </Button>
+        </HStack>
+      </VStack>
+    </Box>
   );
 }
 
@@ -455,6 +349,7 @@ function SearchableHeader({
  */
 export function SegmentationDefaultEditorPage({ data, actionData, isSaving = false }) {
   const location = useLocation();
+  const createFocusFetcher = useFetcher();
   const categoryDepth = data.segmentationDefault.categoryColumns.length;
   const defaultBranchFieldNames = Array.isArray(data.segmentationDefault.categoryFieldNames)
     ? data.segmentationDefault.categoryFieldNames
@@ -471,21 +366,47 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
           }
         : {}
   );
+  const [draftMetadata, setDraftMetadata] = useState(() => (isPlainObject(data.metadata) ? { ...data.metadata } : {}));
+  const [draftDescription, setDraftDescription] = useState(data.description || "");
+  const [draftEditorConfig, setDraftEditorConfig] = useState(() =>
+    isPlainObject(data.editor)
+      ? { ...data.editor }
+      : data.editorType
+        ? {
+            type: data.editorType
+          }
+        : {}
+  );
   const [rows, setRows] = useState(() => cloneSegmentationRows(data.segmentationDefault.rows, categoryDepth));
   const [filters, setFilters] = useState({});
   const [draftFilters, setDraftFilters] = useState({});
   const [openFilterKeys, setOpenFilterKeys] = useState({});
+  const [selectedRowIndexes, setSelectedRowIndexes] = useState([]);
   const [editingRowIndex, setEditingRowIndex] = useState(null);
   const [draftRow, setDraftRow] = useState(() => buildEmptySegmentationRow(categoryDepth, defaultBranchFieldNames));
+  const [focusCatalogOptions, setFocusCatalogOptions] = useState(() =>
+    Array.isArray(data.categoryCatalog?.focusOptions) ? data.categoryCatalog.focusOptions : []
+  );
+  const [bulkChangeDraft, setBulkChangeDraft] = useState(() => buildEmptyBulkChangeDraft());
+  const [newFocusContext, setNewFocusContext] = useState(null);
+  const [newFocusDraft, setNewFocusDraft] = useState(() => buildEmptyNewFocusDraft());
+  const [newFocusErrorMessage, setNewFocusErrorMessage] = useState("");
+  const documentIdRef = useRef(readTrimmedString(data.id));
+  const handledCreateFocusResponseRef = useRef(null);
   const {
-    isOpen: isRowModalOpen,
-    onOpen: openRowModal,
-    onClose: closeRowModal
+    isOpen: isRowDrawerOpen,
+    onOpen: openRowDrawer,
+    onClose: closeRowDrawer
   } = useDisclosure();
   const {
-    isOpen: isMetadataModalOpen,
-    onOpen: openMetadataModal,
-    onClose: closeMetadataModal
+    isOpen: isMetadataDrawerOpen,
+    onOpen: openMetadataDrawerState,
+    onClose: closeMetadataDrawerState
+  } = useDisclosure();
+  const {
+    isOpen: isBulkChangeDrawerOpen,
+    onOpen: openBulkChangeDrawer,
+    onClose: closeBulkChangeDrawer
   } = useDisclosure();
   const {
     saveSummary,
@@ -519,11 +440,30 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
     savedVisible,
     saveErrorMessage: saveError?.message || actionData?.error?.message || null
   });
+  const voidRowBg = "gray.50";
+  const warningRowBg = "orange.50";
 
   useEffect(() => {
+    const nextDocumentId = readTrimmedString(data.id);
+    if (documentIdRef.current === nextDocumentId) {
+      return;
+    }
+
+    documentIdRef.current = nextDocumentId;
     setMetadata(isPlainObject(data.metadata) ? { ...data.metadata } : {});
     setDescription(data.description || "");
     setEditorConfig(
+      isPlainObject(data.editor)
+        ? { ...data.editor }
+        : data.editorType
+          ? {
+            type: data.editorType
+          }
+        : {}
+    );
+    setDraftMetadata(isPlainObject(data.metadata) ? { ...data.metadata } : {});
+    setDraftDescription(data.description || "");
+    setDraftEditorConfig(
       isPlainObject(data.editor)
         ? { ...data.editor }
         : data.editorType
@@ -533,13 +473,97 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
           : {}
     );
     setRows(cloneSegmentationRows(data.segmentationDefault.rows, categoryDepth));
+    setFocusCatalogOptions(Array.isArray(data.categoryCatalog?.focusOptions) ? data.categoryCatalog.focusOptions : []);
     setFilters({});
     setDraftFilters({});
     setOpenFilterKeys({});
-  }, [categoryDepth, data.description, data.editorType, data.id, data.version]);
+    setSelectedRowIndexes([]);
+    setBulkChangeDraft(buildEmptyBulkChangeDraft());
+    setNewFocusContext(null);
+    setNewFocusDraft(buildEmptyNewFocusDraft());
+    setNewFocusErrorMessage("");
+    handledCreateFocusResponseRef.current = null;
+  }, [categoryDepth, data.categoryCatalog?.focusOptions, data.description, data.editorType, data.id]);
 
-  const taxonomyOptions = buildTaxonomyOptions(data.categoryCatalog, rows);
-  const filteredRows = rows.filter((row) => rowMatchesFilters(row, filters));
+  useEffect(() => {
+    if (createFocusFetcher.state !== "idle") {
+      return;
+    }
+
+    const payload = createFocusFetcher.data;
+    if (!payload || payload.intent !== "create-focus" || handledCreateFocusResponseRef.current === payload) {
+      return;
+    }
+
+    handledCreateFocusResponseRef.current = payload;
+    if (!payload.ok) {
+      setNewFocusErrorMessage(payload.error?.message || "Unable to create the new Focus.");
+      return;
+    }
+
+    const createdFocus = buildCreatedFocusRow(payload.createdFocus);
+    if (!createdFocus.label) {
+      return;
+    }
+
+    setFocusCatalogOptions((currentOptions) => appendFocusOption(currentOptions, createdFocus.label));
+    setNewFocusErrorMessage("");
+
+    if (newFocusContext?.surface === "row") {
+      setDraftRow((currentRow) => {
+        if (!currentRow) {
+          return currentRow;
+        }
+
+        const targetIndex = Number.isInteger(newFocusContext.targetIndex) ? newFocusContext.targetIndex : 0;
+        const nextTargets = Array.isArray(currentRow.focusTargets) ? currentRow.focusTargets.slice() : [];
+        while (nextTargets.length <= targetIndex) {
+          nextTargets.push(buildEmptyTargetRow());
+        }
+
+        nextTargets[targetIndex] = {
+          ...nextTargets[targetIndex],
+          name: createdFocus.label
+        };
+
+        return {
+          ...currentRow,
+          focusTargets: nextTargets
+        };
+      });
+    }
+
+    if (newFocusContext?.surface === "bulk") {
+      setBulkChangeDraft((currentValue) => ({
+        ...currentValue,
+        focus: createdFocus.label
+      }));
+    }
+
+    setNewFocusContext(null);
+    setNewFocusDraft(buildEmptyNewFocusDraft());
+  }, [createFocusFetcher.data, createFocusFetcher.state, newFocusContext]);
+
+  const taxonomyOptions = buildTaxonomyOptions(
+    {
+      ...(data.categoryCatalog || {}),
+      focusOptions: focusCatalogOptions
+    },
+    rows
+  );
+  const filteredRows = rows.filter((row) => rowMatchesFilters(row, filters, taxonomyOptions));
+  const selectedRowIndexSet = new Set(selectedRowIndexes);
+  const filteredSourceRowIndexes = filteredRows
+    .map((row) => rows.indexOf(row))
+    .filter((rowIndex) => rowIndex >= 0);
+  const selectedFilteredRowCount = filteredSourceRowIndexes.filter((rowIndex) => selectedRowIndexSet.has(rowIndex)).length;
+  const hasSelectedRows = selectedRowIndexes.length > 0;
+  const allFilteredRowsSelected =
+    filteredSourceRowIndexes.length > 0 &&
+    filteredSourceRowIndexes.every((rowIndex) => selectedRowIndexSet.has(rowIndex));
+  const someFilteredRowsSelected =
+    selectedFilteredRowCount > 0 && selectedFilteredRowCount < filteredSourceRowIndexes.length;
+  const canApplyBulkChange = hasSelectedRows && (readTrimmedString(bulkChangeDraft.industry) || readTrimmedString(bulkChangeDraft.focus));
 
   /**
    * Builds one queued-save payload for the current editor state.
@@ -576,26 +600,32 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
     });
   }
   /**
-   * Opens the row modal for the requested row index.
+   * Opens the row flyout for the requested row index.
    * @param {number|null} rowIndex
    */
   function openRowEditor(rowIndex) {
+    setNewFocusContext(null);
+    setNewFocusDraft(buildEmptyNewFocusDraft());
+    setNewFocusErrorMessage("");
     setEditingRowIndex(rowIndex);
     setDraftRow(
       rowIndex == null
         ? buildEmptySegmentationRow(categoryDepth, defaultBranchFieldNames)
         : cloneSegmentationRows([rows[rowIndex]], categoryDepth)[0] || buildEmptySegmentationRow(categoryDepth, defaultBranchFieldNames)
     );
-    openRowModal();
+    openRowDrawer();
   }
 
   /**
-   * Closes the row modal and resets draft state.
+   * Closes the row flyout and resets draft state.
    */
   function closeRowEditor() {
     setEditingRowIndex(null);
     setDraftRow(buildEmptySegmentationRow(categoryDepth, defaultBranchFieldNames));
-    closeRowModal();
+    setNewFocusContext(null);
+    setNewFocusDraft(buildEmptyNewFocusDraft());
+    setNewFocusErrorMessage("");
+    closeRowDrawer();
   }
 
   /**
@@ -614,6 +644,9 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
         : rows.map((row, index) => (index === editingRowIndex ? normalizedDraftRow : row));
 
     setRows(nextRows);
+    if (editingRowIndex == null) {
+      setSelectedRowIndexes([]);
+    }
     markRowsChanged([editingRowIndex == null ? nextRows.length - 1 : editingRowIndex]);
     closeRowEditor();
     requestSave((summary) =>
@@ -635,6 +668,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
 
     const nextRows = rows.filter((_, index) => index !== editingRowIndex);
     setRows(nextRows);
+    setSelectedRowIndexes([]);
     closeRowEditor();
     requestSave((summary) =>
       buildSaveFormData({
@@ -785,7 +819,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
    * @param {string} value
    */
   function updateEditorConfig(key, value) {
-    setEditorConfig((currentConfig) => ({
+    setDraftEditorConfig((currentConfig) => ({
       ...(isPlainObject(currentConfig) ? currentConfig : {}),
       [key]: value
     }));
@@ -797,31 +831,191 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
    * @param {string} value
    */
   function updateMetadata(key, value) {
-    setMetadata((currentMetadata) => ({
+    setDraftMetadata((currentMetadata) => ({
       ...(isPlainObject(currentMetadata) ? currentMetadata : {}),
       [key]: value
     }));
   }
 
   /**
-   * Persists metadata edits and closes the metadata modal.
+   * Opens the metadata flyout with a fresh draft copy of the saved values.
+   */
+  function openMetadataDrawer() {
+    setDraftMetadata(isPlainObject(metadata) ? { ...metadata } : {});
+    setDraftDescription(description);
+    setDraftEditorConfig(isPlainObject(editorConfig) ? { ...editorConfig } : {});
+    openMetadataDrawerState();
+  }
+
+  /**
+   * Closes the metadata flyout and discards unsaved draft changes.
+   */
+  function closeMetadataDrawer() {
+    setDraftMetadata(isPlainObject(metadata) ? { ...metadata } : {});
+    setDraftDescription(description);
+    setDraftEditorConfig(isPlainObject(editorConfig) ? { ...editorConfig } : {});
+    closeMetadataDrawerState();
+  }
+
+  /**
+   * Persists metadata edits and closes the metadata flyout.
    */
   function saveMetadataChanges() {
+    const nextMetadata = isPlainObject(draftMetadata) ? { ...draftMetadata } : {};
+    const nextDescription = draftDescription;
+    const nextEditorConfig = isPlainObject(draftEditorConfig) ? { ...draftEditorConfig } : {};
+
+    setMetadata(nextMetadata);
+    setDescription(nextDescription);
+    setEditorConfig(nextEditorConfig);
     requestSave((summary) =>
       buildSaveFormData({
-        summary
+        summary,
+        nextDescription,
+        nextMetadata,
+        nextEditorConfig
       })
     );
-    closeMetadataModal();
+    closeMetadataDrawerState();
+  }
+
+  /**
+   * Toggles one row checkbox.
+   * @param {number} rowIndex
+   */
+  function toggleRowSelection(rowIndex) {
+    setSelectedRowIndexes((currentIndexes) =>
+      currentIndexes.includes(rowIndex)
+        ? currentIndexes.filter((value) => value !== rowIndex)
+        : [...currentIndexes, rowIndex].sort((left, right) => left - right)
+    );
+  }
+
+  /**
+   * Toggles all rows visible under the current filters.
+   */
+  function toggleSelectAllFilteredRows() {
+    if (!filteredSourceRowIndexes.length) {
+      return;
+    }
+
+    setSelectedRowIndexes((currentIndexes) => {
+      const nextIndexes = new Set(currentIndexes);
+      const shouldSelectAll = filteredSourceRowIndexes.some((rowIndex) => !nextIndexes.has(rowIndex));
+
+      filteredSourceRowIndexes.forEach((rowIndex) => {
+        if (shouldSelectAll) {
+          nextIndexes.add(rowIndex);
+        } else {
+          nextIndexes.delete(rowIndex);
+        }
+      });
+
+      return Array.from(nextIndexes).sort((left, right) => left - right);
+    });
+  }
+
+  /**
+   * Clears all selected rows.
+   */
+  function clearSelectedRows() {
+    setSelectedRowIndexes([]);
+  }
+
+  /**
+   * Updates one bulk-change field.
+   * @param {"industry"|"focus"} key
+   * @param {string} value
+   */
+  function updateBulkChangeDraft(key, value) {
+    setBulkChangeDraft((currentValue) => ({
+      ...currentValue,
+      [key]: value
+    }));
+  }
+
+  /**
+   * Resets and closes the bulk-change flyout.
+   */
+  function closeBulkChangeEditor() {
+    setBulkChangeDraft(buildEmptyBulkChangeDraft());
+    setNewFocusContext(null);
+    setNewFocusDraft(buildEmptyNewFocusDraft());
+    setNewFocusErrorMessage("");
+    closeBulkChangeDrawer();
+  }
+
+  /**
+   * Applies the current bulk change across the selected rows and queues one save.
+   */
+  function saveBulkChangeChanges() {
+    const result = applyBulkSelectionUpdate(rows, bulkChangeDraft, selectedRowIndexes);
+    if (!result.changedRowCount) {
+      return;
+    }
+
+    setRows(result.rows);
+    markRowsChanged(result.changedRowIndexes);
+    requestSave((summary) =>
+      buildSaveFormData({
+        summary,
+        nextRows: result.rows
+      })
+    );
+    setSelectedRowIndexes([]);
+    closeBulkChangeEditor();
+  }
+
+  /**
+   * Opens the inline Focus-creation panel for the requested editor surface.
+   * @param {{surface: "row"|"bulk", targetIndex?: number|null}} context
+   */
+  function openNewFocusEditor(context) {
+    setNewFocusContext(context);
+    setNewFocusDraft(buildEmptyNewFocusDraft());
+    setNewFocusErrorMessage("");
+  }
+
+  /**
+   * Updates one field inside the Focus-creation draft.
+   * @param {"label"|"description"} field
+   * @param {string} value
+   */
+  function updateNewFocusDraft(field, value) {
+    setNewFocusDraft((currentValue) => ({
+      ...currentValue,
+      [field]: value
+    }));
+  }
+
+  /**
+   * Saves a new Focus into the Focus category document.
+   */
+  function saveNewFocus() {
+    const label = readTrimmedString(newFocusDraft.label);
+    if (!label) {
+      setNewFocusErrorMessage("Focus name is required.");
+      return;
+    }
+
+    setNewFocusErrorMessage("");
+    const formData = new FormData();
+    formData.set("intent", "create-focus");
+    formData.set("focusLabel", label);
+    formData.set("focusDescription", newFocusDraft.description || "");
+    createFocusFetcher.submit(formData, {
+      method: "post"
+    });
   }
 
   const displayDescription = readTrimmedString(description);
   const displayName = readTrimmedString(metadata?.name) || data.name;
   const editorTypeLabel = readTrimmedString(editorConfig?.type) || data.editorType || "segmentation.default";
+  const isCreatingFocus = createFocusFetcher.state !== "idle";
 
   return (
     <Box bg="white" h="100%" minH="0" display="flex" flexDirection="column">
-      <Box px={{ base: 4, md: 6 }} py={{ base: 4, md: 5 }} borderBottomWidth="1px" bg="white">
+      <Box px={{ base: 4, md: 6 }} py={{ base: 4, md: 5 }} borderBottomWidth="1px" bg="white" position="sticky" top={0} zIndex={3}>
         <Flex justify="space-between" align={{ base: "start", md: "center" }} gap={4} wrap="wrap">
           <Box>
             <Heading size="md">{displayName}</Heading>
@@ -833,7 +1027,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
             />
           </Box>
           <HStack spacing={3} align="center" flexWrap="wrap">
-            <Button type="button" variant="link" size="sm" colorScheme="blue" onClick={openMetadataModal}>
+            <Button type="button" variant="link" size="sm" colorScheme="blue" onClick={openMetadataDrawer}>
               edit metadata
             </Button>
           </HStack>
@@ -868,6 +1062,29 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
             <Flex justify="space-between" align={{ base: "stretch", xl: "end" }} gap={4} wrap="wrap">
               <Box />
               <HStack spacing={3} align="center" flexWrap="wrap">
+                {hasSelectedRows ? (
+                  <>
+                    <Text fontSize="sm" color="gray.600">
+                      {selectedRowIndexes.length} selected
+                    </Text>
+                    <Button type="button" variant="link" size="sm" colorScheme="blue" onClick={clearSelectedRows}>
+                      clear selected
+                    </Button>
+                  </>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setNewFocusContext(null);
+                    setNewFocusDraft(buildEmptyNewFocusDraft());
+                    setNewFocusErrorMessage("");
+                    openBulkChangeDrawer();
+                  }}
+                  isDisabled={!hasSelectedRows}
+                >
+                  Bulk Change
+                </Button>
                 <Button type="button" variant="outline" onClick={() => openRowEditor(null)}>
                   Add Row
                 </Button>
@@ -879,12 +1096,29 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                 <Table size="sm" variant="simple">
                   <Thead bg="gray.50">
                     <Tr>
+                      <Th position="sticky" top={0} left={0} bg="gray.50" zIndex={2} width="52px">
+                        <Checkbox
+                          isChecked={allFilteredRowsSelected}
+                          isIndeterminate={someFilteredRowsSelected}
+                          isDisabled={!filteredSourceRowIndexes.length}
+                          onChange={toggleSelectAllFilteredRows}
+                          aria-label="Select all filtered rows"
+                        />
+                      </Th>
                       {data.segmentationDefault.categoryColumns.map((columnLabel, index) => {
                         const columnKey = buildCategoryFilterKey(index);
+                        const isRegex = columnLabel.toLowerCase() === "regex";
 
                         return (
-                          <Th key={columnKey} position="sticky" top={0} bg="gray.50" zIndex={1}>
-                            <SearchableHeader
+                          <Th
+                            key={columnKey}
+                            position="sticky"
+                            top={0}
+                            bg={isRegex ? "blue.50" : "gray.50"}
+                            color={isRegex ? "blue.700" : undefined}
+                            zIndex={1}
+                          >
+                            <ColumnFilterHeader
                               columnKey={columnKey}
                               label={columnLabel}
                               isOpen={Boolean(openFilterKeys[columnKey])}
@@ -900,7 +1134,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                       })}
                       {valueColumns.map((column) => (
                         <Th key={column.key} position="sticky" top={0} bg="gray.50" zIndex={1}>
-                          <SearchableHeader
+                          <ColumnFilterHeader
                             columnKey={column.key}
                             label={column.label}
                             isOpen={Boolean(openFilterKeys[column.key])}
@@ -914,7 +1148,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                         </Th>
                       ))}
                       <Th position="sticky" top={0} bg="gray.50" zIndex={1} sx={{ borderLeft: "4px double", borderLeftColor: "#CBD5E0" }}>
-                        <SearchableHeader
+                        <ColumnFilterHeader
                           columnKey="industry"
                           label="Industry"
                           isOpen={Boolean(openFilterKeys.industry)}
@@ -928,7 +1162,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                         />
                       </Th>
                       <Th position="sticky" top={0} bg="gray.50" zIndex={1}>
-                        <SearchableHeader
+                        <ColumnFilterHeader
                           columnKey="focus"
                           label="Focus"
                           isOpen={Boolean(openFilterKeys.focus)}
@@ -951,60 +1185,91 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                   </Thead>
                   <Tbody>
                     {filteredRows.length ? (
-                      filteredRows.map((row, rowIndex) => (
-                        <Tr
-                          key={row.rowId || `${data.id || "segmentation"}-${rowIndex}`}
-                          bg={
-                            rowHighlightStateByKey[String(rows.indexOf(row))] === "saving"
-                              ? "blue.50"
-                              : rowHighlightStateByKey[String(rows.indexOf(row))] === "saved"
-                                ? "green.50"
+                      filteredRows.map((row, rowIndex) => {
+                        const sourceRowIndex = rows.indexOf(row);
+                        const rowWarnings = readRowTaxonomyWarnings(row, taxonomyOptions);
+                        const hasWarning = rowWarnings.length > 0;
+                        const rowBackground =
+                          rowHighlightStateByKey[String(sourceRowIndex)] === "saving"
+                            ? "blue.50"
+                            : rowHighlightStateByKey[String(sourceRowIndex)] === "saved"
+                              ? "green.50"
+                              : hasWarning
+                                ? warningRowBg
                                 : isIncompleteRow(row)
-                                  ? "red.50"
-                                  : undefined
-                          }
-                          transition="background-color 0.35s ease"
-                        >
-                          {data.segmentationDefault.categoryColumns.map((_, categoryIndex) => (
-                            <Td key={`${rowIndex}-category-${categoryIndex}`}>{row.categories[categoryIndex] || ""}</Td>
-                          ))}
-                          {valueColumns.map((column) => (
-                            <Td key={`${rowIndex}-${column.key}`}>{readTrimmedString(row[column.key])}</Td>
-                          ))}
-                          <Td sx={{ borderLeft: "4px double", borderLeftColor: "#CBD5E0" }}>
-                            {summarizeTargets(row.industryTargets, row.industry || "")}
-                          </Td>
-                          <Td>{summarizeTargets(row.focusTargets, row.focus || "")}</Td>
-                          <Td>
-                            <Tooltip label={row.notes || "No notes"} hasArrow openDelay={200}>
+                                  ? voidRowBg
+                                  : undefined;
+
+                        return (
+                          <Tr
+                            key={row.rowId || `${data.id || "segmentation"}-${rowIndex}`}
+                            bg={rowBackground}
+                            transition="background-color 0.35s ease"
+                          >
+                            <Td position="sticky" left={0} bg={rowBackground || "white"} zIndex={1}>
+                              <Checkbox
+                                isChecked={selectedRowIndexSet.has(sourceRowIndex)}
+                                onChange={() => toggleRowSelection(sourceRowIndex)}
+                                aria-label={`Select row ${rowIndex + 1}`}
+                              />
+                            </Td>
+                            {data.segmentationDefault.categoryColumns.map((columnLabel, categoryIndex) => (
+                              <Td key={`${rowIndex}-category-${categoryIndex}`}>
+                                {columnLabel.toLowerCase() === "regex"
+                                  ? <RegexTokenDisplay pattern={row.categories[categoryIndex] || ""} />
+                                  : row.categories[categoryIndex] || ""}
+                              </Td>
+                            ))}
+                            {valueColumns.map((column) => (
+                              <Td key={`${rowIndex}-${column.key}`}>{readTrimmedString(row[column.key])}</Td>
+                            ))}
+                            <Td sx={{ borderLeft: "4px double", borderLeftColor: "#CBD5E0" }}>
+                              {readDisplayValue({
+                                key: "industry",
+                                row,
+                                taxonomyOptions
+                              })}
+                            </Td>
+                            <Td>
+                              {readDisplayValue({
+                                key: "focus",
+                                row,
+                                taxonomyOptions
+                              })}
+                            </Td>
+                            <Td>
+                              <Tooltip label={row.notes || "No notes"} hasArrow openDelay={200}>
+                                <IconButton
+                                  aria-label={`View notes for row ${rowIndex + 1}`}
+                                  icon={<MdDescription />}
+                                  size="sm"
+                                  type="button"
+                                  variant="ghost"
+                                  colorScheme={row.notes ? "blue" : "gray"}
+                                />
+                              </Tooltip>
+                              {hasWarning ? (
+                                <Tooltip label={rowWarnings.join("\n")} hasArrow openDelay={200}>
+                                  <Text mt={1} fontSize="xs" color="orange.700">
+                                    Warning
+                                  </Text>
+                                </Tooltip>
+                              ) : null}
+                            </Td>
+                            <Td textAlign="right" whiteSpace="nowrap">
                               <IconButton
-                                aria-label={`View notes for row ${rowIndex + 1}`}
-                                icon={<MdDescription />}
+                                aria-label={`Edit row ${rowIndex + 1}`}
+                                icon={<EditIcon />}
                                 size="sm"
                                 type="button"
                                 variant="ghost"
-                                colorScheme={row.notes ? "blue" : isIncompleteRow(row) ? "red" : "gray"}
+                                colorScheme="blue"
+                                onClick={() => openRowEditor(sourceRowIndex)}
                               />
-                            </Tooltip>
-                            {isIncompleteRow(row) ? (
-                              <Text mt={1} fontSize="xs" color="red.600">
-                                Incomplete
-                              </Text>
-                            ) : null}
-                          </Td>
-                          <Td textAlign="right" whiteSpace="nowrap">
-                            <IconButton
-                              aria-label={`Edit row ${rowIndex + 1}`}
-                              icon={<EditIcon />}
-                              size="sm"
-                              type="button"
-                              variant="ghost"
-                              colorScheme="blue"
-                              onClick={() => openRowEditor(rows.indexOf(row))}
-                            />
-                          </Td>
-                        </Tr>
-                      ))
+                            </Td>
+                          </Tr>
+                        );
+                      })
                     ) : (
                       <Tr>
                         <Td colSpan={data.segmentationDefault.categoryColumns.length + valueColumns.length + 5}>
@@ -1020,29 +1285,43 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
         </Box>
       </Box>
 
-      <Modal isOpen={isRowModalOpen} onClose={closeRowEditor} size="4xl" scrollBehavior="inside">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>{editingRowIndex == null ? "Add Row" : "Edit Row"}</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
+      <Drawer isOpen={isRowDrawerOpen} onClose={closeRowEditor} placement="right" size="xl">
+        <DrawerOverlay />
+        <DrawerContent>
+          <DrawerCloseButton />
+          <DrawerHeader>{editingRowIndex == null ? "Add Row" : "Edit Row"}</DrawerHeader>
+          <DrawerBody pb={6}>
             <VStack align="stretch" spacing={4}>
               {isIncompleteRow(draftRow) ? (
-                <Alert status="warning" borderRadius="md">
+                <Alert status="info" borderRadius="md">
                   <AlertIcon />
-                  <AlertDescription>This row is incomplete and will be skipped by segmentation until it has Industry or Focus output.</AlertDescription>
+                  <AlertDescription>This row has no Industry or Focus output, so segmentation skips it until one is added.</AlertDescription>
                 </Alert>
               ) : null}
-              {data.segmentationDefault.categoryColumns.map((columnLabel, index) => (
-                <FormControl key={`draft-category-${index}`}>
-                  <FormLabel>{columnLabel}</FormLabel>
-                  <Input
-                    value={draftRow.categories[index] || ""}
-                    onChange={(event) => updateDraftCategory(index, event.target.value)}
-                    bg="white"
-                  />
-                </FormControl>
-              ))}
+              {data.segmentationDefault.categoryColumns.map((columnLabel, index) => {
+                const isRegex = columnLabel.toLowerCase() === "regex";
+                const parsed = isRegex ? parseRegexToTokens(draftRow.categories[index] || "") : null;
+                return (
+                  <FormControl key={`draft-category-${index}`}>
+                    <FormLabel>{columnLabel}</FormLabel>
+                    {isRegex ? (
+                      <RegexBuilder
+                        compact
+                        initialTokens={parsed?.tokens ?? null}
+                        initialAnchorStart={parsed?.anchorStart ?? false}
+                        initialAnchorEnd={parsed?.anchorEnd ?? false}
+                        onPatternChange={(pattern) => updateDraftCategory(index, pattern)}
+                      />
+                    ) : (
+                      <Input
+                        value={draftRow.categories[index] || ""}
+                        onChange={(event) => updateDraftCategory(index, event.target.value)}
+                        bg="white"
+                      />
+                    )}
+                  </FormControl>
+                );
+              })}
 
               {valueColumns.map((column) => (
                 <FormControl key={`draft-value-${column.key}`}>
@@ -1061,7 +1340,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                   {(Array.isArray(draftRow.industryTargets) ? draftRow.industryTargets : []).map((target, index) => (
                     <HStack key={`industry-target-${index}`} align="start">
                       <Select
-                        value={target.name}
+                        value={resolveFriendlyTaxonomyLabel(target.name, taxonomyOptions.industryOptions) || target.name}
                         onChange={(event) => updateDraftTarget("industryTargets", index, "name", event.target.value)}
                         bg="white"
                       >
@@ -1096,8 +1375,18 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                   {(Array.isArray(draftRow.focusTargets) ? draftRow.focusTargets : []).map((target, index) => (
                     <HStack key={`focus-target-${index}`} align="start">
                       <Select
-                        value={target.name}
-                        onChange={(event) => updateDraftTarget("focusTargets", index, "name", event.target.value)}
+                        value={resolveFriendlyTaxonomyLabel(target.name, taxonomyOptions.focusOptions) || target.name}
+                        onChange={(event) => {
+                          if (event.target.value === NEW_FOCUS_OPTION_VALUE) {
+                            openNewFocusEditor({
+                              surface: "row",
+                              targetIndex: index
+                            });
+                            return;
+                          }
+
+                          updateDraftTarget("focusTargets", index, "name", event.target.value);
+                        }}
                         bg="white"
                       >
                         <option value="">Select focus</option>
@@ -1106,6 +1395,7 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                             {option}
                           </option>
                         ))}
+                        <option value={NEW_FOCUS_OPTION_VALUE}>New Focus</option>
                       </Select>
                       <Input
                         value={target.score}
@@ -1125,14 +1415,28 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                 </VStack>
               </FormControl>
 
+              <NewFocusEditorPanel
+                isVisible={newFocusContext?.surface === "row"}
+                draft={newFocusDraft}
+                errorMessage={newFocusErrorMessage}
+                isSaving={isCreatingFocus}
+                onDraftChange={updateNewFocusDraft}
+                onCancel={() => {
+                  setNewFocusContext(null);
+                  setNewFocusDraft(buildEmptyNewFocusDraft());
+                  setNewFocusErrorMessage("");
+                }}
+                onSave={saveNewFocus}
+              />
+
               <FormControl>
                 <FormLabel>Notes</FormLabel>
                 <Textarea value={draftRow.notes} onChange={(event) => updateDraftField("notes", event.target.value)} minH="112px" />
               </FormControl>
             </VStack>
-          </ModalBody>
+          </DrawerBody>
 
-          <ModalFooter>
+          <DrawerFooter>
             <HStack spacing={3}>
               {editingRowIndex == null ? null : (
                 <Button type="button" variant="ghost" colorScheme="red" onClick={deleteDraftRow}>
@@ -1146,20 +1450,115 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
                 Save Row
               </Button>
             </HStack>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
-      <Modal isOpen={isMetadataModalOpen} onClose={closeMetadataModal} size="xl" scrollBehavior="inside">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Metadata</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
+      <Drawer isOpen={isBulkChangeDrawerOpen} onClose={closeBulkChangeEditor} placement="right" size="md">
+        <DrawerOverlay />
+        <DrawerContent>
+          <DrawerCloseButton />
+          <DrawerHeader>Bulk Change Industry/Focus</DrawerHeader>
+          <DrawerBody pb={6}>
+            <VStack align="stretch" spacing={4}>
+              <Alert status="info" borderRadius="md">
+                <AlertIcon />
+                <AlertDescription>
+                  Update the selected rows in one save. Active filters will stay in place.
+                </AlertDescription>
+              </Alert>
+
+              <Text fontSize="sm" color="gray.600">
+                {selectedRowIndexes.length} row{selectedRowIndexes.length === 1 ? "" : "s"} selected
+              </Text>
+
+              <FormControl>
+                <FormLabel>Industry</FormLabel>
+                <Select
+                  value={bulkChangeDraft.industry}
+                  onChange={(event) => updateBulkChangeDraft("industry", event.target.value)}
+                  bg="white"
+                >
+                  <option value="">Do not change industry</option>
+                  {taxonomyOptions.industryOptions.map((option) => (
+                    <option key={`bulk-industry-${option}`} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Focus</FormLabel>
+                <Select
+                  value={bulkChangeDraft.focus}
+                  onChange={(event) => {
+                    if (event.target.value === NEW_FOCUS_OPTION_VALUE) {
+                      openNewFocusEditor({
+                        surface: "bulk"
+                      });
+                      return;
+                    }
+
+                    updateBulkChangeDraft("focus", event.target.value);
+                  }}
+                  bg="white"
+                >
+                  <option value="">Do not change focus</option>
+                  {taxonomyOptions.focusOptions.map((option) => (
+                    <option key={`bulk-focus-${option}`} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                  <option value={NEW_FOCUS_OPTION_VALUE}>New Focus</option>
+                </Select>
+              </FormControl>
+
+              <NewFocusEditorPanel
+                isVisible={newFocusContext?.surface === "bulk"}
+                draft={newFocusDraft}
+                errorMessage={newFocusErrorMessage}
+                isSaving={isCreatingFocus}
+                onDraftChange={updateNewFocusDraft}
+                onCancel={() => {
+                  setNewFocusContext(null);
+                  setNewFocusDraft(buildEmptyNewFocusDraft());
+                  setNewFocusErrorMessage("");
+                }}
+                onSave={saveNewFocus}
+              />
+            </VStack>
+          </DrawerBody>
+          <DrawerFooter>
+            <HStack spacing={3}>
+              <Button type="button" variant="ghost" onClick={closeBulkChangeEditor}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                colorScheme="blue"
+                onClick={saveBulkChangeChanges}
+                isDisabled={!canApplyBulkChange}
+                isLoading={isSaving}
+                loadingText="Saving"
+              >
+                Save
+              </Button>
+            </HStack>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+
+      <Drawer isOpen={isMetadataDrawerOpen} onClose={closeMetadataDrawer} placement="right" size="md">
+        <DrawerOverlay />
+        <DrawerContent>
+          <DrawerCloseButton />
+          <DrawerHeader>Metadata</DrawerHeader>
+          <DrawerBody pb={6}>
             <VStack align="stretch" spacing={4}>
               <FormControl>
                 <FormLabel>Name</FormLabel>
-                <Input value={readTrimmedString(metadata?.name)} onChange={(event) => updateMetadata("name", event.target.value)} bg="white" />
+                <Input value={readTrimmedString(draftMetadata?.name)} onChange={(event) => updateMetadata("name", event.target.value)} bg="white" />
               </FormControl>
 
               <FormControl>
@@ -1169,32 +1568,32 @@ export function SegmentationDefaultEditorPage({ data, actionData, isSaving = fal
 
               <FormControl>
                 <FormLabel>Type</FormLabel>
-                <Input value={readTrimmedString(metadata?.type)} onChange={(event) => updateMetadata("type", event.target.value)} bg="white" />
+                <Input value={readTrimmedString(draftMetadata?.type)} onChange={(event) => updateMetadata("type", event.target.value)} bg="white" />
               </FormControl>
 
               <FormControl>
                 <FormLabel>Editor</FormLabel>
-                <Input value={editorTypeLabel} onChange={(event) => updateEditorConfig("type", event.target.value)} bg="white" />
+                <Input value={readTrimmedString(draftEditorConfig?.type) || data.editorType || "segmentation.default"} onChange={(event) => updateEditorConfig("type", event.target.value)} bg="white" />
               </FormControl>
 
               <FormControl>
                 <FormLabel>Description</FormLabel>
-                <Textarea value={description} onChange={(event) => setDescription(event.target.value)} minH="120px" bg="white" />
+                <Textarea value={draftDescription} onChange={(event) => setDraftDescription(event.target.value)} minH="120px" bg="white" />
               </FormControl>
             </VStack>
-          </ModalBody>
-          <ModalFooter>
+          </DrawerBody>
+          <DrawerFooter>
             <HStack spacing={3}>
-              <Button type="button" variant="ghost" onClick={closeMetadataModal}>
+              <Button type="button" variant="ghost" onClick={closeMetadataDrawer}>
                 Cancel
               </Button>
               <Button type="button" colorScheme="blue" onClick={saveMetadataChanges} isLoading={isSaving} loadingText="Saving">
                 Save
               </Button>
             </HStack>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
     </Box>
   );
 }
