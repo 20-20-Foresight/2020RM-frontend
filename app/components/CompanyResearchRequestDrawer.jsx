@@ -30,7 +30,10 @@ const DATA_PROVIDER_OPTIONS = [
   { value: "preqin", label: "Preqin" },
   { value: "revenuebase", label: "RevenueBase" },
 ];
-const DEFAULT_DATA_PROVIDERS = DATA_PROVIDER_OPTIONS.map((option) => option.value);
+const HIDDEN_DATA_PROVIDER_VALUES = new Set(["website"]);
+const DEFAULT_DATA_PROVIDERS = DATA_PROVIDER_OPTIONS.map((option) => option.value).filter(
+  (value) => !HIDDEN_DATA_PROVIDER_VALUES.has(value)
+);
 
 const REQUEST_REASON_OPTIONS = [
   { value: "From Email Request", label: "From Email Request" },
@@ -44,7 +47,7 @@ function normalizeDataProviders(value) {
   const items = Array.isArray(value) ? value : [];
   const unique = Array.from(
     new Set(items.map((entry) => readTrimmedString(entry)).filter(Boolean))
-  );
+  ).filter((entry) => !HIDDEN_DATA_PROVIDER_VALUES.has(entry));
   return unique.length ? unique : DEFAULT_DATA_PROVIDERS;
 }
 
@@ -159,6 +162,11 @@ export function CompanyResearchRequestDrawer({
                       key={option.value}
                       name={`requestSource_${option.value}`}
                       value="true"
+                      style={
+                        HIDDEN_DATA_PROVIDER_VALUES.has(option.value)
+                          ? { display: "none" }
+                          : undefined
+                      }
                       isChecked={selectedDataProviders.includes(option.value)}
                       onChange={(event) => {
                         setSelectedDataProviders((current) => {
