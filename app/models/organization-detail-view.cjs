@@ -498,7 +498,7 @@ function getAccountHealthLabels(score) {
 
 /**
  * Builds the organization header view model used by the detail shell.
- * @param {{record: object|null, schema: object|null, locations: object[]}} options
+ * @param {{record: object|null, schema: object|null, locations: object[], salesforceEntity?: object|null}} options
  * @returns {{
  *   name: string,
  *   initials: string,
@@ -506,7 +506,8 @@ function getAccountHealthLabels(score) {
  *   phone: string|null,
  *   websiteLabel: string|null,
  *   websiteUrl: string|null,
- *   linkedInUrl: string|null
+ *   linkedInUrl: string|null,
+ *   salesforceEntity: object|null
  * }}
  */
 function buildOrganizationHeaderViewModel(options) {
@@ -523,7 +524,11 @@ function buildOrganizationHeaderViewModel(options) {
     phone: resolvePreferredPhoneValue(record, schema, PHONE_FIELD_PATHS),
     websiteLabel,
     websiteUrl: normalizeUrl(websiteLabel),
-    linkedInUrl: normalizeUrl(resolvePreferredFieldValue(record, schema, LINKEDIN_FIELD_PATHS))
+    linkedInUrl: normalizeUrl(resolvePreferredFieldValue(record, schema, LINKEDIN_FIELD_PATHS)),
+    salesforceEntity:
+      options?.salesforceEntity && typeof options.salesforceEntity === "object"
+        ? options.salesforceEntity
+        : null,
   };
 }
 

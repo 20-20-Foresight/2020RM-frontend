@@ -137,6 +137,11 @@ test("entity detail loader calls the organization detail REST endpoint and retur
             meta: {
               count: 1
             },
+            salesforceEntity: {
+              salesforceId: "001-salesforce",
+              recordTypeName: "ES Client",
+              url: "https://2020-foresight.lightning.force.com/lightning/r/Account/001-salesforce/view"
+            },
             schema: {
               namespace: "crm.schema",
               key: "organization",
@@ -224,6 +229,11 @@ test("entity detail loader calls the organization detail REST endpoint and retur
     meta: {
       count: 1
     },
+    salesforceEntity: {
+      salesforceId: "001-salesforce",
+      recordTypeName: "ES Client",
+      url: "https://2020-foresight.lightning.force.com/lightning/r/Account/001-salesforce/view"
+    },
     schema: {
       namespace: "crm.schema",
       key: "organization",
@@ -267,6 +277,7 @@ test("entity detail loader returns a not found state when the backend returns 40
       count: 0
     },
     schema: null,
+    salesforceEntity: null,
     error: "Person not found."
   });
 });

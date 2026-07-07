@@ -7,7 +7,7 @@
  *   statusExplained: string,
  *   error: string
  * }} options
- * @returns {{entityType: "organization"|"person", uuid: string, status: string, statusExplained: string, record: object|null, locations: object[], relationships: object[], workHistory: object[], meta: {count: number}, schema: object|null, error: string}}
+ * @returns {{entityType: "organization"|"person", uuid: string, status: string, statusExplained: string, record: object|null, locations: object[], relationships: object[], workHistory: object[], meta: {count: number}, schema: object|null, salesforceEntity: object|null, error: string}}
  */
 function buildFailedEntityDetailState(options) {
   return {
@@ -23,6 +23,7 @@ function buildFailedEntityDetailState(options) {
       count: 0
     },
     schema: null,
+    salesforceEntity: null,
     error: options.error
   };
 }
@@ -35,7 +36,7 @@ function buildFailedEntityDetailState(options) {
  *   uuid: string,
  *   fetchImpl?: typeof fetch
  * }} options
- * @returns {Promise<{entityType: "organization"|"person", uuid: string, status: string, statusExplained: string, record: object|null, locations: object[], relationships: object[], workHistory: object[], meta: object, schema: object|null, error: string|null}>}
+ * @returns {Promise<{entityType: "organization"|"person", uuid: string, status: string, statusExplained: string, record: object|null, locations: object[], relationships: object[], workHistory: object[], meta: object, schema: object|null, salesforceEntity: object|null, error: string|null}>}
  */
 async function loadEntityDetailPage(options) {
   const fetchImpl = options.fetchImpl || fetch;
@@ -99,6 +100,10 @@ async function loadEntityDetailPage(options) {
               count: 0
             },
       schema: payload && payload.schema && typeof payload.schema === "object" ? payload.schema : null,
+      salesforceEntity:
+        payload && payload.salesforceEntity && typeof payload.salesforceEntity === "object"
+          ? payload.salesforceEntity
+          : null,
       error: null
     };
   } catch (error) {

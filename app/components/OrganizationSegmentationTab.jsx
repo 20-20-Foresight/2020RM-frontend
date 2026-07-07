@@ -38,6 +38,7 @@ import {
   Thead,
   Tr,
   UnorderedList,
+  useToast,
   useDisclosure,
   VStack,
   Wrap,
@@ -1086,6 +1087,7 @@ function OrganizationSegmentationReviewFlyout({
 
 export function OrganizationSegmentationTab({ organizationDetail }) {
   const revalidator = useRevalidator();
+  const toast = useToast();
   const record =
     organizationDetail?.record && typeof organizationDetail.record === "object"
       ? organizationDetail.record
@@ -1093,6 +1095,11 @@ export function OrganizationSegmentationTab({ organizationDetail }) {
   const organizationUUID = readTrimmedString(
     organizationDetail?.uuid || record?.uuid
   );
+  const salesforceEntity =
+    organizationDetail?.salesforceEntity &&
+    typeof organizationDetail.salesforceEntity === "object"
+      ? organizationDetail.salesforceEntity
+      : null;
   const organizationName = readTrimmedString(record?.name) || "Organization";
   const initialSegmentation = normalizeSegmentationV312(record);
   const legacySegmentation = buildOrganizationSegmentationViewModel(record);
@@ -1103,6 +1110,11 @@ export function OrganizationSegmentationTab({ organizationDetail }) {
     message: "",
     error: "",
     details: null,
+  });
+  const [salesforceSaveState, setSalesforceSaveState] = useState({
+    status: "idle",
+    message: "",
+    error: "",
   });
   const [reviewNotice, setReviewNotice] = useState({
     status: "idle",
@@ -1127,6 +1139,11 @@ export function OrganizationSegmentationTab({ organizationDetail }) {
       message: "",
       error: "",
       details: null,
+    });
+    setSalesforceSaveState({
+      status: "idle",
+      message: "",
+      error: "",
     });
     setReviewNotice({
       status: "idle",
@@ -1267,6 +1284,11 @@ export function OrganizationSegmentationTab({ organizationDetail }) {
       error: "",
       details: null,
     });
+    setSalesforceSaveState({
+      status: "idle",
+      message: "",
+      error: "",
+    });
 
     try {
       const payload = await postResegmentationAction("segmentOrganization", {
@@ -1307,6 +1329,60 @@ export function OrganizationSegmentationTab({ organizationDetail }) {
     }
   }
 
+  async function handleSendToSalesforce() {
+    if (!organizationUUID || !salesforceEntity?.salesforceId) {
+      return;
+    }
+
+    setSalesforceSaveState({
+      status: "running",
+      message: "",
+      error: "",
+    });
+
+    try {
+      const payload = await postResegmentationAction(
+        "saveOrganizationSegmentationToSalesforce",
+        {
+          uuid: organizationUUID,
+        }
+      );
+      const message =
+        payload?.statusExplained || "Segmentation was saved to Salesforce successfully.";
+      setSalesforceSaveState({
+        status: "success",
+        message,
+        error: "",
+      });
+      toast({
+        title: "Saved to Salesforce",
+        description: message,
+        status: "success",
+        duration: 5000,
+        isClosable: true,
+        position: "top-right",
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to save segmentation to Salesforce.";
+      setSalesforceSaveState({
+        status: "error",
+        message: "",
+        error: message,
+      });
+      toast({
+        title: "Salesforce Save Failed",
+        description: message,
+        status: "error",
+        duration: 7000,
+        isClosable: true,
+        position: "top-right",
+      });
+    }
+  }
+
   return (
     <>
       <Stack spacing={6}>
@@ -1336,6 +1412,18 @@ export function OrganizationSegmentationTab({ organizationDetail }) {
             >
               Rerun Segmentation
             </Button>
+            {salesforceEntity?.salesforceId ? (
+              <Button
+                variant="outline"
+                colorScheme="blue"
+                onClick={handleSendToSalesforce}
+                isLoading={salesforceSaveState.status === "running"}
+                loadingText="Saving..."
+                isDisabled={isRerunning}
+              >
+                Send to Salesforce
+              </Button>
+            ) : null}
             <Button colorScheme="blue" leftIcon={<MdAutoAwesome />} onClick={onOpen}>
               Review With AI
             </Button>
