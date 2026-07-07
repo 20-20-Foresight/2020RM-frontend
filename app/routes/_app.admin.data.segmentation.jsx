@@ -1,8 +1,6 @@
 import { Badge, Box, Flex, Heading, LinkBox, LinkOverlay, SimpleGrid, Text, VStack } from "@chakra-ui/react";
 import { json } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
-import { sortAdminDataItems } from "../models/admin-data-list.mjs";
-
 /**
  * Builds the route pathname for one admin data record.
  * @param {string|null|undefined} id
@@ -12,37 +10,18 @@ function buildAdminDataPath(id) {
   return id ? `/admin/data/${encodeURIComponent(id)}` : "/admin/data";
 }
 
-/**
- * Loads the segmentation document helpers.
- * @returns {Promise<{
- *   loadCategoryDocuments: Function,
- *   loadSegmentationDocuments: Function
- * }>}
- */
-async function loadSegmentationDocumentModule() {
-  return import("../models/segmentation-document.server.js");
-}
-
 async function loadSegmentationV312DocumentModule() {
   const module = await import("../models/segmentation-v312-documents.server.js");
   return module.default || module;
 }
 
 export async function loader({ request }) {
-  const { loadCategoryDocuments, loadSegmentationDocuments } = await loadSegmentationDocumentModule();
   const { loadSegmentationDocuments: loadSegmentationV312Documents } = await loadSegmentationV312DocumentModule();
-  const [categoryResult, crosswalkResult] = await Promise.allSettled([
-    loadCategoryDocuments({ request }),
-    loadSegmentationDocuments({ request })
-  ]);
-
   const documentsResult = await loadSegmentationV312Documents({ request });
 
   return json({
     documents: Array.isArray(documentsResult?.documents) ? documentsResult.documents : [],
-    syncStatus: documentsResult?.syncStatus || null,
-    categoryDocuments: categoryResult.status === "fulfilled" ? sortAdminDataItems(categoryResult.value) : [],
-    crosswalkDocuments: crosswalkResult.status === "fulfilled" ? sortAdminDataItems(crosswalkResult.value) : []
+    syncStatus: documentsResult?.syncStatus || null
   });
 }
 
@@ -207,22 +186,6 @@ export default function AdminDataSegmentationRoute() {
             description="Each page combines definitions and rules, with tabs to switch between them."
             items={data.documents}
             columns={{ base: 1, md: 2, xl: 2 }}
-          />
-
-          <SegmentationSection
-            id="categories"
-            title="Legacy Categories"
-            description="Existing category documents used by the current segmentation editors."
-            items={data.categoryDocuments}
-            columns={{ base: 1, md: 2 }}
-          />
-
-          <SegmentationSection
-            id="crosswalks"
-            title="Legacy Crosswalks"
-            description="Existing segmentation mapping documents and editable crosswalk data."
-            items={data.crosswalkDocuments}
-            columns={{ base: 1, md: 2, xl: 3 }}
           />
         </VStack>
       </Box>
