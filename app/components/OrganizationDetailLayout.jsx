@@ -102,6 +102,28 @@ function HeaderMetaItem({ icon, label, href = null, isExternal = false }) {
   return content;
 }
 
+function SalesforceCloudIcon(props) {
+  return (
+    <svg viewBox="0 0 64 64" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M45.8 25.1c-1.8-7-8.1-12.1-15.6-12.1-6 0-11.4 3.3-14.1 8.5-6.6.7-11.7 6.3-11.7 13.1C4.4 41.2 9.8 46.6 16.4 46.6h28c8 0 14.5-6.3 14.5-14.1 0-7.1-5.4-13-12.9-13.4-.1 0-.1 0-.2 0z"
+        fill="#00A1E0"
+      />
+      <text
+        x="32"
+        y="37"
+        textAnchor="middle"
+        fontSize="16"
+        fontWeight="700"
+        fill="white"
+        fontFamily="Arial, sans-serif"
+      >
+        SF
+      </text>
+    </svg>
+  );
+}
+
 /**
  * Renders the static organization-local header and tab navigation.
  * @param {{
@@ -130,7 +152,8 @@ export function OrganizationDetailLayout({ data, tabs, activeTabKey, children = 
   const header = buildOrganizationHeaderViewModel({
     record: data?.record || null,
     schema: data?.schema || null,
-    locations: Array.isArray(data?.locations) ? data.locations : []
+    locations: Array.isArray(data?.locations) ? data.locations : [],
+    salesforceEntity: data?.salesforceEntity || null,
   });
   const companyResearchInitialValues = buildCompanyResearchInitialValues(data, header);
 
@@ -214,6 +237,14 @@ export function OrganizationDetailLayout({ data, tabs, activeTabKey, children = 
                       icon={FaLinkedin}
                       label="LinkedIn"
                       href={header.linkedInUrl}
+                      isExternal
+                    />
+                  ) : null}
+                  {header.salesforceEntity?.url ? (
+                    <HeaderMetaItem
+                      icon={SalesforceCloudIcon}
+                      label={header.salesforceEntity.recordTypeName || "Salesforce"}
+                      href={header.salesforceEntity.url}
                       isExternal
                     />
                   ) : null}

@@ -62,6 +62,13 @@ export async function postResegmentationAction(intent, fields = {}) {
       saveSalesforce: fields.saveSalesforce === true,
       includeExplanation: fields.includeExplanation !== false
     });
+  } else if (intent === "saveOrganizationSegmentationToSalesforce") {
+    requestPath = `/api/rest/organization/${encodeURIComponent(uuid)}/segmentation/save-salesforce`;
+    requestOptions.method = "POST";
+    requestOptions.headers = {
+      "content-type": "application/json"
+    };
+    requestOptions.body = JSON.stringify({});
   } else {
     throw new Error("Unknown resegmentation action.");
   }
@@ -112,6 +119,20 @@ export async function postResegmentationAction(intent, fields = {}) {
     }
     return {
       resegmentation: payload.resegmentation || null,
+      status: payload.status,
+      statusExplained: payload.statusExplained
+    };
+  }
+  if (intent === "saveOrganizationSegmentationToSalesforce") {
+    if (payload?.status && payload.status !== "completed") {
+      throw new Error(
+        payload?.statusExplained ||
+          payload?.message ||
+          "Unable to send segmentation to Salesforce."
+      );
+    }
+    return {
+      result: payload.result || null,
       status: payload.status,
       statusExplained: payload.statusExplained
     };

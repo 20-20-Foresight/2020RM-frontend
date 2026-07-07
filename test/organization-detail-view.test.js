@@ -48,7 +48,8 @@ test("organization header view model prefers live organization metadata", () => 
     phone: "+1 (312) 555-0100",
     websiteLabel: "acme.example",
     websiteUrl: "https://acme.example",
-    linkedInUrl: "https://www.linkedin.com/company/acme-aerospace"
+    linkedInUrl: "https://www.linkedin.com/company/acme-aerospace",
+    salesforceEntity: null
   });
 });
 
@@ -72,6 +73,7 @@ test("organization header view model formats phone objects with extensions", () 
   });
 
   assert.equal(result.phone, "555-0101 x22");
+  assert.equal(result.salesforceEntity, null);
 });
 
 test("organization header view model selects the first grouped phone value", () => {
@@ -99,6 +101,25 @@ test("organization header view model selects the first grouped phone value", () 
   });
 
   assert.equal(result.phone, "+1 (312) 555-0199 x104");
+  assert.equal(result.salesforceEntity, null);
+});
+
+test("organization header view model carries one salesforce entity for header rendering", () => {
+  const salesforceEntity = {
+    salesforceId: "001-salesforce",
+    recordTypeName: "ES Client",
+    url: "https://2020-foresight.lightning.force.com/lightning/r/Account/001-salesforce/view"
+  };
+  const result = buildOrganizationHeaderViewModel({
+    record: {
+      name: "Acme Aerospace"
+    },
+    schema: null,
+    locations: [],
+    salesforceEntity
+  });
+
+  assert.deepEqual(result.salesforceEntity, salesforceEntity);
 });
 
 test("organization overview view model falls back to neutral placeholder values", () => {
