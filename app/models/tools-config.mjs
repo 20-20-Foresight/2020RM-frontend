@@ -32,6 +32,26 @@ export const toolsConfig = [
       "Draft, preview, and publish CRM email templates plus shared global header and footer snippets.",
     icon: "mail",
     status: "available"
+  },
+  {
+    key: "email-blast-request",
+    label: "Email Blast Request",
+    to: "/tools/email-blast-request",
+    permissionTarget: "email_blast_request",
+    description:
+      "Build a targeted email blast request — pick the audience, compose the message, and send it for approval.",
+    icon: "mail",
+    status: "available"
+  },
+  {
+    key: "email-blast-schedule",
+    label: "Schedule Email Blast",
+    to: "/tools/email-blast-schedule",
+    permissionTarget: "email_blast_schedule",
+    description:
+      "Review incoming blast requests, freeze the audience snapshot, schedule the send, and verify launch.",
+    icon: "campaign",
+    status: "available"
   }
 ];
 

@@ -20,7 +20,7 @@ import { EditIcon, SearchIcon } from "@chakra-ui/icons";
 import { useLocation } from "@remix-run/react";
 import { useEffect, useRef, useState } from "react";
 import { InlineSaveStatus } from "./InlineSaveStatus";
-import { ToastRichTextEditor } from "./ToastRichTextEditor";
+import { RichTextEditor } from "./RichTextEditor";
 import { useQueuedDocumentSave } from "../hooks/useQueuedDocumentSave";
 import { useRowSaveHighlight } from "../hooks/useRowSaveHighlight";
 
@@ -127,7 +127,7 @@ function DimensionCard({
 
           <FormControl>
             <FormLabel>Description</FormLabel>
-            <ToastRichTextEditor value={draftRow.description} onChange={(value) => onDraftChange?.("description", value)} />
+            <RichTextEditor value={draftRow.description} onChange={(value) => onDraftChange?.("description", value)} />
           </FormControl>
 
           <FormControl>

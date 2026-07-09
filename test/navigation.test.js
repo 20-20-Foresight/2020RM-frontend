@@ -30,7 +30,13 @@ test("navigation model defines the requested subsection labels", async () => {
     },
     {
       label: "Tools",
-      children: ["Company Research", "Resegmentation", "Email Templates"]
+      children: [
+        "Company Research",
+        "Resegmentation",
+        "Email Templates",
+        "Email Blast Request",
+        "Schedule Email Blast"
+      ]
     },
     {
       label: "Admin",

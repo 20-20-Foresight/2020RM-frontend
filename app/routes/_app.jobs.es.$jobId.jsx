@@ -33,8 +33,9 @@ import { Link, useParams } from "@remix-run/react";
 import { useState } from "react";
 import { FiChevronLeft, FiExternalLink, FiFile, FiMail, FiPhone, FiSettings } from "react-icons/fi";
 import { MdAdd } from "react-icons/md";
-import { ToastRichTextEditor } from "../components/ToastRichTextEditor";
+import { RichTextEditor } from "../components/RichTextEditor";
 import { MilestoneChevrons } from "../components/MilestoneChevrons";
+import { StatusPill, EMAIL_BLAST_STATUS_TONES } from "../components/ui/atoms/StatusPill";
 import {
   ES_MILESTONE_PHASES,
   ES_MILESTONES,
@@ -43,6 +44,12 @@ import {
   MOCK_ES_SERVICES,
   MOCK_OUTREACH_CAMPAIGNS,
 } from "../models/services-mock-data.mjs";
+import {
+  CANNED_AUDIENCE_LISTS,
+  EMAIL_BLAST_STATUSES,
+  MOCK_EMAIL_BLAST_REQUESTS,
+  statusIndex,
+} from "../models/email-blast-mock-data.mjs";
 
 const BRAND_BLUE = "#0F4C81";
 const BRAND_RED = "#D72638";
@@ -496,9 +503,71 @@ function CandidatesTab() {
 
 // ── Outreach Tab ───────────────────────────────────────────────────────────────
 
-function OutreachTab() {
+function getAudienceLabel(request) {
+  if (request.audienceSource.type === "canned") {
+    const list = CANNED_AUDIENCE_LISTS.find((entry) => entry.id === request.audienceSource.cannedListId);
+    return list?.label || "Canned list";
+  }
+  return "Custom query";
+}
+
+function OutreachTab({ service }) {
+  const blastRequests = MOCK_EMAIL_BLAST_REQUESTS.filter((request) => request.serviceId === service.id);
+
   return (
-    <VStack align="stretch" spacing={4}>
+    <VStack align="stretch" spacing={6}>
+      <Box>
+        <Flex justify="space-between" align="center" mb={3}>
+          <Text fontWeight="bold" fontSize="sm" color="gray.700">Email Blasts</Text>
+          <Button
+            as={Link}
+            to={`/tools/email-blast-request/${service.id}`}
+            leftIcon={<Icon as={MdAdd} />}
+            size="sm"
+            colorScheme="blue"
+          >
+            New Email Blast
+          </Button>
+        </Flex>
+
+        {blastRequests.length ? (
+          <VStack align="stretch" spacing={2}>
+            {blastRequests.map((request) => (
+              <Box
+                as={Link}
+                key={request.id}
+                to={`/tools/email-blast-request/${service.id}/${request.id}`}
+                borderWidth="1px"
+                borderColor={BORDER_COLOR}
+                borderRadius="lg"
+                px={4}
+                py={3}
+                bg="white"
+                _hover={{ borderColor: "blue.300" }}
+              >
+                <HStack justify="space-between" mb={1}>
+                  <Text fontWeight="semibold" fontSize="sm" noOfLines={1}>
+                    {request.email.subject}
+                  </Text>
+                  <StatusPill
+                    label={EMAIL_BLAST_STATUSES[statusIndex(request.status)].label}
+                    tone={EMAIL_BLAST_STATUS_TONES[request.status]}
+                  />
+                </HStack>
+                <HStack justify="space-between" fontSize="xs" color="gray.500">
+                  <Text>{request.requestedBy} · {getAudienceLabel(request)}</Text>
+                  <Text fontVariantNumeric="tabular-nums">
+                    ~{request.estimatedAudienceSize.toLocaleString()} people
+                  </Text>
+                </HStack>
+              </Box>
+            ))}
+          </VStack>
+        ) : (
+          <Text fontSize="sm" color="gray.500">No email blasts yet for this service.</Text>
+        )}
+      </Box>
+
       <Flex justify="space-between" align="center">
         <Text fontWeight="bold" fontSize="sm" color="gray.700">Campaigns</Text>
         <Menu>
@@ -578,7 +647,7 @@ function JobDescriptionTab() {
   const [value, setValue] = useState(FAKE_JD_HTML);
   return (
     <Box>
-      <ToastRichTextEditor value={value} onChange={setValue} height="520px" />
+      <RichTextEditor value={value} onChange={setValue} height="520px" />
     </Box>
   );
 }
@@ -872,7 +941,7 @@ export default function EsJobDetailPage() {
                 <TabPanel p={0}><MilestonesTab service={service} /></TabPanel>
                 <TabPanel p={0}><DetailsTab service={service} /></TabPanel>
                 <TabPanel p={0}><CandidatesTab /></TabPanel>
-                <TabPanel p={0}><OutreachTab /></TabPanel>
+                <TabPanel p={0}><OutreachTab service={service} /></TabPanel>
                 <TabPanel p={0}><JobDescriptionTab /></TabPanel>
                 <TabPanel p={0}><DocumentsTab /></TabPanel>
                 <TabPanel p={0}><ClientHubTab /></TabPanel>

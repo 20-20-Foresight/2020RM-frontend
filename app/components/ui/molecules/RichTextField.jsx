@@ -1,6 +1,6 @@
 import React from "react";
 import { FormControl, FormLabel } from "@chakra-ui/react";
-import { ToastRichTextEditor } from "../../ToastRichTextEditor";
+import { RichTextEditor } from "../../RichTextEditor";
 
 /**
  * Combines one field label with the shared Toast-based rich text editor.
@@ -23,7 +23,7 @@ export function RichTextField({
   return (
     <FormControl>
       <FormLabel>{label}</FormLabel>
-      <ToastRichTextEditor value={value} onChange={onChange} placeholder={placeholder} height={height} />
+      <RichTextEditor value={value} onChange={onChange} placeholder={placeholder} height={height} />
     </FormControl>
   );
 }

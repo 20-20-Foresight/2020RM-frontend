@@ -1,7 +1,6 @@
 import React from "react";
 import { ChakraProvider, Box } from "@chakra-ui/react";
 import { theme } from "../app/theme";
-import "@toast-ui/editor/dist/toastui-editor.css";
 
 /** @type {import('@storybook/react').Preview} */
 const preview = {
