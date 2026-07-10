@@ -28,10 +28,11 @@ function buildCalendarWeeks(year, month) {
  *   year: number,
  *   month: number,
  *   today?: Date,
- *   eventDays?: number[]
+ *   eventDays?: number[],
+ *   onDayClick?: (day: number) => void
  * }} props
  */
-export function MonthCalendar({ year, month, today = new Date(), eventDays = [] }) {
+export function MonthCalendar({ year, month, today = new Date(), eventDays = [], onDayClick }) {
   const weeks = buildCalendarWeeks(year, month);
   const eventSet = new Set(eventDays);
 
@@ -71,8 +72,9 @@ export function MonthCalendar({ year, month, today = new Date(), eventDays = [] 
                       align="center"
                       justify="center"
                       bg={isToday ? BRAND_RED : "transparent"}
-                      cursor="pointer"
-                      _hover={{ bg: isToday ? BRAND_RED : "gray.100" }}
+                      cursor={onDayClick ? "pointer" : "default"}
+                      _hover={{ bg: isToday ? BRAND_RED : onDayClick ? "gray.100" : "transparent" }}
+                      onClick={onDayClick ? () => onDayClick(day) : undefined}
                     >
                       <Text
                         fontSize="xs"

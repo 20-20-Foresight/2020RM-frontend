@@ -30,7 +30,7 @@ import {
   Text,
   Textarea
 } from "@chakra-ui/react";
-import { EmailTemplateVisualEditor } from "../components/EmailTemplateVisualEditor";
+import { EmailTemplateVisualEditor } from "../components/ui/organisms/EmailTemplateVisualEditor";
 import {
   buildEmailContentRecordId,
   buildEmailTemplatePreview,
