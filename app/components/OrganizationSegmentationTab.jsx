@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRevalidator } from "@remix-run/react";
 import {
   Alert,
@@ -765,7 +765,7 @@ function renderExplanationCrosswalk(row) {
   );
 }
 
-function OrganizationSegmentationReviewFlyout({
+export function OrganizationSegmentationReviewFlyout({
   isOpen,
   onClose,
   organizationUUID,
@@ -898,6 +898,8 @@ function OrganizationSegmentationReviewFlyout({
       placement="right"
       size="xl"
       closeOnOverlayClick={false}
+      scrollBehavior="inside"
+      preserveScrollBarGap={false}
     >
       <DrawerOverlay />
       <DrawerContent>
@@ -925,8 +927,8 @@ function OrganizationSegmentationReviewFlyout({
           </HStack>
         </DrawerHeader>
 
-        <DrawerBody py={5}>
-          <Stack spacing={5} h="100%">
+        <DrawerBody py={5} overflowY="auto" flex="1" minH={0}>
+          <Stack spacing={5} h="100%" minH={0}>
             {chatState.error ? (
               <Alert status="warning" borderRadius="16px">
                 <AlertIcon />
@@ -973,7 +975,7 @@ function OrganizationSegmentationReviewFlyout({
                 ))}
               </Wrap>
             </Box>
-            <Box position="relative" flex="1" minH="320px">
+            <Box position="relative" flex="1" minH={{ base: "220px", md: "320px" }}>
               <Tooltip
                 label={
                   copyState === "copied"
@@ -999,6 +1001,7 @@ function OrganizationSegmentationReviewFlyout({
               <Stack
                 spacing={3}
                 h="100%"
+                minH={0}
                 overflowY="auto"
                 borderWidth="1px"
                 borderColor={BORDER_COLOR}
@@ -1046,7 +1049,7 @@ function OrganizationSegmentationReviewFlyout({
           </Stack>
         </DrawerBody>
 
-        <DrawerFooter borderTopWidth="1px" borderColor={BORDER_COLOR}>
+        <DrawerFooter borderTopWidth="1px" borderColor={BORDER_COLOR} flexShrink={0}>
           <Stack spacing={3} w="100%">
             <Textarea
               value={draftMessage}
@@ -1062,7 +1065,7 @@ function OrganizationSegmentationReviewFlyout({
                 }
               }}
               placeholder="Discuss the segmentation, ask why something was chosen, or propose a keyword/rule change..."
-              minH="120px"
+              minH={{ base: "88px", md: "120px" }}
               resize="vertical"
             />
             <HStack justify="space-between">

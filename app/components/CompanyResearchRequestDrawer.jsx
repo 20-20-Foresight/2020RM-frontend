@@ -102,7 +102,14 @@ export function CompanyResearchRequestDrawer({
   }, [fetcher.state, fetcher.data, onSuccess]);
 
   return (
-    <Drawer isOpen={isOpen} onClose={onClose} placement="right" size="md">
+    <Drawer
+      isOpen={isOpen}
+      onClose={onClose}
+      placement="right"
+      size="md"
+      scrollBehavior="inside"
+      preserveScrollBarGap={false}
+    >
       <DrawerOverlay />
       <DrawerContent>
         <DrawerCloseButton />
@@ -110,8 +117,13 @@ export function CompanyResearchRequestDrawer({
           {isRerunRequest ? "Rerun Company Research" : "Request Research"}
         </DrawerHeader>
 
-        <fetcher.Form key={formKey} method="post" action="/tools/company-research">
-          <DrawerBody py={5}>
+        <fetcher.Form
+          key={formKey}
+          method="post"
+          action="/tools/company-research"
+          style={{ display: "flex", flex: 1, flexDirection: "column", minHeight: 0 }}
+        >
+          <DrawerBody py={5} overflowY="auto" flex="1" minH={0}>
             <VStack align="stretch" spacing={4}>
               {error ? (
                 <Alert status="error" borderRadius="md">
@@ -229,7 +241,7 @@ export function CompanyResearchRequestDrawer({
             </VStack>
           </DrawerBody>
 
-          <DrawerFooter borderTopWidth="1px">
+          <DrawerFooter borderTopWidth="1px" flexShrink={0}>
             <Box display="flex" gap={3}>
               <Button variant="ghost" onClick={onClose}>
                 Cancel
