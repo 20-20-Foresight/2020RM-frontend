@@ -27,11 +27,18 @@ async function loadSessionMeta(options) {
 
   const fetchImpl = options.fetchImpl || fetch;
   const apiUrl = new URL("/api/meta", options.request.url);
-  const response = await fetchImpl(apiUrl.toString(), {
-    headers: {
-      cookie: options.request.headers.get("cookie") || ""
-    }
-  });
+  let response;
+  try {
+    response = await fetchImpl(apiUrl.toString(), {
+      headers: {
+        cookie: options.request.headers.get("cookie") || ""
+      }
+    });
+  } catch (_error) {
+    return {
+      redirectToLogout: true
+    };
+  }
 
   if (response.status === 401) {
     return {

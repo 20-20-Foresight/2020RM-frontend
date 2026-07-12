@@ -86,6 +86,19 @@ test("session meta loader returns a signin redirect marker on 401", async () => 
   });
 });
 
+test("session meta loader returns a logout redirect marker when session bootstrap fetch fails", async () => {
+  const meta = await loadSessionMeta({
+    request: new Request("https://center.2020foresight.com/dashboard"),
+    fetchImpl: async () => {
+      throw new TypeError("fetch failed");
+    }
+  });
+
+  assert.deepEqual(meta, {
+    redirectToLogout: true
+  });
+});
+
 test("session meta loader can read a local fixture when SESSION_META_FIXTURE_PATH is set", async () => {
   const fixturePath = path.join(
     fs.mkdtempSync(path.join(os.tmpdir(), "crm-session-meta-")),
