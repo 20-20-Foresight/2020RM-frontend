@@ -306,3 +306,37 @@ test("public build assets stay accessible without an authenticated session", asy
     fs.rmSync(publicDir, { recursive: true, force: true });
   }
 });
+
+test("app-only logout clears the local session without redirecting through Microsoft", async () => {
+  const publicDir = fs.mkdtempSync(path.join(os.tmpdir(), "crm-frontend-public-"));
+  fs.mkdirSync(path.join(publicDir, "build"), { recursive: true });
+
+  const app = createApp(
+    createConfig({
+      publicDir
+    }),
+    (_req, res) => {
+      res.status(200).send("remix");
+    }
+  );
+
+  const server = http.createServer(app);
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+  try {
+    const address = server.address();
+    const origin = `http://127.0.0.1:${address.port}`;
+
+    const response = await fetch(`${origin}/auth/app-logout`, {
+      redirect: "manual"
+    });
+
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get("location"), "/signin.html");
+  } finally {
+    await new Promise((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+    fs.rmSync(publicDir, { recursive: true, force: true });
+  }
+});

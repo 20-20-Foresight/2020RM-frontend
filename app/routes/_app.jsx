@@ -8,7 +8,7 @@ const { loadSessionMeta } = require("../models/session-meta.server");
 export async function loader({ request }) {
   const meta = await loadSessionMeta({ request });
   if (meta.redirectToLogout) {
-    return redirect("/auth/logout");
+    return redirect("/auth/app-logout");
   }
   if (meta.redirectToSignin) {
     return redirect(buildSigninPath(meta.returnTo));

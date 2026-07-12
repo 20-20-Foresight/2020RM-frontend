@@ -872,6 +872,12 @@ function createApp(config, remixHandler, deps = {}) {
     }
   });
 
+  app.get("/auth/app-logout", (req, res) => {
+    req.session.destroy(() => {
+      res.redirect("/signin.html");
+    });
+  });
+
   app.get("/auth/logout", (req, res) => {
     const logoutUrl = config.authEnabled
       ? `https://login.microsoftonline.com/${encodeURIComponent(config.msTenantId)}/oauth2/v2.0/logout?post_logout_redirect_uri=${encodeURIComponent(`${config.baseUrl}/signin.html`)}`
@@ -1016,6 +1022,7 @@ function createApp(config, remixHandler, deps = {}) {
       "/signin.html",
       "/auth/login",
       "/auth/callback",
+      "/auth/app-logout",
       "/auth/logout",
       "/health",
       "/assets",

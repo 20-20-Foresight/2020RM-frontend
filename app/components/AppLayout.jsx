@@ -384,7 +384,7 @@ export function AppLayout({ user, meta, children }) {
             _hover={{ bg: "rgba(255, 255, 255, 0.06)" }}
             icon={<Avatar size="sm" name={displayName} bg={BRAND_RED} color="white" />}
           />
-          <MenuList>
+          <MenuList color="gray.800">
             <Box px={3} py={3}>
               <Text fontWeight="semibold">{displayName}</Text>
               {user?.email ? (
@@ -398,7 +398,14 @@ export function AppLayout({ user, meta, children }) {
                 </Text>
               ) : null}
             </Box>
-            <MenuItem as={NavLink} to="/auth/logout" icon={<FiLogOut />}>
+            <MenuItem
+              as={NavLink}
+              to="/auth/app-logout"
+              icon={<FiLogOut />}
+              color="gray.800"
+              _hover={{ bg: "gray.100" }}
+              _focus={{ bg: "gray.100" }}
+            >
               Logout
             </MenuItem>
           </MenuList>
