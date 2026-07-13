@@ -333,6 +333,20 @@ test("app-only logout clears the local session without redirecting through Micro
 
     assert.equal(response.status, 302);
     assert.equal(response.headers.get("location"), "/signin.html");
+
+    const authLogoutResponse = await fetch(`${origin}/auth/logout`, {
+      redirect: "manual"
+    });
+
+    assert.equal(authLogoutResponse.status, 302);
+    assert.equal(authLogoutResponse.headers.get("location"), "/signin.html");
+
+    const signoutResponse = await fetch(`${origin}/signout`, {
+      redirect: "manual"
+    });
+
+    assert.equal(signoutResponse.status, 302);
+    assert.equal(signoutResponse.headers.get("location"), "/signin.html");
   } finally {
     await new Promise((resolve, reject) => {
       server.close((error) => (error ? reject(error) : resolve()));

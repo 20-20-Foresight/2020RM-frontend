@@ -7,7 +7,10 @@ const DISALLOWED_RETURN_TO_PATHS = new Set([
   "/signin.html",
   "/auth/login",
   "/auth/callback",
-  "/auth/logout"
+  "/auth/app-logout",
+  "/auth/logout",
+  "/auth/microsoft-logout",
+  "/signout"
 ]);
 
 /**

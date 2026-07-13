@@ -21,6 +21,8 @@ test("normalizeReturnToPath falls back for external URLs and auth routes", () =>
   assert.equal(normalizeReturnToPath("//evil.example/phish"), DEFAULT_RETURN_TO_PATH);
   assert.equal(normalizeReturnToPath("/auth/callback"), DEFAULT_RETURN_TO_PATH);
   assert.equal(normalizeReturnToPath("/signin"), DEFAULT_RETURN_TO_PATH);
+  assert.equal(normalizeReturnToPath("/auth/logout"), DEFAULT_RETURN_TO_PATH);
+  assert.equal(normalizeReturnToPath("/signout"), DEFAULT_RETURN_TO_PATH);
 });
 
 test("buildSigninPath includes returnTo for non-default destinations", () => {

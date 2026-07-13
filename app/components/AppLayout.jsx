@@ -399,10 +399,11 @@ export function AppLayout({ user, meta, children }) {
               ) : null}
             </Box>
             <MenuItem
-              as={NavLink}
-              to="/auth/app-logout"
+              as="a"
+              href="/auth/logout"
               icon={<FiLogOut />}
               color="gray.800"
+              sx={{ color: "#1A202C !important" }}
               _hover={{ bg: "gray.100" }}
               _focus={{ bg: "gray.100" }}
             >
